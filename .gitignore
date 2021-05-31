@@ -1,3 +1,7 @@
+credenziali.py
+log/*.log
+variazioni/*.csv
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

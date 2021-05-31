@@ -1,0 +1,1 @@
+Cartella dove salvare i file giornalieri con le variazioni
