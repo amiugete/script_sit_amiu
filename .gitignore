@@ -1,6 +1,7 @@
 credenziali.py
 log/*.log
 variazioni/*.csv
+variazioni/*.xlsx
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
