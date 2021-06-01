@@ -57,7 +57,7 @@ logfile='{}/log/variazioni.log'.format(path)
 
 logging.basicConfig(format='%(asctime)s\t%(levelname)s\t%(message)s',
     filemode='a', # overwrite or append
-    #filename=logfile,
+    filename=logfile,
     level=logging.DEBUG)
 
 
