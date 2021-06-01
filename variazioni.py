@@ -23,7 +23,8 @@ import datetime
 
 currentdir = os.path.dirname(os.path.realpath(__file__))
 parentdir = os.path.dirname(currentdir)
-sys.path.append(parentdir)
+spath=sys.path.append(parentdir)
+print(spath)
 from credenziali import db, port, user, pwd, host, user_mail, pwd_mail, port_mail, smtp_mail
 
 
