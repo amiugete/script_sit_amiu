@@ -10,6 +10,7 @@ Lo script verifica tutti i percorsi dismessi in SIT ma non in UO
 
 
 import os,sys
+import inspect, os.path
 import cx_Oracle
 
 
@@ -35,7 +36,11 @@ import logging
 
 #num_giorno=datetime.datetime.today().weekday()
 #giorno=datetime.datetime.today().strftime('%A')
-path=os.path.dirname(sys.argv[0]) 
+
+filename = inspect.getframeinfo(inspect.currentframe()).filename
+path     = os.path.dirname(os.path.abspath(filename))
+
+
 giorno_file=datetime.datetime.today().strftime('%Y%m%d')
 
 logging.basicConfig(

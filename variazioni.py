@@ -9,6 +9,7 @@ Lo script verifica le variazioni e manda CSV a assterritorio@amiu.genova.it gior
 '''
 
 import os, sys, re  # ,shutil,glob
+import inspect, os.path
 
 import xlsxwriter
 
@@ -21,10 +22,6 @@ import psycopg2
 
 import datetime
 
-currentdir = os.path.dirname(os.path.realpath(__file__))
-parentdir = os.path.dirname(currentdir)
-spath=sys.path.append(parentdir)
-print(spath)
 from credenziali import db, port, user, pwd, host, user_mail, pwd_mail, port_mail, smtp_mail
 
 
@@ -48,7 +45,11 @@ from email.mime.text import MIMEText
 import csv
 
 #LOG
-path=os.path.dirname(sys.argv[0]) 
+
+filename = inspect.getframeinfo(inspect.currentframe()).filename
+path     = os.path.dirname(os.path.abspath(filename))
+
+#path=os.path.dirname(sys.argv[0]) 
 #tmpfolder=tempfile.gettempdir() # get the current temporary directory
 logfile='{}/log/variazioni.log'.format(path)
 #if os.path.exists(logfile):
