@@ -201,15 +201,16 @@ def main():
     subject = "Variazioni odierne - File automatico"
     body = "Report giornaliero delle variazioni.\n Giorno {}\n\n".format(giorno_file)
     sender_email = user_mail
-    receiver_email='roberto.marzocchi@amiu.genova.it'
+    receiver_email='assterritorio@amiu.genova.it'
+    debug_email='roberto.marzocchi@amiu.genova.it'
 
     # Create a multipart message and set headers
     message = MIMEMultipart()
     message["From"] = sender_email
     message["To"] = receiver_email
     message["Subject"] = subject
-    #message["Bcc"] = receiver_email  # Recommended for mass emails
-    message.preamble = "help I cannot send an attachment to save my life"
+    message["Bcc"] = debug_email  # Recommended for mass emails
+    message.preamble = "File giornaliero con le variazioni"
 
     # Add body to email
     message.attach(MIMEText(body, "plain"))
