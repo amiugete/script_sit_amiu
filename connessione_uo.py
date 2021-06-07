@@ -11,6 +11,7 @@ Lo script verifica tutti i percorsi dismessi in SIT ma non in UO
 
 import os,sys
 import inspect, os.path
+# da sistemare per Linux
 import cx_Oracle
 
 

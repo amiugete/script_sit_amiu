@@ -106,6 +106,7 @@ def main():
         and h."type" = 'PERCORSO' 
         and h.action = 'UPDATE_ELEM'
         and pu.responsabile = 'S'
+        and (p.data_dismissione is null or p.data_dismissione > current_date)
         order by ut, servizio'''.format(num)
     
 
