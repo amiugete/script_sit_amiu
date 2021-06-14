@@ -37,9 +37,11 @@ logfile='{}/log/import_legno_plastica.log'.format(path)
 #if os.path.exists(logfile):
 #    os.remove(logfile)
 
-logging.basicConfig(format='%(asctime)s\t%(levelname)s\t%(message)s',
-    filemode='w', # overwrite or append
-    filename=logfile,
+logging.basicConfig(
+    handlers=[logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')],
+    format='%(asctime)s\t%(levelname)s\t%(message)s',
+    #filemode='w', # overwrite or append
+    #filename=logfile,
     level=logging.INFO)
 
 
@@ -73,6 +75,7 @@ def main():
                 line_count += 1
         #logging.debug(id_piazzola)
         logging.info('Lette {} righe nel file CSV'.format(len(id_piazzola)))
+        logging.info('I dati sono inseriti su SIT e nel campo "modificato_da" abbiamo inserito il valore "Importato da script" ')
 
     
 
@@ -137,128 +140,133 @@ def main():
             ep.id_elemento_privato, 
             ep.descrizione, u.data_cessazione
             order by u.data_cessazione, ep.id_utenzapap desc
-            limit 1'''.format(id_piazzola[i])
+            '''.format(id_piazzola[i])
         try:
             curr.execute(query)
             parametri_elemento=curr.fetchall()
         except Exception as e:
             logging.error(e)
         if len(parametri_elemento) > 1:
-            logging.error('La piazzola {} contiene più di un elemento privato'.format(id_piazzola[i]))
+            logging.warning('La piazzola {} contiene più di un elemento privato'.format(id_piazzola[i]))
+        if len(parametri_elemento) < 1:
+            logging.warning('La piazzola {} non contiene elementi privati. Si consiglia di controllare l\'esattezza delle informazioni su SIT'.format(id_piazzola[i]))
+        c=0
         for vv in parametri_elemento:  
             #modificato_da
             #data_ultima_modifica
             #freq_stimata = 3
-            if vv[1] != None:
-                id_cliente= vv[1]
-            else:
-                id_cliente = -1
-            
-            if vv[2] != None:
-                posizione= vv[2]
-            else:
-                posizione = 0
-            
-            #if vv[5] != None:
-            #    id_utenza= vv[5]
-            #else:
-            #    id_utenza = -1
-            
-            if riferimento[i] != None:
-                rif = riferimento[i]
-            else: 
-                if vv[10] != None:
-                    rif= vv[10]
+            if c==0:
+                if vv[1] != None:
+                    id_cliente= vv[1]
+                else:
+                    id_cliente = -1
+                
+                if vv[2] != None:
+                    posizione= vv[2]
+                else:
+                    posizione = 0
+                
+                #if vv[5] != None:
+                #    id_utenza= vv[5]
+                #else:
+                #    id_utenza = -1
+                
+                if riferimento[i] != None:
+                    rif = riferimento[i]
                 else: 
-                    rif = 'nd'
-            
-            #posizione, privato, numero_civico_old
-            #    id_utenza, numero_civico, lettera_civico, colore_civico, 
-            #    note
-            logging.debug(len(vv))
-            if civico[i] != None and vv[4] != None:
-                if vv[4].lower() != civico[i].lower():
-                    logging.warning('Piazzola {}:\n - numero civico letto = {}\n - numero civico csv = {}'.format(id_piazzola[i],vv[4],civico[i]))
-            else:
-                logging.warning('Piazzola {}:\n - numero civico letto = {}\n - numero civico csv = {}'.format(id_piazzola[i],vv[4],civico[i]))
-            
+                    if vv[10] != None:
+                        rif= vv[10]
+                    else: 
+                        rif = 'nd'
+                
+                #posizione, privato, numero_civico_old
+                #    id_utenza, numero_civico, lettera_civico, colore_civico, 
+                #    note
+                logging.debug(len(vv))
+                if civico[i] != None and vv[4] != None:
+                    if vv[4].lower() != civico[i].lower():
+                        logging.info('Piazzola {} - incongruenza civici con file excel:\n - numero civico letto = {}\n - numero civico csv = {}'.format(id_piazzola[i],vv[4],civico[i]))
+                else:
+                    logging.info('Piazzola {} incongruenza / assenza civici su file excel :\n - numero civico letto = {}\n - numero civico csv = {}'.format(id_piazzola[i],vv[4],civico[i]))
+                
 
-            
-            #campi= ''' id_asta, id_cliente, posizione, privato, id_utenza, id_piazzola, modificato_da, data_ultima_modifica, freq_stimata, riferimento'''
-            #valori= '''{0},{1},{2},1,{3},{4}, 'Importato da script SIT', now(), 3 '''.format(vv[0], id_cliente, posizione, id_utenza, id_piazzola[i])
-            
-            for tipo in (170, 178):
-                insert_query= ''' INSERT INTO elem.elementi (tipo_elemento, id_asta, id_cliente, posizione, privato, 
-                id_piazzola, modificato_da, data_ultima_modifica, freq_stimata, riferimento)
-                VALUES (%s, %s, %s, %s, 1, %s, 'Importato da script SIT', now(), 3 , %s )'''
-                logging.debug(insert_query)
-                curr2 = conn.cursor()
-                curr2.execute(insert_query, (tipo, vv[0], id_cliente, posizione, id_piazzola[i], rif))
-                curr2.close()
+                
+                #campi= ''' id_asta, id_cliente, posizione, privato, id_utenza, id_piazzola, modificato_da, data_ultima_modifica, freq_stimata, riferimento'''
+                #valori= '''{0},{1},{2},1,{3},{4}, 'Importato da script SIT', now(), 3 '''.format(vv[0], id_cliente, posizione, id_utenza, id_piazzola[i])
+                
+                for tipo in (170, 178):
+                    insert_query= ''' INSERT INTO elem.elementi (tipo_elemento, id_asta, id_cliente, posizione, privato, 
+                    id_piazzola, peso_reale, peso_stimato, percent_riempimento, modificato_da, data_ultima_modifica, freq_stimata, riferimento)
+                    VALUES (%s, %s, %s, %s, 1, %s, 0, 0, 90, 'Importato da script', now(), 3 , %s )'''
+                    logging.debug(insert_query)
+                    curr2 = conn.cursor()
+                    curr2.execute(insert_query, (tipo, vv[0], id_cliente, posizione, id_piazzola[i], rif))
+                    curr2.close()
 
 
-
-            
-            
-            upd= 'UPDATE elem.elementi SET'
-            cond = 'WHERE id_piazzola = {} and tipo_elemento in (170, 178)'. format(id_piazzola[i])
-            # numero_civico_old
-            if vv[4] != None:
-                update_query='''UPDATE elem.elementi SET numero_civico_old = %s 
-                WHERE id_piazzola = %s and tipo_elemento in (170, 178)'''
-                logging.debug(update_query)
-                curr3 = conn.cursor()
-                curr3.execute(update_query, (vv[4], id_piazzola[i]))
-                curr3.close()
-            else:
-                if civico[i] != None:
+                upd= 'UPDATE elem.elementi SET'
+                cond = 'WHERE id_piazzola = {} and tipo_elemento in (170, 178)'. format(id_piazzola[i])
+                # numero_civico_old
+                if vv[4] != None:
                     update_query='''UPDATE elem.elementi SET numero_civico_old = %s 
                     WHERE id_piazzola = %s and tipo_elemento in (170, 178)'''
+                    logging.debug(update_query)
                     curr3 = conn.cursor()
-                    curr3.execute(update_query, (civico[i], id_piazzola[i]))
+                    curr3.execute(update_query, (vv[4], id_piazzola[i]))
+                    curr3.close()
+                else:
+                    if civico[i] != None:
+                        update_query='''UPDATE elem.elementi SET numero_civico_old = %s 
+                        WHERE id_piazzola = %s and tipo_elemento in (170, 178)'''
+                        curr3 = conn.cursor()
+                        curr3.execute(update_query, (civico[i], id_piazzola[i]))
+                        curr3.close()
+
+
+                if vv[5] != None:
+                    update_query='''UPDATE elem.elementi SET id_utenza = %s 
+                    WHERE id_piazzola = %s and tipo_elemento in (170, 178)'''
+                    logging.debug(update_query)
+                    curr3 = conn.cursor()
+                    curr3.execute(update_query, (vv[5], id_piazzola[i]))
                     curr3.close()
 
-
-            if vv[5] != None:
-                update_query='''UPDATE elem.elementi SET id_utenza = %s 
-                WHERE id_piazzola = %s and tipo_elemento in (170, 178)'''
-                logging.debug(update_query)
-                curr3 = conn.cursor()
-                curr3.execute(update_query, (vv[5], id_piazzola[i]))
-                curr3.close()
-
-            # numero_civico, 6
-            if vv[6] != None:
-                update_query='''UPDATE elem.elementi SET numero_civico = %s 
-                WHERE id_piazzola = %s and tipo_elemento in (170, 178)'''
-                logging.debug(update_query)
-                curr3 = conn.cursor()
-                curr3.execute(update_query, (vv[6], id_piazzola[i]))
-                curr3.close()
-            # lettera_civico, 7
-            if vv[7] != None:
-                update_query='''UPDATE elem.elementi SET lettera_civico = %s
-                WHERE id_piazzola = %s and tipo_elemento in (170, 178)'''
-                logging.debug(update_query)
-                curr3 = conn.cursor()
-                curr3.execute(update_query, (vv[7], id_piazzola[i]))
-                curr3.close()
-            # colore_civico, 8
-            if vv[8] != None:
-                update_query='''UPDATE elem.elementi SET colore_civico = %s 
-                WHERE id_piazzola = %s and tipo_elemento in (170, 178)'''
-                logging.debug(update_query)
-                curr3 = conn.cursor()
-                curr3.execute(update_query, (vv[8], id_piazzola[i]))
-                curr3.close()
-            # note, 9
-            if vv[9] != None:
-                update_query='''UPDATE elem.elementi SET note = %s 
-                WHERE id_piazzola = %s and tipo_elemento in (170, 178)'''
-                logging.debug(update_query)
-                curr3 = conn.cursor()
-                curr3.execute(update_query, (vv[9], id_piazzola[i]))
-                curr3.close()
+                # numero_civico, 6
+                if vv[6] != None:
+                    update_query='''UPDATE elem.elementi SET numero_civico = %s 
+                    WHERE id_piazzola = %s and tipo_elemento in (170, 178)'''
+                    logging.debug(update_query)
+                    curr3 = conn.cursor()
+                    curr3.execute(update_query, (vv[6], id_piazzola[i]))
+                    curr3.close()
+                # lettera_civico, 7
+                if vv[7] != None:
+                    update_query='''UPDATE elem.elementi SET lettera_civico = %s
+                    WHERE id_piazzola = %s and tipo_elemento in (170, 178)'''
+                    logging.debug(update_query)
+                    curr3 = conn.cursor()
+                    curr3.execute(update_query, (vv[7], id_piazzola[i]))
+                    curr3.close()
+                # colore_civico, 8
+                if vv[8] != None:
+                    update_query='''UPDATE elem.elementi SET colore_civico = %s 
+                    WHERE id_piazzola = %s and tipo_elemento in (170, 178)'''
+                    logging.debug(update_query)
+                    curr3 = conn.cursor()
+                    curr3.execute(update_query, (vv[8], id_piazzola[i]))
+                    curr3.close()
+                # note, 9
+                if vv[9] != None:
+                    update_query='''UPDATE elem.elementi SET note = %s 
+                    WHERE id_piazzola = %s and tipo_elemento in (170, 178)'''
+                    logging.debug(update_query)
+                    curr3 = conn.cursor()
+                    curr3.execute(update_query, (vv[9], id_piazzola[i]))
+                    curr3.close()
+                
+                #check per non fare doppia importazione nel caso in cui in precedenza ci fosse più di un cliente
+                c+=1
+            
         i+=1
 
     curr.close()
