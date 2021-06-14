@@ -37,9 +37,12 @@ logfile='{}/log/check_pre_import_legno_plastica.log'.format(path)
 #if os.path.exists(logfile):
 #    os.remove(logfile)
 
-logging.basicConfig(format='%(asctime)s\t%(levelname)s\t%(message)s',
-    filemode='w', # overwrite or append
-    filename=logfile,
+logging.basicConfig(
+    handlers=[logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')],
+    format='%(asctime)s\t%(levelname)s\t%(message)s',
+    #filemode='w', # overwrite or append
+    #fileencoding='utf-8',
+    #filename=logfile,
     level=logging.INFO)
 
 
@@ -137,7 +140,7 @@ ep.id_utenzapap, e.numero_civico, e.lettera_civico, e.colore_civico, e.note, e.r
 ep.id_elemento_privato, 
 ep.descrizione, u.data_cessazione
 order by u.data_cessazione, ep.id_utenzapap desc
-limit 1'''.format(id_piazzola[i])
+'''.format(id_piazzola[i])        
         try:
             curr.execute(query)
             parametri_elemento=curr.fetchall()
@@ -145,8 +148,13 @@ limit 1'''.format(id_piazzola[i])
             logging.error(e)
         if len(parametri_elemento) > 1:
             logging.error('La piazzola {} contiene più di un elemento privato'.format(id_piazzola[i]))
+        elif len(parametri_elemento)< 1:
+            logging.warning('La piazzola {} non ha altri elementi privati'.format(id_piazzola[i]))
+        c=0
         for vv in parametri_elemento: 
-            logging.info(vv)
+            if c==0:
+                logging.info(vv)
+                c+=1
         i+=1
 
 

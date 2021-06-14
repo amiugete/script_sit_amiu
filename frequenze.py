@@ -120,12 +120,18 @@ def main():
     conn.autocommit = True
 
     #create table query
-    select_frequenze = ''' select distinct ap.frequenza, ap.frequenza::bit(12), f.*
+    select_frequenze = ''' select distinct ap.frequenza, ap.frequenza::bit(12) as fbin, f.*
         from elem.aste_percorso ap 
         left join elem.frequenze f
         on cast (f.cod_frequenza as text) = cast (ap.frequenza as text)
         where ap.frequenza is not null
-        order by 1 '''
+    union               
+    select distinct ap.frequenza::integer, ap.frequenza::integer::bit(12) as fbin,f.*
+        from elem.elementi_aste_percorso ap 
+        left join elem.frequenze f
+        on cast (f.cod_frequenza as text) = cast (ap.frequenza as text)
+        where ap.frequenza is not null
+        order by 1    '''
 
     
     try:
