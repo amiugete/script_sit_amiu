@@ -103,8 +103,14 @@ def main():
         on u.id_ut = pu.id_ut 
         where h.datetime > (current_date - INTEGER '{0}') 
         and h.datetime < current_date 
-        and h."type" = 'PERCORSO' 
-        and h.action = 'UPDATE_ELEM'
+        and (
+        (h."type" IN ('PERCORSO') 
+        and h.action IN ('UPDATE_ELEM')
+        ) or 
+        (h."type" IN ('ASTA PERCORSO') 
+        and h.action IN ('INSERT', 'UPDATE')
+        )
+        )
         and pu.responsabile = 'S'
         and (p.data_dismissione is null or p.data_dismissione > current_date)
         order by ut, servizio'''.format(num)
