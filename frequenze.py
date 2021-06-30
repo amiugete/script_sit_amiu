@@ -131,7 +131,13 @@ def main():
         left join elem.frequenze f
         on cast (f.cod_frequenza as text) = cast (ap.frequenza as text)
         where ap.frequenza is not null
-        order by 1    '''
+    union  
+    select distinct ap.frequenza::integer, ap.frequenza::integer::bit(12) as fbin,f.*
+        from elem.percorsi ap 
+        left join elem.frequenze f
+        on cast (f.cod_frequenza as text) = cast (ap.frequenza as text)
+        where ap.frequenza is not null  
+    order by 1    '''
 
     
     try:

@@ -2,6 +2,7 @@ credenziali.py
 log/*.log
 variazioni/*.csv
 variazioni/*.xlsx
+ecopunti/*.xlsx
 *.osm
 
 
