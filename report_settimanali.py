@@ -20,6 +20,7 @@ import datetime
 
 from credenziali import *
 
+from mail_log import *
 
 #import requests
 
@@ -67,6 +68,8 @@ def dayNameFromWeekday(weekday):
 
 
 
+
+
 def main(): 
     filename = inspect.getframeinfo(inspect.currentframe()).filename
     path     = os.path.dirname(os.path.abspath(filename))
@@ -78,14 +81,22 @@ def main():
     #    os.remove(logfile)
 
     logging.basicConfig(
-        #handlers=[logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')],
+        handlers=[logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')],
         format='%(asctime)s\t%(levelname)s\t%(message)s',
         #filemode='w', # overwrite or append
+        #fileencoding='utf-8',
         #filename=logfile,
-        level=logging.DEBUG)
+        level=logging.INFO)
 
+    try: 
+        #codice='0203009803'
+        codice=sys.argv[1]
+        logging.info('Inizio creazione report per percorso {}'.format(codice))
+    except Exception as e:
+        logging.error(e)
+        sent_log_by_mail(filename,logfile)
 
-    codice='0203009803'
+    
 
     nome_file="report_{}.xlsx".format(codice)
     file_report="{0}/report/{1}".format(path,nome_file)
@@ -128,7 +139,7 @@ def main():
     w.fit_to_pages(1, 0) # 1 page wide and as long as necessary.
 
 
-    w.insert_image('I2', 'img/logo_amiu.jpg', {'x_scale': 0.8, 'y_scale': 0.8})
+    w.insert_image('I2', '{}/img/logo_amiu.jpg'.format(path), {'x_scale': 0.8, 'y_scale': 0.8, 'x_offset': 10, 'y_offset': 10})
 
 
     w.set_column(0,0, 30)
@@ -202,6 +213,7 @@ where p.cod_percorso= '{}'
 	    dettagli_percorso=curr.fetchall()
     except Exception as e:
         logging.error(e)
+        sent_log_by_mail(filename,logfile)
 
 
     k=0       
@@ -244,6 +256,7 @@ order by ap.num_seq asc'''.format(codice)
 	    lista_elementi=curr.fetchall()
     except Exception as e:
         logging.error(e)
+        sent_log_by_mail(filename,logfile)
 
 
     k=0       
@@ -270,6 +283,10 @@ order by ap.num_seq asc'''.format(codice)
                 w.write(6+k,5+i, None, cell_format)
             i+=1
         k+=1
+    
+    if k==0:
+        logging.error("Percorso non presente su SIT")
+        sys.exit("Percorso non presente su SIT")
 
 
 
@@ -279,6 +296,8 @@ order by ap.num_seq asc'''.format(codice)
 
 
     workbook.close()
+    #sent_log_by_mail(filename,logfile)
+
     
 
     '''
