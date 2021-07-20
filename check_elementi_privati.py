@@ -31,6 +31,8 @@ import logging
 filename = inspect.getframeinfo(inspect.currentframe()).filename
 path     = os.path.dirname(os.path.abspath(filename))
 
+scriptname = os.path.basename(__file__)
+
 #path=os.path.dirname(sys.argv[0]) 
 #tmpfolder=tempfile.gettempdir() # get the current temporary directory
 logfile='{}/log/check_pre_import_legno_plastica.log'.format(path)
