@@ -3,6 +3,8 @@ log/*.log
 variazioni/*.csv
 variazioni/*.xlsx
 ecopunti/*.xlsx
+utenze/*.xlsx
+report/*.xlsx
 *.osm
 
 
