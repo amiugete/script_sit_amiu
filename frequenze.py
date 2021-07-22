@@ -18,10 +18,12 @@ import os, sys, re  # ,shutil,glob
 
 import psycopg2
 
+import cx_Oracle
+
 currentdir = os.path.dirname(os.path.realpath(__file__))
 parentdir = os.path.dirname(currentdir)
 sys.path.append(parentdir)
-from credenziali import db, port, user, pwd, host
+from credenziali import *
 
 
 #import requests
@@ -34,10 +36,27 @@ logfile='{}/log/frequenze.log'.format(path)
 #if os.path.exists(logfile):
 #    os.remove(logfile)
 
-logging.basicConfig(format='%(asctime)s\t%(levelname)s\t%(message)s',
-    filemode='a', # overwrite or append
+logging.basicConfig(
+    handlers=[logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')],
+    format='%(asctime)s\t%(levelname)s\t%(message)s',
+    #filemode='w', # overwrite or append
+    #fileencoding='utf-8',
     #filename=logfile,
-    level=logging.ERROR)
+    level=logging.INFO)
+
+
+# libreria per invio mail
+import email, smtplib, ssl
+import mimetypes
+from email.mime.multipart import MIMEMultipart
+from email import encoders
+from email.message import Message
+from email.mime.audio import MIMEAudio
+from email.mime.base import MIMEBase
+from email.mime.image import MIMEImage
+from email.mime.text import MIMEText
+
+
 
 
 def long_set(codice_binario):
@@ -118,6 +137,30 @@ def main():
 
     curr = conn.cursor()
     conn.autocommit = True
+
+    # rimuovo la tabella marzocchir.frequenze_ok_1 che serve per vedere le differenze
+    curr0 = conn.cursor()
+    query0='drop table marzocchir.frequenze_ok_1'
+    try:
+        curr0.execute(query0)
+    except Exception as e:
+        logging.error(e)
+
+    curr0.close()
+
+    # la ricreo pulita
+    query1='''create table marzocchir.frequenze_ok_1 as
+        select * from marzocchir.frequenze_ok 
+        order by cod_frequenza'''
+    curr0 = conn.cursor()
+    try:
+	    curr0.execute(query1)
+    except Exception as e:
+        logging.error(e)
+
+    curr0.close()
+
+
 
     #create table query
     select_frequenze = ''' select distinct ap.frequenza, ap.frequenza::bit(12) as fbin, f.*
@@ -203,11 +246,142 @@ def main():
             curr1 = conn.cursor()
             curr1.execute(query_insert)
         except Exception as e:
-            logging.error(e)
-            logging.error(query_insert)
+            logging.warning(e)
+            logging.warning(query_insert)
             #logging.error('Null value')
         i+=1
         curr1.close()
+
+    
+    # trasferisco i dati sul DB UO 
+
+
+    freq_SIT=[]
+    freq_UO=[]
+    query_select='''select cod_frequenza as "FREQUENZA_SIT", freq_binaria as "FREQUENZA_UO" 
+    from marzocchir.frequenze_ok 
+    order by cod_frequenza
+    '''
+    curr0 = conn.cursor()
+    try:
+	    curr0.execute(select_frequenze)
+	    frequenze_su_sit=curr0.fetchall()
+    except Exception as e:
+        logging.error(e)
+    curr0.close()
+
+    for ff in frequenze_su_sit:
+        freq_SIT.append(ff[0])
+        freq_UO.append(ff[1])
+    
+
+    
+
+
+    ####################################################################################
+    # controllo cosa è cambiato
+
+    query2= '''select * from marzocchir.frequenze_ok 
+where cod_frequenza not in (select cod_frequenza from marzocchir.frequenze_ok_1)'''
+
+    ################################
+    # predisposizione mail
+    ################################
+
+    # Create a secure SSL context
+    context = ssl.create_default_context()
+
+    subject = "FREQUENZA DA AGGIUNGERE A CODICE DI UO"
+    body = '''Mail generata automaticamente dal codice python frequenze.py che gira su amiugis\n\n\n
+    Frequenze da ggiungere:\n'''
+    sender_email = user_mail
+    receiver_email='assterritorio@amiu.genova.it'
+    debug_email='roberto.marzocchi@amiu.genova.it'
+    cc_mail='calvello@amiu.genova.it'
+
+    # Create a multipart message and set headers
+    message = MIMEMultipart()
+    message["From"] = sender_email
+    message["To"] = receiver_email
+    message["Cc"] = cc_mail
+    message["Subject"] = subject
+    #message["Bcc"] = debug_email  # Recommended for mass emails
+    message.preamble = "Variazione frequenze"
+
+    
+    # ciclo su variazioni
+    
+    curr0 = conn.cursor()
+    try:
+	    curr0.execute(query2)
+	    frequenze_nuove=curr0.fetchall()
+    except Exception as e:
+        logging.error(e)
+    curr0.close()
+
+    check=0
+    for fff in frequenze_nuove:
+        body='{} cod_frequenza (SIT)= {} freq_binaria (UO) = {}\n'.format(body, fff[0], fff[4])
+        check=1
+
+
+    if check>0:
+        # Add body to email
+        message.attach(MIMEText(body, "plain"))
+
+        text = message.as_string()
+
+        # Now send or store the message
+        with smtplib.SMTP_SSL(smtp_mail, port_mail, context=context) as s:
+            s.login(user_mail, pwd_mail)
+            s.send_message(message)
+    
+        ################################################################################################
+        # ora siccome è cambiato qualcosa accedo su UO e ricreo il mapping frequenze
+
+
+        # connessione Oracle
+        cx_Oracle.init_oracle_client() # necessario configurare il client oracle correttamente
+        parametri_con='{}/{}@//{}:{}/{}'.format(user_uo,pwd_uo, host_uo,port_uo,service_uo)
+        logging.debug(parametri_con)
+        con = cx_Oracle.connect(parametri_con)
+        logging.info("Versione ORACLE: {}".format(con.version))
+
+
+
+        cur = con.cursor()
+        query='''TRUNCATE TABLE UNIOPE.CONS_MAPPING_FREQUENZE'''.format()
+        try:
+            cur.execute(query)
+        except Exception as e:
+            logging.error(query)
+            logging.error(e)
+        cur.close()
+
+
+        cur = con.cursor()
+        i=0
+        while i < len(freq_SIT):
+            query='''INSERT INTO UNIOPE.CONS_MAPPING_FREQUENZE
+    (FREQUENZA_SIT, FREQUENZA_UO)
+    VALUES({}, '{}')'''.format(freq_SIT[i], freq_UO[i])
+            try:
+                logging.debug(query)
+                cur.execute(query)
+                con.commit()
+            except Exception as e:
+                logging.error(query)
+                logging.error(e)
+            i+=1
+
+        cur.close()
+        con.close()
+
+
+
+
+
+
     curr.close()
     conn.close()
 	    
