@@ -17,12 +17,16 @@ Esegue le seguenti operazioni:
 
 #codici_via= '40500, 19420, 61980, 49860'
 
-file_csv='elenco_vie_test2.txt'
-prefisso1='zona valpolcevera'
+#file_csv ='elenco_vie_test2.txt'
+#prefisso1 ='zona valpolcevera'
+#mail = 'roberto.marzocchi@gmail.com'
 
 
 
-import os,sys
+
+
+
+import os,sys, getopt
 import inspect, os.path
 # da sistemare per Linux
 import cx_Oracle
@@ -50,27 +54,72 @@ from credenziali import *
 import logging
 
 
-#num_giorno=datetime.datetime.today().weekday()
-#giorno=datetime.datetime.today().strftime('%A')
-
-filename = inspect.getframeinfo(inspect.currentframe()).filename
-path     = os.path.dirname(os.path.abspath(filename))
-
-
-giorno_file=datetime.datetime.today().strftime('%Y%m%d')
-
-giorno_file='{}_{}'.format(giorno_file, prefisso1.replace(' ', '_'))
-
-logging.basicConfig(
-    format='%(asctime)s\t%(levelname)s\t%(message)s',
-    filemode ='w',
-    #filename='{}\log\{}_{}_ecopunti_parte2.log'.format(path, giorno_file, user),
-    level=logging.DEBUG)
+# Libreria per invio mail
+import email, smtplib, ssl
+import mimetypes
+from email.mime.multipart import MIMEMultipart
+from email import encoders
+from email.message import Message
+from email.mime.audio import MIMEAudio
+from email.mime.base import MIMEBase
+from email.mime.image import MIMEImage
+from email.mime.text import MIMEText
 
 
 
 
-def main():
+def main(argv):
+    #num_giorno=datetime.datetime.today().weekday()
+    #giorno=datetime.datetime.today().strftime('%A')
+
+    filename = inspect.getframeinfo(inspect.currentframe()).filename
+    path     = os.path.dirname(os.path.abspath(filename))
+
+
+    giorno_file=datetime.datetime.today().strftime('%Y%m%d')
+
+    #giorno_file='{}_{}'.format(giorno_file, prefisso1.replace(' ', '_'))
+
+    logfile='{}/log/{}_utenze.log'.format(path, giorno_file)
+
+    logging.basicConfig(
+        handlers=[logging.FileHandler(filename=logfile, encoding='utf-8', mode='a')],
+        format='%(asctime)s\t%(levelname)s\t%(message)s',
+        #filemode='w', # overwrite or append
+        #fileencoding='utf-8',
+        #filename=logfile,
+        level=logging.INFO)
+
+
+
+
+
+
+ 
+    logging.info('Leggo gli input')
+    try:
+        opts, args = getopt.getopt(argv,"hi:p:m:",["ifile=","prefix=", "mail="])
+    except getopt.GetoptError:
+        logging.error('seleziona_utenze_vie.py -i <inputfile> -p <prefisso> -m <mail>')
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == '-h':
+            print('seleziona_utenze_vie.py -i <inputfile> -o <outputfile>')
+            sys.exit()
+        elif opt in ("-i", "--ifile"):
+            file_csv = arg
+            logging.info('Input file = {}'.format(file_csv))
+        elif opt in ("-p", "--prefix"):
+            prefisso1 = arg
+            logging.info('Prefisso file = {}'.format(prefisso1))
+        elif opt in ("-m", "--mail"):
+            mail = arg
+            logging.info('Mail cui inviare i dati = {}'.format(mail))
+
+
+    #aggiorno il prefisso del file
+    giorno_file='{}_{}'.format(giorno_file, prefisso1.replace(' ', '_'))
+    
     # carico i mezzi sul DB PostgreSQL
     logging.info('Leggo il file CSV')
 
@@ -148,10 +197,20 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
         logging.error(e)
 
 
-    
+    # array che uso dopo quando devo inviare le mail
+    nomi_files=[]
+    files=[]
+
+    nomi_files.append('elenco_vie.txt')
+    files.append('/var/www/html/utenze/file/elenco_vie.txt')
+
+
     nome_file0="{0}_elenco_civici_completo.xlsx".format(giorno_file)
     file_civici="{0}/utenze/{1}".format(path,nome_file0)
     
+    nomi_files.append(nome_file0)
+    files.append(file_civici)
+
     
     workbook0 = xlsxwriter.Workbook(file_civici)
     w0 = workbook0.add_worksheet()
@@ -190,7 +249,8 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
 
 
     # connessione Oracle
-    cx_Oracle.init_oracle_client(lib_dir=r"C:\oracle\instantclient_19_10")
+    #cx_Oracle.init_oracle_client(lib_dir=r"C:\oracle\instantclient_19_10")
+    cx_Oracle.init_oracle_client()
     parametri_con='{}/{}@//{}:{}/{}'.format(user_strade,pwd_strade, host_uo,port_uo,service_uo)
     logging.debug(parametri_con)
     con = cx_Oracle.connect(parametri_con)
@@ -211,6 +271,18 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
     file_nondomestiche="{0}/utenze/{1}".format(path,nome_file2)
     file_civdomestiche="{0}/utenze/{1}".format(path,nome_file3)
     file_civnondomestiche="{0}/utenze/{1}".format(path,nome_file4)
+
+
+    nomi_files.append(nome_file)
+    files.append(file_domestiche)
+    nomi_files.append(nome_file2)
+    files.append(file_nondomestiche)
+    nomi_files.append(nome_file3)
+    files.append(file_civdomestiche)
+    nomi_files.append(nome_file4)
+    files.append(file_civnondomestiche)
+
+
     
     workbook = xlsxwriter.Workbook(file_domestiche)
     w = workbook.add_worksheet()
@@ -240,7 +312,7 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
 
 
     logging.info('*****************************************************')
-    logging.info('Utenze domestiche su strade')
+    logging.info('Civici utenze domestiche su strade')
 
     cur = con.cursor()
     query=''' SELECT ID_UTENTE, PROGR_UTENZA, COGNOME, NOME, COD_VIA, DESCR_VIA,
@@ -308,7 +380,7 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
     workbook3.close()
 
     logging.info('*****************************************************')
-    logging.info('Utenze non domestiche su strade')
+    logging.info('Civici utenze non domestiche su strade')
     # non domestiche
     cur2 = con.cursor()
 
@@ -399,7 +471,7 @@ WHERE {}
 
     
 
-    exit()
+    #exit()
 
     
     i=0
@@ -407,6 +479,11 @@ WHERE {}
     cont=0
     logging.info('*****************************************************')
     logging.info('Utenze domestiche su strade')
+
+    # non domestiche
+    cur = con.cursor()
+
+
     while i< len(cod_civico):
         query='''
        SELECT ID_UTENTE, PROGR_UTENZA, COGNOME, NOME, COD_VIA, DESCR_VIA,
@@ -529,6 +606,128 @@ WHERE COD_CIVICO = '{}' '''.format(cod_civico[i])
     workbook2.close()
 
 
+    ###########################
+    # Invio mail 
+    ###########################
+
+    logging.info("Invio mail")
+
+
+
+    # Create a secure SSL context
+    context = ssl.create_default_context()
+
+
+
+   # messaggio='Test invio messaggio'
+
+
+    subject = "Invio utenze zona {}".format(prefisso1)
+    
+    sender_email = user_mail
+    receiver_email=mail
+    debug_email='assterritorio@amiu.genova.it'
+    #assterritorio@amiu.genova.it
+
+
+    body = '''Mail automatica con l'invio delle utenze.\n
+    L'applicativo che gestisce l'estrazione delle utenze è stato realizzato dal gruppo GETE.\n 
+    Segnalare tempestivamente eventuali malfunzionamenti inoltrando la presente mail a {}\n\n
+    Giorno {}\n\n
+    AMIU Assistenza Territorio
+    '''.format(debug_email, datetime.datetime.today().strftime('%d/%m/%Y'))
+    
+
+
+    # Create a multipart message and set headers
+    message = MIMEMultipart()
+    message["From"] = sender_email
+    message["To"] = receiver_email
+    message["Cc"] = debug_email
+    message["Subject"] = subject
+    #message["Bcc"] = debug_email  # Recommended for mass emails
+    message.preamble = "File con le utenze"
+
+    # Add body to email
+    message.attach(MIMEText(body, "plain"))
+
+    #filename = file_variazioni  # In same directory as script
+
+
+    i=0
+    while i < len(files):
+        ctype, encoding = mimetypes.guess_type(files[i])
+        if ctype is None or encoding is not None:
+            ctype = "application/octet-stream"
+
+        maintype, subtype = ctype.split("/", 1)
+
+        if maintype == "text":
+            fp = open(files[i])
+            # Note: we should handle calculating the charset
+            attachment = MIMEText(fp.read(), _subtype=subtype)
+            fp.close()
+        elif maintype == "image":
+            fp = open(files[i], "rb")
+            attachment = MIMEImage(fp.read(), _subtype=subtype)
+            fp.close()
+        elif maintype == "audio":
+            fp = open(files[i], "rb")
+            attachment = MIMEAudio(fp.read(), _subtype=subtype)
+            fp.close()
+        else:
+            fp = open(files[i], "rb")
+            attachment = MIMEBase(maintype, subtype)
+            attachment.set_payload(fp.read())
+            fp.close()
+            encoders.encode_base64(attachment)
+        attachment.add_header("Content-Disposition", "attachment", filename=nomi_files[i])
+        message.attach(attachment)
+        i+=1
+
+    '''
+    # Open PDF file in binary mode
+    with open(filename, "rb") as attachment:
+        # Add file as application/octet-stream
+        # Email client can usually download this automatically as attachment
+        part = MIMEBase("application", "octet-stream")
+        part.set_payload(attachment.read())
+
+
+    # Encode file in ASCII characters to send by email    
+    encoders.encode_base64(part)
+
+    # Add header as key/value pair to attachment part
+    part.add_header(
+        "Content-Disposition",
+        f"attachment; filename= {nome_file}",
+    )
+
+    # Add attachment to message and convert message to string
+    message.attach(part)
+    '''
+    
+    
+    text = message.as_string()
+
+
+
+
+
+
+    '''with smtplib.SMTP_SSL(smtp_mail, port_mail, context=context) as server:
+        server.login(user_mail, pwd_mail)
+        server.sendmail(user_mail, receiver_email, text)
+        # TODO: Send email here
+
+    '''
+    # Now send or store the message
+    with smtplib.SMTP_SSL(smtp_mail, port_mail, context=context) as s:
+        s.login(user_mail, pwd_mail)
+        s.send_message(message)
+
+    logging.info("Mail inviata a {} e a nostro indirizzo".format(receiver_email))
+
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])
