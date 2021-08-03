@@ -42,9 +42,9 @@ def sent_log_by_mail(script_name, log_file):
     # Create a multipart message and set headers
     message = MIMEMultipart()
     message["From"] = sender_email
-    message["To"] = receiver_email
+    message["To"] = debug_email
     message["Subject"] = subject
-    message["Bcc"] = debug_email  # Recommended for mass emails
+    #message["Bcc"] = debug_email  # Recommended for mass emails
     message.preamble = "File giornaliero con le variazioni"
 
     # Add body to email
