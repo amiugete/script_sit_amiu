@@ -423,9 +423,9 @@ WHERE COD_CIVICO in {}
     
     sender_email = user_mail
     receiver_email=mail
-    #debug_email='assterritorio@amiu.genova.it'
+    debug_email='assterritorio@amiu.genova.it'
     #assterritorio@amiu.genova.it
-    debug_email='roberto.marzocchi@amiu.genova.it'
+    #debug_email='roberto.marzocchi@amiu.genova.it'
 
     body = '''Mail automatica con l'invio delle utenze degli ecopunti.\n
     L'applicativo che gestisce l'estrazione delle utenze è stato realizzato dal gruppo GETE.\n 
