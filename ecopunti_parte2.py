@@ -50,11 +50,18 @@ path     = os.path.dirname(os.path.abspath(filename))
 
 giorno_file=datetime.datetime.today().strftime('%Y%m%d')
 
+
+logfile='{}/log/{}_ecopunti_parte2.log'.format(path, giorno_file)
+
 logging.basicConfig(
+    handlers=[logging.FileHandler(filename=logfile, encoding='utf-8', mode='a')],
     format='%(asctime)s\t%(levelname)s\t%(message)s',
-    filemode ='w',
-    filename='{}\log\{}_{}_ecopunti_parte2.log'.format(path, giorno_file, user),
-    level=logging.DEBUG)
+    #filemode='w', # overwrite or append
+    #fileencoding='utf-8',
+    #filename=logfile,
+    level=logging.INFO)
+
+
 
 
 
