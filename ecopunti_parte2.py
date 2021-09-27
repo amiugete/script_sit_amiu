@@ -53,7 +53,7 @@ giorno_file=datetime.datetime.today().strftime('%Y%m%d')
 logging.basicConfig(
     format='%(asctime)s\t%(levelname)s\t%(message)s',
     filemode ='w',
-    #filename='{}\log\{}_{}_ecopunti_parte2.log'.format(path, giorno_file, user),
+    filename='{}\log\{}_{}_ecopunti_parte2.log'.format(path, giorno_file, user),
     level=logging.DEBUG)
 
 
