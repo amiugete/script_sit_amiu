@@ -358,7 +358,7 @@ where cod_frequenza not in (select cod_frequenza from marzocchir.frequenze_ok_1)
             logging.error(query)
             logging.error(e)
         cur.close()
-        con.commit()
+        #con.commit()
 
 
         cur = con.cursor()
