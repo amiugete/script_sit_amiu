@@ -5,6 +5,9 @@ variazioni/*.xlsx
 ecopunti/*.xlsx
 utenze/*.xlsx
 report/*.xlsx
+correzioni_grafo/*.xlsx
+optit/*
+bilaterali/*
 osm_file/*.osm
 *.osm
 

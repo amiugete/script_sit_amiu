@@ -154,7 +154,7 @@ def main():
         order by cod_frequenza'''
     curr0 = conn.cursor()
     try:
-	    curr0.execute(query1)
+        curr0.execute(query1)
     except Exception as e:
         logging.error(e)
 
@@ -184,8 +184,8 @@ def main():
 
     
     try:
-	    curr.execute(select_frequenze)
-	    frequenze_su_db=curr.fetchall()
+        curr.execute(select_frequenze)
+        frequenze_su_db=curr.fetchall()
     except Exception as e:
         logging.error(e)
 
@@ -264,10 +264,11 @@ def main():
     '''
     curr0 = conn.cursor()
     try:
-	    curr0.execute(select_frequenze)
-	    frequenze_su_sit=curr0.fetchall()
+        curr0.execute(query_select)
+        frequenze_su_sit=curr0.fetchall()
     except Exception as e:
         logging.error(e)
+    
     curr0.close()
 
     for ff in frequenze_su_sit:
@@ -313,8 +314,8 @@ where cod_frequenza not in (select cod_frequenza from marzocchir.frequenze_ok_1)
     
     curr0 = conn.cursor()
     try:
-	    curr0.execute(query2)
-	    frequenze_nuove=curr0.fetchall()
+        curr0.execute(query2)
+        frequenze_nuove=curr0.fetchall()
     except Exception as e:
         logging.error(e)
     curr0.close()
