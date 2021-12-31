@@ -237,20 +237,31 @@ def main():
                 if bin_uo != None and bin_uo[0:1]=='S':
                     logging.error('M Non torna')
 
-            query_insert='''
-            INSERT INTO marzocchir.frequenze_ok
-            (cod_frequenza, descrizione_short, descrizione_long, num_frequenza, freq_binaria, num_giorni)
-            VALUES({0}, '{1}', '{2}', {0}, '{3}', {4});
-            '''.format(freq_int, descrizione_short, descrizione_long, stringa_binaria, num)
-            logging.debug(query_insert)
-            curr1 = conn.cursor()
-            curr1.execute(query_insert)
+            curr_s = conn.cursor()
+            query_select="SELECT cod_frequenza FROM  marzocchir.frequenze_ok WHERE cod_frequenza={0}".format(freq_int)
+            try:
+                curr.execute(query_select)
+                sel=curr.fetchall()
+            except Exception as e:
+                logging.error(e)
+            curr_s.close()
+
+            if len(sel)==0:
+                query_insert='''
+                INSERT INTO marzocchir.frequenze_ok
+                (cod_frequenza, descrizione_short, descrizione_long, num_frequenza, freq_binaria, num_giorni)
+                VALUES({0}, '{1}', '{2}', {0}, '{3}', {4});
+                '''.format(freq_int, descrizione_short, descrizione_long, stringa_binaria, num)
+                logging.debug(query_insert)
+                curr1 = conn.cursor()
+                curr1.execute(query_insert)
+                curr1.close()
         except Exception as e:
             logging.warning(e)
             logging.warning(query_insert)
             #logging.error('Null value')
         i+=1
-        curr1.close()
+        
 
     
     # trasferisco i dati sul DB UO 
