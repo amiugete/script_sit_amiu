@@ -100,11 +100,16 @@ def main(argv):
 
     # carico i mezzi sul DB PostgreSQL
     logging.info('Connessione al db SIT')
-    conn = psycopg2.connect(dbname=db,
+    try:
+        conn = psycopg2.connect(dbname=db,
                         port=port,
                         user=user,
                         password=pwd,
                         host=host)
+        logging.info('Connessione riuscita')
+    except Exception as e:
+        logging.error(e)
+
 
     curr = conn.cursor()
     conn.autocommit = True
@@ -112,12 +117,15 @@ def main(argv):
 
 
     logging.info('Connessione al db Saltax')
-    conn_saltax = psycopg2.connect(dbname=db_saltax,
+    try:
+        conn_saltax = psycopg2.connect(dbname=db_saltax,
                         port=port,
                         user=user,
                         password=pwd,
                         host=host_saltax)
-    
+        logging.info('Connessione riuscita')
+    except Exception as e:
+        logging.error(e)
     query='''select cod_civico from alberghi.base_ecopunti'''
     
 
