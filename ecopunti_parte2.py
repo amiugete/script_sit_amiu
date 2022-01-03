@@ -142,17 +142,11 @@ def main(argv):
 
     logging.info('Lista civici')
     curr2 = conn.cursor()
-    query2 = ''' SELECT v.nome, be.testo, 
-	case 
-        when e.cod_civico is not null
-	    then 'civico già presente'
-	    else NULL
-	end 
+    query2 = ''' SELECT v.nome, be.testo, be.note 
 	FROM alberghi.base_ecopunti be 
     JOIN topo.vie v 
     ON v.id_via::integer = be.cod_strada::integer
-    LEFT JOIN alberghi.ecopunti e 
-    ON e.cod_civico = be.cod_civico'''
+    '''
 
     try:
         curr2.execute(query2)
