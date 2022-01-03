@@ -111,7 +111,7 @@ def main(argv):
 
 
 
-    logging.info('Connessione al db SIT')
+    logging.info('Connessione al db Saltax')
     conn_saltax = psycopg2.connect(dbname=db_saltax,
                         port=port,
                         user=user,
