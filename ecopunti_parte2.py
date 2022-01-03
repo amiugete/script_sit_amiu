@@ -90,7 +90,7 @@ def main(argv):
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
-            print('seleziona_utenze_vie.py -i <inputfile> -o <outputfile>')
+            print('seleziona_utenze_vie.py -i <inputfile> -o <outputfile> - m <mail>')
             sys.exit()
         elif opt in ("-m", "--mail"):
             mail = arg
@@ -99,7 +99,7 @@ def main(argv):
 
 
     # carico i mezzi sul DB PostgreSQL
-    logging.info('Connessione al db')
+    logging.info('Connessione al db SIT')
     conn = psycopg2.connect(dbname=db,
                         port=port,
                         user=user,
@@ -109,14 +109,22 @@ def main(argv):
     curr = conn.cursor()
     conn.autocommit = True
 
+
+
+    logging.info('Connessione al db SIT')
+    conn_saltax = psycopg2.connect(dbname=db_saltax,
+                        port=port,
+                        user=user,
+                        password=pwd,
+                        host=host_saltax)
     
     query='''select cod_civico from alberghi.base_ecopunti'''
     
 
 
     try:
-	    curr.execute(query)
-	    lista_civici=curr.fetchall()
+        curr.execute(query)
+        lista_civici=curr.fetchall()
     except Exception as e:
         logging.error(e)
 
@@ -134,13 +142,21 @@ def main(argv):
 
     logging.info('Lista civici')
     curr2 = conn.cursor()
-    query2 = ''' SELECT v.nome, be.testo FROM alberghi.base_ecopunti be 
-            JOIN topo.vie v 
-            ON v.id_via::integer = be.cod_strada::integer'''
+    query2 = ''' SELECT v.nome, be.testo, 
+	case 
+        when e.cod_civico is not null
+	    then 'civico già presente'
+	    else NULL
+	end 
+	FROM alberghi.base_ecopunti be 
+    JOIN topo.vie v 
+    ON v.id_via::integer = be.cod_strada::integer
+    LEFT JOIN alberghi.ecopunti e 
+    ON e.cod_civico = be.cod_civico'''
 
     try:
-	    curr2.execute(query2)
-	    lista_civici2=curr2.fetchall()
+        curr2.execute(query2)
+        lista_civici2=curr2.fetchall()
     except Exception as e:
         logging.error(e)
 
@@ -156,11 +172,13 @@ def main(argv):
     w0.write(0, 0, 'id') 
     w0.write(0, 1, 'Nome_via')
     w0.write(0, 2, 'Civico')
+    w0.write(0, 2, 'Note')
     i=1
     for vv in lista_civici2:
         w0.write(i, 0, i) 
         w0.write(i, 1, vv[0])
         w0.write(i, 2, vv[1])
+        w0.write(i, 2, vv[2])
         i+=1
         
 
@@ -254,7 +272,9 @@ def main(argv):
     w.write(0, 16, 'ABITAZIONE_DI_RESIDENZA') 
     w.write(0, 17, 'DESCR_CATEGORIA')
     w.write(0, 18, 'DESCR_UTILIZZO') 
-
+    w.write(0, 19, 'COD_INTERNO')
+    w.write(0, 20, 'Presenza dato su Saltax?')
+    w.write(0, 21, 'Chiave consegnata?')
 
 
     logging.info('*****************************************************')
@@ -262,8 +282,8 @@ def main(argv):
 
     cur = con.cursor()
     query=''' SELECT ID_UTENTE, PROGR_UTENZA, COGNOME, NOME, COD_VIA, DESCR_VIA,
-        CIVICO, SUB_CIVICO, COLORE, SCALA, PIANO, INTERNO, CAP, 
-        UNITA_URBANISTICA, QUARTIERE, CIRCOSCRIZIONE, ZONA, ABITAZIONE_DI_RESIDENZA,  DESCR_CATEGORIA, DESCR_UTILIZZO
+        CIVICO, COLORE, SCALA, PIANO, INTERNO, CAP, 
+        UNITA_URBANISTICA, QUARTIERE, CIRCOSCRIZIONE, ZONA, ABITAZIONE_DI_RESIDENZA,  DESCR_CATEGORIA, DESCR_UTILIZZO, COD_INTERNO
         FROM STRADE.UTENZE_TIA_DOMESTICHE
         WHERE COD_CIVICO in {}
         '''.format(civ)
@@ -277,6 +297,31 @@ def main(argv):
         while j<len(rr):
             w.write(i, j, rr[j])
             j+=1
+        query_saltax='''select * from ecopunti_xatlas_key 
+            where pper ={0} and cod_interno = '{1}'
+            and data_attivazione_utenza is not null 
+            and data_cessazione_utenza is null '''.format(rr[0],rr[19])
+        #print(query_saltax)
+        cur_saltax= conn_saltax.cursor()
+        cur_saltax.execute(query_saltax)
+        presente_saltax=cur_saltax.fetchall()
+        if len(presente_saltax)>0:
+            w.write(i, j, 'S')
+        else:
+            w.write(i, j, 'N')
+        j+=1
+        query_saltax1='''select * from ecopunti_xatlas_key 
+            where pper ={0} and cod_interno = '{1}'
+            and data_attivazione_utenza is not null 
+            and data_cessazione_utenza is null 
+            and data_consegna is not null'''.format(rr[0],rr[19])
+        #print(query_saltax1)
+        cur_saltax.execute(query_saltax1)
+        consegnato_saltax=cur_saltax.fetchall()
+        if len(consegnato_saltax)>0:
+            w.write(i, j, 'Chiave già consegnata')
+        cur_saltax.close()
+        j+=1
         i+=1
 
     cur.close()
@@ -344,15 +389,19 @@ def main(argv):
     w2.write(0, 12, 'UNITA_URBANISTICA') 
     w2.write(0, 13, 'QUARTIERE') 
     w2.write(0, 14, 'CIRCOSCRIZIONE')
-    w2.write(0, 15, 'ABITAZIONE_DI_RESIDENZA') 
+    w2.write(0, 15, 'SUPERFICIE') 
     w2.write(0, 16, 'DESCR_CATEGORIA')
     w2.write(0, 17, 'DESCR_UTILIZZO')
+    w2.write(0, 18, 'COD_INTERNO')
+    w2.write(0, 19, 'Presenza dato su Saltax?')
+    w2.write(0, 20, 'Chiave consegnata?')
+    
 
 
 
     query='''SELECT ID_UTENTE, PROGR_UTENZA, NOMINATIVO, CFISC_PARIVA, COD_VIA, DESCR_VIA,
 CIVICO, COLORE, SCALA, INTERNO, LETTERA_INTERNO, CAP, 
-UNITA_URBANISTICA, QUARTIERE, CIRCOSCRIZIONE, ZONA, SUPERFICIE, NUM_OCCUPANTI, ABITAZIONE_DI_RESIDENZA,  DESCR_CATEGORIA, DESCR_UTILIZZO
+UNITA_URBANISTICA, QUARTIERE, CIRCOSCRIZIONE,  SUPERFICIE, DESCR_CATEGORIA, DESCR_UTILIZZO, COD_INTERNO
 FROM STRADE.UTENZE_TIA_NON_DOMESTICHE
 WHERE COD_CIVICO in {}
         '''.format(civ)
@@ -366,6 +415,30 @@ WHERE COD_CIVICO in {}
         while j<len(rr):
             w2.write(i, j, rr[j])
             j+=1
+        query_saltax='''select * from ecopunti_xatlas_key 
+            where pper ={0} and cod_interno = '{1}'
+            and data_attivazione_utenza is not null 
+            and data_cessazione_utenza is null '''.format(rr[0], rr[18])
+        #print(query_saltax)
+        cur_saltax= conn_saltax.cursor()
+        cur_saltax.execute(query_saltax)
+        presente_saltax=cur_saltax.fetchall()
+        if len(presente_saltax)>0:
+            w2.write(i, j, 'S')
+        else:
+            w2.write(i, j, 'N')
+        j+=1
+        query_saltax1='''select * from ecopunti_xatlas_key 
+            where pper ={0} and cod_interno = '{1}'
+            and data_attivazione_utenza is not null 
+            and data_cessazione_utenza is null 
+            and data_consegna is not null'''.format(rr[0],rr[18])
+        #print(query_saltax1)
+        cur_saltax.execute(query_saltax1)
+        consegnato_saltax=cur_saltax.fetchall()
+        if len(consegnato_saltax)>0:
+            w2.write(i, j, 'Chiave già consegnata')
+        cur_saltax.close()
         i+=1
 
     cur2.close()
