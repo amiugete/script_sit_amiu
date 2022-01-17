@@ -68,7 +68,7 @@ path     = os.path.dirname(os.path.abspath(filename))
 giorno_file=datetime.datetime.today().strftime('%Y%m%d')
 
 
-logfile='{}/log/{}civici.log'.format(path, giorno_file)
+logfile='{}/log/{}_civici.log'.format(path, giorno_file)
 
 logging.basicConfig(
     handlers=[logging.FileHandler(filename=logfile, encoding='utf-8', mode='a')],
@@ -293,23 +293,7 @@ from geo.civici_comune cc'''
         logging.error(e)
     logging.info ('Copio i dati su Oracle')
     cur.execute('TRUNCATE TABLE CIVICI_DA_COMUNE')
-    #for cc in lista_civici:
-    '''arr=[]
-    for cc in lista_civici:
-        vals = {}
-        vals['cc']=cc[0]
-        vals['iv']=cc[1]
-        vals['nc']=cc[2]
-        vals['lc']=cc[3]
-        vals['col']=cc[4]
-        vals['tc']=cc[5]
-        vals['lat']=cc[6]
-        vals['lon']=cc[7]
-        arr.append(vals)
-    print(lista_civici[2])
-    print(arr[2])'''
-    arr=[]
-    ### PROBLEMA CON I NONE!!!!!
+    cur.commit() 
     for cc in lista_civici:
         #lista_ok=['' if v is None else v for v in cc]
         #print(lista_ok)
@@ -334,7 +318,8 @@ from geo.civici_comune cc'''
     VALUES(:c_c, :iv, :nc, :lc, :col, :tc, :lat, :lon)'''
         #cur.execute(insert_o, data)
         cur.execute(insert_o, [cc[0], cc[1], cc[2], lc_temp, col_temp, cc[5], cc[6], cc[7]])
-    cur.commit() 
+        cur.commit() 
+    #cur.commit() 
     logging.info("Fine copiadati su DB Oracle")      
         
          
