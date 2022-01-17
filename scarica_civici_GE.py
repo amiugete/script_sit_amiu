@@ -293,7 +293,7 @@ from geo.civici_comune cc'''
         logging.error(e)
     logging.info ('Copio i dati su Oracle')
     cur.execute('TRUNCATE TABLE CIVICI_DA_COMUNE')
-    cur.commit() 
+    con.commit()
     for cc in lista_civici:
         #lista_ok=['' if v is None else v for v in cc]
         #print(lista_ok)
@@ -315,12 +315,12 @@ from geo.civici_comune cc'''
         cur.setinputsizes(11, int, 4, 1, 1, 25, float, float) 
         insert_o='''INSERT INTO STRADE.CIVICI_DA_COMUNE
         (COD_CIVICO, ID_VIA, NUMERO_CIVICO, LETTERA_CIVICO, COLORE_CIVICO, DESCRIZIONE_CIVICO, COORD_LAT, COORD_LON)
-    VALUES(:c_c, :iv, :nc, :lc, :col, :tc, :lat, :lon)'''
+    VALUES(:c_c, :iv, :nc, :lc, :col, :tc, :lat, :lon);'''
         #cur.execute(insert_o, data)
         cur.execute(insert_o, [cc[0], cc[1], cc[2], lc_temp, col_temp, cc[5], cc[6], cc[7]])
-        cur.commit() 
+    con.commit() 
     #cur.commit() 
-    logging.info("Fine copiadati su DB Oracle")      
+    logging.info("Fine copia dati su DB Oracle")      
         
          
             
