@@ -80,8 +80,8 @@ def main():
 
 
     try:
-	    curr.execute(query)
-	    lista_dismessi=curr.fetchall()
+        curr.execute(query)
+        lista_dismessi=curr.fetchall()
     except Exception as e:
         logging.error(e)
 

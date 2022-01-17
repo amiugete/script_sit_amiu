@@ -9,6 +9,7 @@ correzioni_grafo/*.xlsx
 optit/*
 bilaterali/*
 osm_file/*.osm
+civici/*.geojson
 *.osm
 
 
