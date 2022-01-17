@@ -78,7 +78,7 @@ logging.basicConfig(
     #filename=logfile,
     level=logging.INFO)
 
-debug=1 # da usare per saltare dei pezzi (1 salta)
+debug=0 # da usare per saltare il download in fase di debug su Oracle (1 salta)
 
 
 def main():
@@ -315,7 +315,7 @@ from geo.civici_comune cc'''
         cur.setinputsizes(11, int, 4, 1, 1, 25, float, float) 
         insert_o='''INSERT INTO STRADE.CIVICI_DA_COMUNE
         (COD_CIVICO, ID_VIA, NUMERO_CIVICO, LETTERA_CIVICO, COLORE_CIVICO, DESCRIZIONE_CIVICO, COORD_LAT, COORD_LON)
-    VALUES(:c_c, :iv, :nc, :lc, :col, :tc, :lat, :lon);'''
+        VALUES(:c_c, :iv, :nc, :lc, :col, :tc, :lat, :lon)'''
         #cur.execute(insert_o, data)
         cur.execute(insert_o, [cc[0], cc[1], cc[2], lc_temp, col_temp, cc[5], cc[6], cc[7]])
     con.commit() 
