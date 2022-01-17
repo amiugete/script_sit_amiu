@@ -1,0 +1,214 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+# AMIU copyleft 2021
+# Roberto Marzocchi
+
+'''
+Script per fare update delle aste delle piazzole
+'''
+
+
+import os,sys, getopt
+import inspect, os.path
+# da sistemare per Linux
+import cx_Oracle
+
+
+import xlsxwriter
+
+
+import psycopg2
+
+import datetime
+
+from urllib.request import urlopen
+import urllib.parse
+
+currentdir = os.path.dirname(os.path.realpath(__file__))
+parentdir = os.path.dirname(currentdir)
+sys.path.append(parentdir)
+
+from credenziali import *
+#from credenziali import db, port, user, pwd, host, user_mail, pwd_mail, port_mail, smtp_mail
+
+
+
+#libreria per gestione log
+import logging
+
+
+#num_giorno=datetime.datetime.today().weekday()
+#giorno=datetime.datetime.today().strftime('%A')
+
+filename = inspect.getframeinfo(inspect.currentframe()).filename
+path     = os.path.dirname(os.path.abspath(filename))
+
+
+giorno_file=datetime.datetime.today().strftime('%Y%m%d')
+
+
+logfile='{}/log/{}update_grafo_piazzola.log'.format(path, giorno_file)
+
+logging.basicConfig(
+    #handlers=[logging.FileHandler(filename=logfile, encoding='utf-8', mode='a')],
+    format='%(asctime)s\t%(levelname)s\t%(message)s',
+    #filemode='w', # overwrite or append
+    #fileencoding='utf-8',
+    #filename=logfile,
+    level=logging.INFO)
+
+
+############################################
+#INPUT (da rendere dinamici per  fare WS)
+piazzola = 37113
+asta_old = 3170366705
+asta_new = 3170366713
+#############################################
+
+
+def main():
+
+
+
+
+    # carico i mezzi sul DB PostgreSQL
+    logging.info('Connessione al db')
+    conn = psycopg2.connect(dbname=db,
+                        port=port,
+                        user=user,
+                        password=pwd,
+                        host=host)
+
+    curr = conn.cursor()
+    conn.autocommit = True
+    query='''select id_elemento, id_percorso, id_categoria_uso, cod_percorso from elem.v_percorsi_per_elemento vppe 
+ where id_elemento in (select id_elemento from elem.elementi e where id_piazzola in (%s))'''
+    
+    try:
+        curr.execute(query,(piazzola,))
+        lista_percorsi=curr.fetchall()
+    except Exception as e:
+        logging.error(e)
+
+
+    #inizializzo gli array
+    #ut=[]
+
+           
+    for u in lista_percorsi:
+        #logging.debug(vv[0])
+        #ut.append(vv[0])
+        id_percorso=u[1]
+        cod_percorso=u[3]
+        id_elemento=u[0]
+
+
+        query2='''select * from elem.aste_percorso ap where id_percorso = %s and id_asta=%s'''
+        curr2= conn.cursor()
+        
+        try:
+            curr2.execute(query2,(id_percorso, asta_new,))
+            lista_aste_percorsi=curr2.fetchall()
+        except Exception as e:
+            logging.error(e)
+            
+        ''' Procedo in due modi diversi'''
+        if len(lista_aste_percorsi)==0:
+            logging.info("Non c'è la nuova asta {0}, nel percorso {1}, la aggiungo".format(asta_new, cod_percorso))
+            curr3= conn.cursor()
+             #update num_seq
+            update =  '''update elem.aste_percorso 
+            set num_seq=num_seq+1 
+            where id_percorso=%s and num_seq >=(select min(num_seq) FROM elem.aste_percorso where id_percorso = %s and id_asta=%s);'''
+            try:
+                curr3.execute(update,(id_percorso, id_percorso, asta_old,))
+                #conn.commit()
+            except Exception as e:
+                logging.error(e)
+            
+            insert= '''insert into elem.aste_percorso (id_asta, num_seq, x_cod_percorso, lato_servizio, percent_trattamento, tipo, frequenza, 
+            carico_scarico, id_percorso, metri_trasf, tempo_trasf, senso_perc, lung_trattamento, nota) SELECT %s, min(num_seq), x_cod_percorso,
+            lato_servizio, percent_trattamento, tipo, frequenza, 
+            carico_scarico, id_percorso, metri_trasf, tempo_trasf, senso_perc, lung_trattamento, nota
+            FROM elem.aste_percorso where id_percorso = %s and id_asta=%s group by x_cod_percorso,
+            lato_servizio, percent_trattamento, tipo, frequenza, 
+            carico_scarico, id_percorso, metri_trasf, tempo_trasf, senso_perc, lung_trattamento, nota;'''
+
+            try:
+                curr3.execute(insert,(asta_new, id_percorso, asta_old,))
+                #conn.commit()
+            except Exception as e:
+                logging.error(e)
+                
+            
+            
+            
+            update_eap='''update elem.elementi_aste_percorso 
+                    set id_asta_percorso = (select id_asta_percorso from elem.aste_percorso ap where id_percorso = %s and id_asta=%s)
+                    where id_elemento = %s and id_asta_percorso in
+                    (select id_asta_percorso from elem.aste_percorso where id_percorso=%s);'''
+            try:
+                curr3.execute(update_eap, (id_percorso, asta_new, id_elemento,id_percorso,))
+                #conn.commit()
+            except Exception as e:
+                logging.error(e)
+            
+            curr3.close()
+
+            
+            
+            
+        elif len(lista_aste_percorsi)>0:
+            logging.info("La nuova asta {0} c'è già nel percorso {1}, faccio semplicemente update".format(asta_new, cod_percorso))
+            c=0
+            for ap in lista_aste_percorsi:
+                if c==0:
+                    asta_percorso=ap[0]
+                    update_eap='''update elem.elementi_aste_percorso 
+                    set id_asta_percorso = %s
+                    where id_elemento = %s and id_asta_percorso in
+                    (select id_asta_percorso from elem.aste_percorso where id_percorso=%s)'''
+                    curr3= conn.cursor()
+                    curr3.execute(update_eap, (asta_percorso, id_elemento,id_percorso,))
+                    conn.commit()
+                    curr3.close()
+                c+=1   
+        '''else: 
+            print('Cod percorso: {}'.format(cod_percorso))
+            print('Id percorso: {}'.format(id_percorso))
+            print('Asta: {}'.format(asta_new))
+            print("Da capire come gestire")      
+        '''
+        curr2.close()
+        
+    update_piazzola = '''update elem.piazzole p
+        set id_asta= %s
+        where id_piazzola in (%s);'''
+    
+    try:
+        curr.execute(update_piazzola,(asta_new, piazzola,))
+        #conn.commit()
+    except Exception as e:
+        logging.error(e)
+        
+        
+    update_elementi = '''update elem.elementi 
+    set id_asta= %s
+    where id_piazzola in (%s);'''
+    
+    try:
+        curr.execute(update_elementi,(asta_new, piazzola,))
+        #conn.commit()
+    except Exception as e:
+        logging.error(e)
+
+
+    curr.close()
+
+
+
+
+
+if __name__ == "__main__":
+    main()   
