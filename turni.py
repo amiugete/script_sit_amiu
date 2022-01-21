@@ -46,12 +46,12 @@ logfile='{}/log/turni.log'.format(path)
 #    os.remove(logfile)
 
 logging.basicConfig(
-    #handlers=[logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')],
+    handlers=[logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')],
     format='%(asctime)s\t%(levelname)s\t%(message)s',
     #filemode='w', # overwrite or append
     #fileencoding='utf-8',
     #filename=logfile,
-    level=logging.DEBUG)
+    level=logging.INFO)
 
 
 
@@ -341,8 +341,8 @@ def main():
 
         subject = "WARNING: anomalie turni su UO"
         body = '''Mail generata automaticamente dal codice python turni.py che gira su server amiugis.\n\n
-Esistono dei percorsi su UO dove c'è una discordanza di turni fra un UT e l'altra. Visualizza l'allegato e contatta le UT di riferimento\n\n\n\n
-Assistenza Territorio
+Esistono dei percorsi su UO dove c'è una discordanza di turni fra un UT e l'altra. \nVisualizza l'allegato e contatta le UT di riferimento\n\n\n\n
+AMIU Assistenza Territorio
 '''
         sender_email = user_mail
         receiver_email='assterritorio@amiu.genova.it'
