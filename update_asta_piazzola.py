@@ -64,6 +64,7 @@ logging.basicConfig(
 piazzola = 37113
 asta_old = 3170366705
 asta_new = 3170366713
+ambiente = 'sit' # sit_test, #sit_prog
 #############################################
 
 
@@ -74,7 +75,7 @@ def main():
 
     # carico i mezzi sul DB PostgreSQL
     logging.info('Connessione al db')
-    conn = psycopg2.connect(dbname=db,
+    conn = psycopg2.connect(dbname=ambiente,
                         port=port,
                         user=user,
                         password=pwd,
