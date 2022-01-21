@@ -266,7 +266,7 @@ order by 1'''.format(epsg)
                             curr1.execute(insert,(codvia, numero, lettera,colore, testo,uso, id_municipio, codice_indirizzo_comune, geom, cod_civico,))
                         except Exception as e:
                             logging.error(e)
-                            logging.error('cod_civico={}, geom={}'.formar(cod_civico,geom))
+                            logging.error('cod_civico={}, geom={}'.format(cod_civico,geom))
                     
                             
                             

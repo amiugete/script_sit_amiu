@@ -118,8 +118,8 @@ def main():
 
 
     try:
-	    curr.execute(query)
-	    lista_variazioni=curr.fetchall()
+        curr.execute(query)
+        lista_variazioni=curr.fetchall()
     except Exception as e:
         logging.error(e)
 
@@ -144,7 +144,7 @@ def main():
         '''.format(vv[0])
 
         try:
-	        curr.execute(insert_query)
+            curr.execute(insert_query)
 	        #lista_variazioni=curr.fetchall()
         except Exception as e:
             logging.error(insert_query)
