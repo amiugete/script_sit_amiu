@@ -94,8 +94,8 @@ def main():
 
 
     try:
-	    curr.execute(select)
-	    lista_elementi=curr.fetchall()
+        curr.execute(select)
+        lista_elementi=curr.fetchall()
     except Exception as e:
         logging.error(e)
 
@@ -110,8 +110,8 @@ def main():
         sel_piazzola= '''select count(distinct tipo_elemento) from elem.elementi where id_piazzola = {}'''.format(pp[3])
         curr1 = conn.cursor()
         try:
-	        curr1.execute(sel_piazzola)
-	        lista_piazzole=curr1.fetchall()
+            curr1.execute(sel_piazzola)
+            lista_piazzole=curr1.fetchall()
         except Exception as e:
             logging.error(e)
         for cc in lista_piazzole:
@@ -139,8 +139,8 @@ def main():
         id_elemento=0
         curr2=conn.cursor()
         try:
-	        curr2.execute(query)
-	        elemento=curr2.fetchall()
+            curr2.execute(query)
+            elemento=curr2.fetchall()
         except Exception as e:
             logging.error(e)
         for ee in elemento:
