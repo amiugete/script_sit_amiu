@@ -75,8 +75,8 @@ def main():
         group by e.id_piazzola'''
     
     try:
-	    curr.execute(select)
-	    lista_piazzole=curr.fetchall()
+        curr.execute(select)
+        lista_piazzole=curr.fetchall()
     except Exception as e:
         logging.error(e)
 

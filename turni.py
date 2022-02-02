@@ -15,7 +15,7 @@ caso C in SIT il turno non esiste e lo crea
 Quindi allinea i turni di tutti i percorsi da U.O. a SIT
 '''
 
-from msilib import type_short
+#from msilib import type_short
 import os, sys, re  # ,shutil,glob
 
 #import getopt  # per gestire gli input
@@ -236,7 +236,7 @@ def main():
     for pp in percorsi:
         percorso_uo='''SELECT ID_PERCORSO, ID_TURNO 
         FROM ANAGR_SER_PER_UO aspu 
-        WHERE ID_PERCORSO IN (:cod_perc) AND DTA_DISATTIVAZIONE > SYSDATE
+        WHERE ID_PERCORSO IN (:cod_perc) AND (DTA_DISATTIVAZIONE > SYSDATE OR ID_PERCORSO IN (SELECT ID_PERCORSO FROM CONS_PERCORSI_STAGIONALI ))
         GROUP BY ID_PERCORSO, ID_TURNO'''
         try:
             cur.execute(percorso_uo, [pp[0]])
@@ -254,7 +254,7 @@ def main():
             if pp[1]!=pp_uo[1]:
                 update_turno_sit='''UPDATE elem.percorsi 
                 SET id_turno= %s
-                WHERE cod_percorso=%s and id_categoria_uso=3'''
+                WHERE cod_percorso=%s and id_categoria_uso in (3,6)'''
                 curr1.execute(update_turno_sit, (pp_uo[1],pp[0],))
     
     
@@ -307,7 +307,8 @@ def main():
             JOIN ANAGR_TURNI at2 ON at2.ID_TURNO =aspu.ID_TURNO
             JOIN ANAGR_UO au ON au.ID_UO = aspu.ID_UO 
             JOIN ANAGR_SERVIZI as2 ON as2.ID_SERVIZIO = aspu.ID_SERVIZIO 
-            WHERE ID_PERCORSO IN (:id_perc) AND aspu.DTA_DISATTIVAZIONE > SYSDATE'''
+            WHERE ID_PERCORSO IN (:id_perc) AND 
+            (aspu.DTA_DISATTIVAZIONE > SYSDATE OR id_percorso IN (SELECT ID_PERCORSO FROM CONS_PERCORSI_STAGIONALI)) '''
             try:
                 cur.execute(select_anomalie, [percorsi_anomali_uo[i]])
                 anomalie=cur.fetchall()
@@ -339,7 +340,7 @@ def main():
         # Create a secure SSL context
         context = ssl.create_default_context()
 
-        subject = "WARNING: anomalie turni su UO"
+        subject = "Anomalie turni su UO"
         body = '''Mail generata automaticamente dal codice python turni.py che gira su server amiugis.\n\n
 Esistono dei percorsi su UO dove c'è una discordanza di turni fra un UT e l'altra. \nVisualizza l'allegato e contatta le UT di riferimento\n\n\n\n
 AMIU Assistenza Territorio
@@ -356,7 +357,7 @@ AMIU Assistenza Territorio
         #message["Cc"] = cc_mail
         message["Subject"] = subject
         #message["Bcc"] = debug_email  # Recommended for mass emails
-        message.preamble = "Numero di civici alto"
+        message.preamble = "Anomalie turni"
 
         
                         
