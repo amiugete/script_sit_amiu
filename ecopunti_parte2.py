@@ -86,11 +86,11 @@ def main(argv):
     try:
         opts, args = getopt.getopt(argv,"hm:",["mail="])
     except getopt.GetoptError:
-        logging.error('ecopunti_parte2.py -i <inputfile> -p <prefisso> -m <mail>')
+        logging.error('ecopunti_parte2.py  -m <mail>')
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
-            print('seleziona_utenze_vie.py -i <inputfile> -o <outputfile> - m <mail>')
+            print('seleziona_utecopunti_parte2.py - m <mail>')
             sys.exit()
         elif opt in ("-m", "--mail"):
             mail = arg
