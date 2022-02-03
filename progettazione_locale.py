@@ -5,12 +5,52 @@
 # Roberto Marzocchi
 
 '''
-Lo script esporta tabelle da SIT PROG a un geopackage locale
+Lo script importa i dati dai geopackage caricati sul cloud di MERGIN al DB PostGIS
+
+Lavora su:
+
+- annotazioni 
+- installazioni
+
+Si riferisce al progetto denominato installazioni_bilaterali_genova 
+
 '''
 
 
-import os
+import os, sys, getopt, re  # ,shutil,glob
 from credenziali import *
+
+
+import psycopg2
+import sqlite3
+
+
+currentdir = os.path.dirname(os.path.realpath(__file__))
+parentdir = os.path.dirname(currentdir)
+sys.path.append(parentdir)
+from credenziali import *
+
+
+#import requests
+
+import logging
+
+path=os.path.dirname(sys.argv[0]) 
+#tmpfolder=tempfile.gettempdir() # get the current temporary directory
+logfile='{}/log/installazione_bilaterali_genova.log'.format(path)
+#if os.path.exists(logfile):
+#    os.remove(logfile)
+
+logging.basicConfig(
+    #handlers=[logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')],
+    format='%(asctime)s\t%(levelname)s\t%(message)s',
+    #filemode='w', # overwrite or append
+    #fileencoding='utf-8',
+    #filename=logfile,
+    level=logging.DEBUG)
+
+
+
 
 from osgeo import ogr, gdal
 
@@ -65,7 +105,47 @@ def pg_to_gpkg(tablename):
 
 
 def main():
-    pg_to_gpkg('''geo.v_piazzole_geom''')
+    
+    logging.info('Leggo gli input')
+    try:
+        opts, args = getopt.getopt(argv,"hm:",["mail="])
+    except getopt.GetoptError:
+        logging.error('progettazione_locale.py -i <input sqlite3 file>')
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == '-h':
+            print('progettazione_locale.py -i <input sqlite3 file> ')
+            sys.exit()
+        elif opt in ("-i", "--input"):
+            sqlite_file = arg
+            logging.info('Geopackage file = {}'.format(mail))
+    
+    
+    logging.info('Connessione al db PostgreSQL')
+    conn = psycopg2.connect(dbname=db,
+                        port=port,
+                        user=user,
+                        password=pwd,
+                        host=host)
+    
+    
+    curr = conn.cursor()
+    conn.autocommit = True
+    
+    logging.info('Connessione al GeoPackage')
+    con = sqlite3.connect(sqlite_file)
+    cur = con.cursor()
+    for row in cur.execute('SELECT * FROM note_installazione ORDER BY update_time'):
+        print(row[1])
+    
+    
+    curr.close()
+    conn.close()
+
+    
+    
+    
+    
 
 if __name__ == "__main__":
     main()  
