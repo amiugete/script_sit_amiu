@@ -47,7 +47,7 @@ logfile='{}/log/installazione_bilaterali_genova.log'.format(path)
 #    os.remove(logfile)
 
 logging.basicConfig(
-    #handlers=[logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')],
+    handlers=[logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')],
     format='%(asctime)s\t%(levelname)s\t%(message)s',
     #filemode='w', # overwrite or append
     #fileencoding='utf-8',
@@ -401,7 +401,7 @@ AMIU Assistenza Territorio
         message.attach(MIMEText(body, "plain"))
 
         # aggiunto allegato (usando la funzione importata)
-        allegato(message, file_note, nome_file)
+        #allegato(message, file_note, nome_file)
         
         #text = message.as_string()
 

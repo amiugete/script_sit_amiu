@@ -37,6 +37,7 @@ parentdir = os.path.dirname(currentdir)
 sys.path.append(parentdir)
 
 from credenziali import *
+from mail_log import *
 #from credenziali import db, port, user, pwd, host, user_mail, pwd_mail, port_mail, smtp_mail
 
 
@@ -54,16 +55,47 @@ path     = os.path.dirname(os.path.abspath(filename))
 
 giorno_file=datetime.datetime.today().strftime('%Y%m%d')
 
+nomelogfile='{}_allineamento_sit_prog.log'.format(giorno_file)
+logfile='{}/log/{}'.format(path, nomelogfile)
+errorfile='{}/log/error.log'.format(path, giorno_file)
 
-logfile='{}/log/{}_allineamento_sit_prog.log'.format(path, giorno_file)
-
-logging.basicConfig(
-    #handlers=[logging.FileHandler(filename=logfile, encoding='utf-8', mode='a')],
+'''logging.basicConfig(
+    handlers=[logging.FileHandler(filename=logfile, encoding='utf-8', mode='w'), logging.StreamHandler()],
     format='%(asctime)s\t%(levelname)s\t%(message)s',
     #filemode='w', # overwrite or append
     #fileencoding='utf-8',
     #filename=logfile,
     level=logging.INFO)
+'''
+
+# Create a custom logger
+logging.basicConfig(
+    level=logging.INFO,
+    handlers=[
+    ]
+)
+
+logger = logging.getLogger()
+
+# Create handlers
+c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
+f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+
+
+c_handler.setLevel(logging.ERROR)
+f_handler.setLevel(logging.INFO)
+
+
+# Add handlers to the logger
+logger.addHandler(c_handler)
+logger.addHandler(f_handler)
+
+
+cc_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
+
+c_handler.setFormatter(cc_format)
+f_handler.setFormatter(cc_format)
+
 
 
 
@@ -75,7 +107,7 @@ def main():
 
 
     # carico i mezzi sul DB PostgreSQL
-    logging.info('Connessione al db SIT')
+    logger.info('Connessione al db SIT')
     conn = psycopg2.connect(dbname=db,
                         port=port,
                         user=user,
@@ -85,7 +117,7 @@ def main():
     curr = conn.cursor()
     #conn.autocommit = True
 
-    logging.info('Connessione al db SIT PROG')
+    logger.info('Connessione al db SIT PROG')
     conn_p = psycopg2.connect(dbname=db_prog,
                         port=port,
                         user=user,
@@ -94,20 +126,44 @@ def main():
 
     curr_p = conn_p.cursor()
 
+
+    ''' Cerco max data eliminazione su SIT PROG'''
+
+
     
-    ''''Cerco piazzole eliminate da SIT dopo il 01-01-2021'''
+    
+
+    data_max='''select max(data_eliminazione) from elem.piazzole '''
+
+    try:
+        curr_p.execute(data_max)
+        max_data=curr_p.fetchall()
+    except Exception as e:
+        logger.error(e)
+    
+    
+    
+    for d in max_data:
+        data_eliminazione_max=d[0]
+
+    curr_p.close()
+    curr_p = conn_p.cursor()
+
+    logger.info('''Su SIT PROG l'ultima piazzola eliminata risulta ferma al {}'''.format(data_eliminazione_max))
+
+    ''''Cerco piazzole eliminate da SIT dopo la data_eliminazione_max'''
 
     p_e_s=[]
     de_s=[]
     query= '''SELECT id_piazzola, data_eliminazione 
     FROM elem.piazzole p 
-    WHERE data_eliminazione > '2021-01-01' '''
+    WHERE data_eliminazione > %s '''
 
     try:
-        curr.execute(query)
+        curr.execute(query, (data_eliminazione_max,))
         dettagli_piazzola=curr.fetchall()
     except Exception as e:
-        logging.error(e)
+        logger.error(e)
     
     
     
@@ -133,7 +189,7 @@ def main():
     conn_p.commit()
     ########################################################################################
 
-    logging.info("{} piazzole eliminate".format(len(de_s)))
+    logger.info("{} piazzole eliminate".format(len(de_s)))
 
     curr.close()
     curr_p.close()
@@ -150,7 +206,7 @@ def main():
 
  
  
-    '''Prima di tutto devo cercare gli elementi bilaterali e usare numeri negativi come per le piazzole'''
+    '''Prima di tutto devo cercare gli elementi bilaterali dentro SIT PROG e usare numeri negativi come per le piazzole'''
 
     query_elementi='''select id_elemento from elem.elementi e where tipo_elemento in 
     (
@@ -160,23 +216,22 @@ def main():
 
 
     try:
-        #logging.info(query_elementi)
+        #logger.info(query_elementi)
         curr_p.execute(query_elementi, ('%'+'bilat'+'%',))
         elementi_bilaterali=curr_p.fetchall()
     except Exception as e:
-        logging.error(e)
+        logger.error(e)
 
     curr_p1 = conn_p.cursor()
     k=1
     for e in elementi_bilaterali:
         update_id='''UPDATE elem.elementi 
-        SET id_elemento=(select least(0,min(id_elemento))-%s from elem.elementi e )
+        SET id_elemento=(select least(0,min(id_elemento))-1 from elem.elementi e )
         where id_elemento=%s'''
-        curr_p1.execute(update_id, (k,e))
+        curr_p1.execute(update_id, (e,))
         k+=1
 
-    #####################
-    ## il -k è da sistemare
+ 
 
     ########################################################################################
     # da testare sempre prima senza fare i commit per verificare che sia tutto OK
@@ -188,13 +243,13 @@ def main():
     curr_p.close()
 
     curr_p = conn_p.cursor()
+    curr_p1 = conn_p.cursor()
+
+    logger.info("Terminato check su {} elementi bilaterali già creati".format(len(elementi_bilaterali)))
 
 
-    logging.info("Terminato check su {} elementi bilaterali già creati".format(len(elementi_bilaterali)))
 
-
-
-    ''' Cerco se la campana del vetro c'era già prima'''
+    ''' Cerco se la campana del vetro di SIT Prog c'era già prima'''
 
     query_elementi='''select id_elemento, id_piazzola from elem.elementi where id_piazzola in 
         (
@@ -202,30 +257,32 @@ def main():
         (
         select tipo_elemento from elem.tipi_elemento te where descrizione ilike %s
         )
-        ) and tipo_elemento = 12'''
+        ) and tipo_elemento = 12 and id_elemento > 0'''
 
 
 
     try:
-        #logging.info(query_elementi)
+        #logger.info(query_elementi)
         curr_p.execute(query_elementi, ('%'+'bilat'+'%',))
         elementi_vetro_bilaterali=curr_p.fetchall()
     except Exception as e:
-        logging.error(e)
+        logger.error(e)
 
-    curr_p1 = conn_p.cursor()
+    
     k=1
+    #ciclo sulle campane del vetro bilaterali
     for e in elementi_vetro_bilaterali:
+        # verifico se c'è la campana su SIT
         select_sit='''select * from elem.elementi 
         WHERE id_elemento=%s and id_piazzola=%s and tipo_elemento=12'''
 
         
         try:
-            #logging.info(query_elementi)
+            #logger.info(query_elementi)
             curr.execute(select_sit, (e[0],e[1]))
             elementi_vetro_sit=curr.fetchall()
         except Exception as e:
-            logging.error(e)
+            logger.error(e)
         
 
         select_esiste_sit='''select * from elem.elementi 
@@ -233,32 +290,34 @@ def main():
 
         
         try:
-            #logging.info(query_elementi)
+            #logger.info(query_elementi)
             curr.execute(select_esiste_sit, (e[0],))
             elemento_esiste_sit=curr.fetchall()
         except Exception as e:
-            logging.error(e)
+            logger.error(e)
 
         #print(len(elementi_vetro_sit))
+        # la campana di SIT prog non c'è su SIT
         if len(elementi_vetro_sit) < 1 and len(elemento_esiste_sit)==1:
-            logging.info('id_elemento {}'.format(e[0]))
+            logger.info('id_elemento {}'.format(e[0]))
             update_id='''UPDATE elem.elementi 
-            SET id_elemento=(select least(0,min(id_elemento))-%s from elem.elementi e )
+            SET id_elemento=(select least(0,min(id_elemento))-1 from elem.elementi e )
             where id_elemento=%s'''
-            curr_p1.execute(update_id, (k,e[0]))
+            curr_p1.execute(update_id, (e[0]))
+            ########################################################################################
+            # da testare sempre prima senza fare i commit per verificare che sia tutto OK
+            conn_p.commit()
+            ########################################################################################
             k+=1
         elif len(elemento_esiste_sit)<1:
-            logging.info('id_elemento {} sarebbe da eliminare'.format(e[0]))
+            logger.info('id_elemento {} su SIT non corrisponde a quello su SIT PROG - TO CHECK'.format(e[0]))
 
 
 
 
-    ########################################################################################
-    # da testare sempre prima senza fare i commit per verificare che sia tutto OK
-    conn_p.commit()
-    ########################################################################################
+    
 
-    logging.info("Terminato check su {} elementi del vetro in piazzole bilaterali già creati".format(k))
+    logger.info("Terminato check su {} elementi del vetro in piazzole bilaterali già creati".format(k))
 
 
 
@@ -267,8 +326,6 @@ def main():
     curr_p.close()
     curr.close()
 
-    curr = conn.cursor()
-    curr_p = conn_p.cursor()
 
 
 
@@ -287,7 +344,7 @@ def main():
         curr_p.execute(query_max_id_prog)
         max_id_q=curr_p.fetchall()
     except Exception as e:
-        logging.error(e)
+        logger.error(e)
 
     for mp in max_id_q:
         max_id=mp[0]
@@ -326,7 +383,7 @@ def main():
         curr.execute(select_aste, (max_id,))
         id_a=curr.fetchall()
     except Exception as e:
-        logging.error(e)
+        logger.error(e)
 
 
     curr1 = conn.cursor()
@@ -372,7 +429,7 @@ def main():
             curr1.execute(selezione_geom_aste,(aa[0],))
             id_ag=curr1.fetchall()
         except Exception as e:
-            logging.error(e)
+            logger.error(e)
 
 
         insert_geo='''INSERT INTO geo.grafostradale
@@ -411,7 +468,7 @@ def main():
 
 
 
-    logging.info("{} aste aggiunte".format(len(id_a)))
+    logger.info("{} aste aggiunte".format(len(id_a)))
 
 
 
@@ -424,7 +481,7 @@ def main():
         curr_p.execute(query_max_id_prog)
         max_id_q=curr_p.fetchall()
     except Exception as e:
-        logging.error(e)
+        logger.error(e)
 
     for mp in max_id_q:
         max_id=mp[0]
@@ -448,11 +505,10 @@ def main():
         curr.execute(query, (max_id,))
         id_p=curr.fetchall()
     except Exception as e:
-        logging.error(e)
+        logger.error(e)
 
 
-    curr1 = conn.cursor()
-    curr_p1 = conn_p.cursor()
+
 
 
 
@@ -486,7 +542,7 @@ def main():
             curr1.execute(selezione_geom_piazzole,(pp[0],))
             id_pg=curr1.fetchall()
         except Exception as e:
-            logging.error(e)
+            logger.error(e)
 
 
         for pg in id_pg:
@@ -516,7 +572,7 @@ def main():
             curr1.execute(seleziono_elementi,(pp[0],))
             id_e=curr1.fetchall()
         except Exception as e:
-            logging.error(e)
+            logger.error(e)
 
 
         insert_elementi='''INSERT INTO elem.elementi
@@ -536,7 +592,7 @@ def main():
             c_e+=1
             #27
 
-    logging.info("{} piazzole aggiunte, con {} elementi".format(len(id_p), c_e))
+    logger.info("{} piazzole aggiunte, con {} elementi".format(len(id_p), c_e))
 
     ########################################################################################
     # da testare sempre prima senza fare i commit per verificare che sia tutto OK
@@ -549,7 +605,7 @@ def main():
     curr_p.close()
     
     
-    ''' Cerco piazzole modificate su SIT'''
+    logger.info(''' Cerco piazzole modificate su SIT''')
     curr = conn.cursor()
     curr_p = conn_p.cursor()
     curr_p1 = conn_p.cursor()
@@ -571,17 +627,17 @@ def main():
         curr.execute(select_elementi_sit)
         id_e=curr.fetchall()
     except Exception as e:
-        logging.error(e)
+        logger.error(e)
 
     c=0
     for ee in id_e:
         '''Cerco se esiste in SIT PROG'''
         select_prog='''select * from elem.elementi where id_elemento = %s'''
         try:
-            curr_p.execute(select_prog,(ee[0],))
+            curr_p.execute(select_prog,(int(ee[0]),))
             id_e1=curr_p.fetchall()
         except Exception as e:
-            logging.error(e)
+            logger.error(e)
         # se c'è l'elemento non lo tocco
         #altrimenti
         if len(id_e1)<1:
@@ -590,11 +646,11 @@ def main():
             select tipo_elemento from elem.tipi_elemento te where descrizione ilike %s
             ) '''
             try:
-                #logging.info(query_elementi)
+                #logger.info(query_elementi)
                 curr_p1.execute(select_prog2, (ee[2], '%'+'bilat'+'%'))
                 id_e_bil=curr_p1.fetchall()
             except Exception as e:
-                logging.error(e)
+                logger.error(e)
             # se non ci sono bilaterali nella stessa piazzola
             if len(id_e_bil)<1:
                 curr_p2.execute(insert_elementi,(ee[0],ee[1],ee[2],ee[3],ee[4],ee[5],ee[6],ee[7],ee[8],ee[9],ee[10],ee[11],ee[12],ee[13],ee[14],ee[15],ee[16],ee[17],ee[18],ee[19],ee[20],ee[21],ee[22],ee[23],ee[24],ee[25],ee[26]))
@@ -604,7 +660,7 @@ def main():
     # da testare sempre prima senza fare i commit per verificare che sia tutto OK
     conn_p.commit()
     ########################################################################################
-    logging.info("{} elementi di SIT aggiunti".format(c))
+    logger.info("{} elementi di SIT aggiunti".format(c))
 
     
 
@@ -613,11 +669,17 @@ def main():
     curr_p.close()
     curr_p1.close()
     curr_p2.close()
+    conn.close()
 
 
+    logger.info('Ri-connessione al db SIT')
+    conn = psycopg2.connect(dbname=db,
+                        port=port,
+                        user=user,
+                        password=pwd,
+                        host=host)
 
-
-    '''Cerco elementi su SIT Prog e non su sit (forse da eliminare)'''
+    logger.info('''Cerco elementi su SIT Prog e non su sit (forse da eliminare)''')
     curr = conn.cursor()
     curr_p = conn_p.cursor()
     curr_p1 = conn_p.cursor()
@@ -635,26 +697,28 @@ def main():
             ) ;'''
 
     try:
-        #logging.info(query_elementi)
+        #logger.info(query_elementi)
         curr_p.execute(select_elementi_sit_prog, ('%'+'bilat'+'%',))
         id_e_bil=curr_p.fetchall()
     except Exception as e:
-        logging.error(e)
+        logger.error(select_elementi_sit_prog)
+        logger.error(e)
 
 
     c=0
     for ee in id_e_bil:
-        '''Cerco se esiste in SIT'''
-        select_prog='''select * from elem.elementi where id_elemento = %s'''
+        #logger.debug('''Cerco se elemento {} esiste in SIT'''.format(ee[0]))
+        select_prog='''SELECT * FROM elem.elementi where id_elemento=%s; '''
         try:
-            curr.execute(select_prog,(ee[0],))
+            curr.execute(select_prog,(int(ee[0]),))
             id_e1=curr.fetchall()
         except Exception as e:
-            logging.error(e)
+            logger.error(select_prog)
+            logger.error(e)
         # se c'è l'elemento non lo tocco
         #altrimenti
         if len(id_e1)<1:
-            #logging.info('Elemento {} da eliminare'.format(ee[0]))
+            #logger.info('Elemento {} da eliminare'.format(ee[0]))
             delete_prog='''DELETE FROM elem.elementi_aste_percorso
             WHERE id_elemento = %s;
             DELETE FROM elem.elementi
@@ -662,13 +726,13 @@ def main():
             try:
                 curr_p1.execute(delete_prog,(ee[0],ee[0]))
             except psycopg2.Error as e:
-                logging.error(e)
-                logging.error(e.pgerror)
-                logging.error(e.diag.message_detail)
+                logger.error(e)
+                logger.error(e.pgerror)
+                logger.error(e.diag.message_detail)
             c+=1
     
 
-    logging.info("{} elementi di SIT PROG eliminati".format(c))
+    logger.info("{} elementi di SIT PROG eliminati".format(c))
     curr.close()
     ########################################################################################
     # da testare sempre prima senza fare i commit per verificare che sia tutto OK
@@ -683,20 +747,17 @@ def main():
     
 
 
-    ''' Cerco elementi vetro nelle piazzole bilaterali'''
+    ''' Cerco elementi vetro nelle piazzole bilaterali (già fatto)'''
 
 
-            
-
-
-
-    curr.close()
+    logger.info("Fine di tutto. Chiudo le connessioni")      
     conn.close()
-    curr_p.close()
     conn_p.close()
-
-
-
+    
+    # cerco se ci sono stati errori
+    count=len(open(errorfile).readlines(  ))
+    if  count >0:
+        sent_log_by_mail(_allineamento_sit_prog, nomelogfile)
 
 
 
