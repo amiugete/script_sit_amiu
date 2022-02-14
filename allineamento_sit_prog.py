@@ -743,8 +743,28 @@ def main():
 
 
 
+    curr = conn.cursor()
+    curr_p = conn_p.cursor()
 
-    
+    vacuum_sql='''vacuum analyze elem.elementi;
+        vacuum analyze elem.elementi;
+        vacuum analyze geo.piazzola;'''
+
+    try:
+        curr.execute(vacuum_sql)
+        curr_p.execute(vacuum_sql)
+    except Exception as e:
+        logger.error(vacuum_sql)
+        logger.error(e)
+
+    ########################################################################################
+    # da testare sempre prima senza fare i commit per verificare che sia tutto OK
+    conn.commit()
+    conn_p.commit()
+    ########################################################################################
+
+    curr.close()
+    curr_p.close()
 
 
     ''' Cerco elementi vetro nelle piazzole bilaterali (già fatto)'''
