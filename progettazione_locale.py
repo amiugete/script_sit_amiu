@@ -112,8 +112,11 @@ def main(argv):
     piazzole_nuove=[]
 
     installate_nuove=[]
-    i_piazzole_nuove=[]
+    i_elementi_nuovi=[]
     i_date_nuove=[]
+    m_nuove=[]
+    t_nuove=[]
+
 
     logging.info('Connessione al GeoPackage')
     con = sqlite3.connect(sqlite_file)
@@ -144,6 +147,7 @@ def main(argv):
             try:
                 currp.execute(sql_update, (nota,id_piazzola,dataora,))
             except Exception as e:
+                logging.error(sql_select)
                 logging.error(e)
         else:
             note_nuove.append(nota)
@@ -165,21 +169,25 @@ def main(argv):
 
     # faccio la stessa cosa con le nuove piazzole installate
 
-    for row in cur.execute('SELECT * FROM piazzole_installate ORDER BY time;'):
-        id_piazzola=int(row[0])
+    for row in cur.execute('SELECT * FROM elementi_installati ORDER BY time;'):
+        id_elemento=int(row[0])
         if row[1]==1:
             installata='true'
         elif row[1]==0:
             installata='false'
+        else:
+            installata='false'
         dataora=row[2]
+        matr=row[3]
+        tag=row[4]
         #logging.debug("{} - {}".format(id,nota))
         #logging.debug("{} - {}".format(id_piazzola,dataora))
         
         # cerco se la nota è già sul DB 
-        sql_select='SELECT * from ne.piazzole_installate where id_piazzola=%s;'
+        sql_select='SELECT * from ne.elementi_installati where id_elemento=%s;'
         
         try:
-            currp.execute(sql_select, (id_piazzola,))
+            currp.execute(sql_select, (id_elemento,))
             check_inst=currp.fetchall()
         except Exception as e:
             logging.error(sql_select)
@@ -187,23 +195,27 @@ def main(argv):
         #logging.debug(len(check_nota))
         if len(check_inst)==1:
             #faccio update
-            sql_update='''UPDATE ne.piazzole_installate
-            SET installata=%s
-            WHERE id_piazzola=%s;'''
+            sql_update='''UPDATE ne.elementi_installati
+            SET installata=%s, matricola=%s,
+            tag=%s
+            WHERE id_elemento=%s;'''
             try:
-                currp.execute(sql_update, (installata,id_piazzola,))
+                currp.execute(sql_update, (installata, matr, tag, id_elemento,))
             except Exception as e:
                 logging.error(e)
         else:
             installate_nuove.append(installata)
-            i_piazzole_nuove.append(id_piazzola)
+            i_elementi_nuovi.append(id_elemento)
             i_date_nuove.append(dataora)
-            sql_insert='''INSERT INTO ne.piazzole_installate
-            (id_piazzola, installata, time)
-            VALUES(%s, %s, %s);'''
+            m_nuove.append(matr)
+            t_nuove.append(tag)
+            sql_insert='''INSERT INTO ne.elementi_installati
+            (id_elemento, installata, matricola, tag, time)
+            VALUES(%s, %s, %s, %s, %s);'''
             try:
-                currp.execute(sql_insert, (id_piazzola,installata,dataora,))
+                currp.execute(sql_insert, (id_elemento, installata, matr, tag, dataora,))
             except Exception as e:
+                logging.error(sql_insert)
                 logging.error(e)
     
     
@@ -287,34 +299,40 @@ def main(argv):
 
             w1.set_column(0, 0, 9)
             w1.set_column(1, 2, 30)
-            w1.set_column(3, 3, 10)
-            w1.set_column(4, 4, 20)
-
+            w1.set_column(3, 4, 10)
+            w1.set_column(5, 5, 20)
+            w1.set_column(6, 7, 10)
 
 
             w1.write(0, 0, 'PIAZZOLA', title) 
             w1.write(0, 1, 'INDIRIZZO', title) 
-            w1.write(0, 2, 'RIFERIMENTO', title) 
-            w1.write(0, 3, 'INSTALLATA', title) 
-            w1.write(0, 4, 'DATA ORA', title)  
+            w1.write(0, 2, 'RIFERIMENTO', title)
+            w1.write(0, 3, 'ELEMENTO', title)
+            w1.write(0, 4, 'INSTALLATO', title) 
+            w1.write(0, 5, 'DATA ORA', title)
+            w1.write(0, 6, 'MATRICOLA', title)
+            w1.write(0, 7, 'TAG', title)  
             
             i=0
             r=1
             while i< len(installate_nuove):
-                w1.write(r, 0, int(i_piazzole_nuove[i]), text)
-                sql_select_p = '''SELECT riferimento, via, numero_civico
-                FROM geo.v_piazzole_geom WHERE id_piazzola=%s; '''
+                w1.write(r, 3, int(i_elementi_nuovi[i]), text)
+                sql_select_p = '''SELECT id_piazzola, riferimento, via, numero_civico
+                FROM geo.v_piazzole_geom WHERE id_piazzola=(SELECT id_piazzola from elem.v_elementi WHERE id_elemento=%s); '''
                 try:
-                    currp.execute(sql_select_p, (i_piazzole_nuove[i],))
+                    currp.execute(sql_select_p, (i_elementi_nuovi[i],))
                     dettagli_piazzola=currp.fetchall()
                 except Exception as e:
                     logging.error(sql_select_p)
                     logging.error(e)
                 for dp in dettagli_piazzola:
-                    w1.write(r, 1, '{},{}'.format(dp[1],dp[2]), text) 
-                    w1.write(r, 2, '{}'.format(dp[0]), text) 
-                w1.write(r, 3, installate_nuove[i], text)
-                w1.write(r, 4, i_date_nuove[i], date_format)
+                    w1.write(r, 1, '{},{}'.format(dp[2],dp[3]), text) 
+                    w1.write(r, 0, '{}'.format(dp[0]), text)
+                    w1.write(r, 2, '{}'.format(dp[1]), text) 
+                w1.write(r, 4, installate_nuove[i], text)
+                w1.write(r, 5, i_date_nuove[i], date_format)
+                w1.write(r, 6, m_nuove[i], date_format)
+                w1.write(r, 7, t_nuove[i], date_format)
                 r+=1
                 i+=1
         
@@ -349,7 +367,7 @@ AMIU Assistenza Territorio
         # Create a multipart message and set headers
         message = MIMEMultipart()
         message["From"] = sender_email
-        message["To"] = receiver_email
+        message["To"] = debug_email
         #message["Cc"] = cc_mail
         message["Subject"] = subject
         #message["Bcc"] = debug_email  # Recommended for mass emails

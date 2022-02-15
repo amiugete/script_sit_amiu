@@ -70,7 +70,7 @@ from allegato_mail import *
 
 def main():
     # Mi connetto al DB oracle
-    cx_Oracle.init_oracle_client("C:\oracle\instantclient_19_10") # necessario configurare il client oracle correttamente
+    cx_Oracle.init_oracle_client(percorso_oracle) # necessario configurare il client oracle correttamente
     #cx_Oracle.init_oracle_client() # necessario configurare il client oracle correttamente
     parametri_con='{}/{}@//{}:{}/{}'.format(user_uo,pwd_uo, host_uo,port_uo,service_uo)
     logging.debug(parametri_con)
@@ -236,7 +236,10 @@ def main():
     for pp in percorsi:
         percorso_uo='''SELECT ID_PERCORSO, ID_TURNO 
         FROM ANAGR_SER_PER_UO aspu 
-        WHERE ID_PERCORSO IN (:cod_perc) AND (DTA_DISATTIVAZIONE > SYSDATE OR ID_PERCORSO IN (SELECT ID_PERCORSO FROM CONS_PERCORSI_STAGIONALI ))
+        WHERE ID_PERCORSO IN (:cod_perc) AND (DTA_DISATTIVAZIONE > SYSDATE OR 
+        (aspu.DTA_DISATTIVAZIONE=(SELECT max(DTA_DISATTIVAZIONE) FROM ANAGR_SER_PER_UO WHERE ID_PERCORSO=aspu.ID_PERCORSO AND ID_UO=aspu.ID_UO) 
+        AND
+        ID_PERCORSO IN (SELECT ID_PERCORSO FROM CONS_PERCORSI_STAGIONALI )))
         GROUP BY ID_PERCORSO, ID_TURNO'''
         try:
             cur.execute(percorso_uo, [pp[0]])
@@ -308,7 +311,9 @@ def main():
             JOIN ANAGR_UO au ON au.ID_UO = aspu.ID_UO 
             JOIN ANAGR_SERVIZI as2 ON as2.ID_SERVIZIO = aspu.ID_SERVIZIO 
             WHERE ID_PERCORSO IN (:id_perc) AND 
-            (aspu.DTA_DISATTIVAZIONE > SYSDATE OR id_percorso IN (SELECT ID_PERCORSO FROM CONS_PERCORSI_STAGIONALI)) '''
+            (aspu.DTA_DISATTIVAZIONE > SYSDATE OR (
+            aspu.DTA_DISATTIVAZIONE = (SELECT max(DTA_DISATTIVAZIONE) FROM ANAGR_SER_PER_UO WHERE ID_PERCORSO=aspu.ID_PERCORSO AND ID_UO=aspu.ID_UO)
+            and id_percorso IN (SELECT ID_PERCORSO FROM CONS_PERCORSI_STAGIONALI))) '''
             try:
                 cur.execute(select_anomalie, [percorsi_anomali_uo[i]])
                 anomalie=cur.fetchall()
