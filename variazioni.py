@@ -90,7 +90,9 @@ def main():
         exit()
     else:
         num=1
-    
+    '''******************************************************************************************************
+    NON SONO COMPRESI I PERCORSI STAGIONALI per cui vanno re-importate le variazioni in fase di attivazione 
+    ********************************************************************************************************'''
     query='''select distinct p.cod_percorso , p.descrizione, s.descrizione as servizio, u.descrizione  as ut
         from util.sys_history h
         inner join elem.percorsi p 
@@ -112,7 +114,7 @@ def main():
         )
         )
         and pu.responsabile = 'S'
-        and (p.data_dismissione is null or p.data_dismissione > current_date)
+        and (p.data_dismissione is null or p.data_dismissione > current_date )
         order by ut, servizio'''.format(num)
     
 
