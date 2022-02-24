@@ -61,9 +61,9 @@ logging.basicConfig(
 
 ############################################
 #INPUT (da rendere dinamici per  fare WS)
-piazzola = 37113
-asta_old = 3170366705
-asta_new = 3170366713
+piazzola = 36772
+asta_old = 3170365283
+asta_new = 3170365339
 ambiente = 'sit' # sit_test, #sit_prog
 #############################################
 
