@@ -5,13 +5,13 @@
 # Roberto Marzocchi
 
 '''
-Script per le attività da fare una volta prodotto alberghi.base_ecopunti  e verificato con l'ausilio del progetto QGIS apposito
+Script per le attività da fare una volta prodotto etl.base_ecopunti  e verificato con l'ausilio del progetto QGIS apposito
 
 Esegue le seguenti operazioni:
 
 1) con l'elenco dei codici civici cerca le utenze domestiche e non domestiche su Oracle e produce due file excel
 
-2) inserisce i dati nella cartella che serve a Laura Calvello per Saltax 
+2) inserisce i dati nella cartella che serve a Laura Calvello per Saltax (etl.ecopunti)
 '''
 
 
@@ -126,7 +126,7 @@ def main(argv):
         logging.info('Connessione riuscita')
     except Exception as e:
         logging.error(e)
-    query='''select cod_civico from alberghi.base_ecopunti'''
+    query='''select cod_civico from etl.base_ecopunti'''
     
 
 
@@ -151,7 +151,7 @@ def main(argv):
     logging.info('Lista civici')
     curr2 = conn.cursor()
     query2 = ''' SELECT v.nome, be.testo, be.note 
-	FROM alberghi.base_ecopunti be 
+	FROM etl.base_ecopunti be 
     JOIN topo.vie v 
     ON v.id_via::integer = be.cod_strada::integer
     '''
