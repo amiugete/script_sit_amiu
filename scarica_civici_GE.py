@@ -224,6 +224,7 @@ order by 1'''.format(epsg)
                     testo=feature['properties']['TESTO']
                     uso=feature['properties']['USO']
                     id_municipio=feature['properties']['CODICE_MUNICIPIO']
+                    sez_censimento=feature['properties']['SEZIONE_CENSIMENTO_2011']
                     codice_indirizzo_comune=feature['properties']['CODICE_INDIRIZZO']
                     # calcolo il codice civico AMIU
                     if lettera==None:
@@ -235,7 +236,7 @@ order by 1'''.format(epsg)
                     else:
                         c='_'
                     cod_civico='{0}{1}{2}{3}'.format(codvia,numero,l,c)
-                    select="SELECT cod_civico from geo.civici_comune where cod_civico = %s"
+                    select="SELECT cod_civico from etl.civici_comune where cod_civico = %s"
                     try:
                         curr1.execute(select,(cod_civico,))
                         lista_civici=curr1.fetchall()
@@ -243,7 +244,7 @@ order by 1'''.format(epsg)
                         logging.error(e)
                     if len(lista_civici)==1:
                         #update
-                        update='''UPDATE geo.civici_comune set 
+                        update='''UPDATE etl.civici_comune set 
                         cod_strada=%s,
                         numero=%s,
                         lettera=%s,
@@ -252,18 +253,19 @@ order by 1'''.format(epsg)
                         uso=%s,
                         id_municipio=%s,
                         codice_indirizzo_comune=%s,
+                        sez_censimento=%s, 
                         geoloc=ST_SetSRID(ST_GeomFromGeoJSON(%s),3003),
                         mod_date=now()
                         where cod_civico=%s
                         '''
-                        curr1.execute(update,(codvia, numero, lettera,colore, testo,uso, id_municipio, codice_indirizzo_comune, geom, cod_civico,))
+                        curr1.execute(update,(codvia, numero, lettera,colore, testo,uso, id_municipio, codice_indirizzo_comune, sez_censimento, geom, cod_civico,))
                     else:
                         #insert
                         try:
-                            insert='''insert into geo.civici_comune (cod_strada, numero, lettera,colore, testo,
-                        uso, id_municipio, codice_indirizzo_comune, geoloc, cod_civico) VALUES ( %s,%s,%s,%s,%s,
-                        %s,%s,%s,ST_SetSRID(ST_GeomFromGeoJSON(%s),3003),%s)'''
-                            curr1.execute(insert,(codvia, numero, lettera,colore, testo,uso, id_municipio, codice_indirizzo_comune, geom, cod_civico,))
+                            insert='''insert into etl.civici_comune (cod_strada, numero, lettera,colore, testo,
+                        uso, id_municipio, codice_indirizzo_comune, geoloc, cod_civico, sez_censimento,) VALUES ( %s,%s,%s,%s,%s,
+                        %s,%s,%s,ST_SetSRID(ST_GeomFromGeoJSON(%s),3003),%s, %s)'''
+                            curr1.execute(insert,(codvia, numero, lettera,colore, testo,uso, id_municipio, codice_indirizzo_comune, geom, cod_civico,sez_censimento,))
                         except Exception as e:
                             logging.error(e)
                             logging.error('cod_civico={}, geom={}'.format(cod_civico,geom))
@@ -282,8 +284,9 @@ lettera as lettera_civico,
 colore as colore_civico, 
 testo as descrizione_civico,
 st_y(st_transform(geoloc,4326)) as coord_lat, 
-st_x(st_transform(geoloc,4326)) as coord_lon
-from geo.civici_comune cc'''
+st_x(st_transform(geoloc,4326)) as coord_lon,
+sez_censimento
+from etl.civici_comune cc'''
     #curr = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     curr = conn.cursor()
     try:
@@ -314,10 +317,10 @@ from geo.civici_comune cc'''
         #print(data)
         cur.setinputsizes(11, int, 4, 1, 1, 25, float, float) 
         insert_o='''INSERT INTO STRADE.CIVICI_DA_COMUNE
-        (COD_CIVICO, ID_VIA, NUMERO_CIVICO, LETTERA_CIVICO, COLORE_CIVICO, DESCRIZIONE_CIVICO, COORD_LAT, COORD_LON)
-        VALUES(:c_c, :iv, :nc, :lc, :col, :tc, :lat, :lon)'''
+        (COD_CIVICO, ID_VIA, NUMERO_CIVICO, LETTERA_CIVICO, COLORE_CIVICO, DESCRIZIONE_CIVICO, COORD_LAT, COORD_LON, SEZIONE_CENSIMENTO_2011)
+        VALUES(:c_c, :iv, :nc, :lc, :col, :tc, :lat, :lon, :sez)'''
         #cur.execute(insert_o, data)
-        cur.execute(insert_o, [cc[0], cc[1], cc[2], lc_temp, col_temp, cc[5], cc[6], cc[7]])
+        cur.execute(insert_o, [cc[0], cc[1], cc[2], lc_temp, col_temp, cc[5], cc[6], cc[7], cc[8]])
     con.commit() 
     #cur.commit() 
     logging.info("Fine copia dati su DB Oracle")      
