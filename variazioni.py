@@ -114,6 +114,7 @@ def main():
         )
         )
         and pu.responsabile = 'S'
+        and p.id_categoria_uso in (6,3)
         and (p.data_dismissione is null or p.data_dismissione > current_date )
         order by ut, servizio'''.format(num)
     
