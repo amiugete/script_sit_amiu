@@ -88,7 +88,7 @@ def main(argv):
         #filemode='w', # overwrite or append
         #fileencoding='utf-8',
         #filename=logfile,
-        level=logging.INFO)
+        level=logging.DEBUG)
 
 
 
@@ -202,8 +202,8 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
     files=[]
 
     nomi_files.append('elenco_vie.txt')
-    files.append('/var/www/html/utenze/file/elenco_vie.txt')
-
+    #files.append('/var/www/html/utenze/file/elenco_vie.txt')
+    files.append(file_csv)
 
     nome_file0="{0}_elenco_civici_completo.xlsx".format(giorno_file)
     file_civici="{0}/utenze/{1}".format(path,nome_file0)
@@ -232,22 +232,9 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
 
 
 
-    # Array con i civici neri e rossi del SIT  (non serve più)
-    # i=0
-    k=1
-    while i< len(cod_civico):
-        if i == 0:
-            civ= '''COD_CIVICO IN ('{}' '''.format(cod_civico[i])
-        elif i==(k*1000-1):
-            k+=1
-            civ= '''{} ) OR COD_CIVICO IN ('{}' '''.format(civ, cod_civico[i])
-        else:
-             civ= '''{} , '{}' '''.format(civ, cod_civico[i])
-        i+=1
-    civ= ''' {})'''.format(civ)
 
 
-
+    logging.info("Tentativo connessione ORACLE")
     # connessione Oracle
     #cx_Oracle.init_oracle_client(lib_dir=r"C:\oracle\instantclient_19_10")
     cx_Oracle.init_oracle_client()
@@ -305,9 +292,10 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
     w.write(0, 13, 'UNITA_URBANISTICA') 
     w.write(0, 14, 'QUARTIERE') 
     w.write(0, 15, 'CIRCOSCRIZIONE')
-    w.write(0, 16, 'ABITAZIONE_DI_RESIDENZA') 
-    w.write(0, 17, 'DESCR_CATEGORIA')
-    w.write(0, 18, 'DESCR_UTILIZZO') 
+    w.write(0, 16, 'ZONA') 
+    w.write(0, 17, 'ABITAZIONE_DI_RESIDENZA') 
+    w.write(0, 18, 'DESCR_CATEGORIA')
+    w.write(0, 19, 'DESCR_UTILIZZO') 
 
 
 
@@ -406,9 +394,12 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
     w2.write(0, 12, 'UNITA_URBANISTICA') 
     w2.write(0, 13, 'QUARTIERE') 
     w2.write(0, 14, 'CIRCOSCRIZIONE')
-    w2.write(0, 15, 'ABITAZIONE_DI_RESIDENZA') 
-    w2.write(0, 16, 'DESCR_CATEGORIA')
-    w2.write(0, 17, 'DESCR_UTILIZZO')
+    w2.write(0, 15, 'ZONA')
+    w2.write(0, 16, 'SUPERFICIE')
+    w2.write(0, 17, 'NUM_OCCUPANTI')
+    w2.write(0, 18, 'ABITAZIONE_DI_RESIDENZA') 
+    w2.write(0, 19, 'DESCR_CATEGORIA')
+    w2.write(0, 20, 'DESCR_UTILIZZO')
 
 
 
@@ -496,6 +487,7 @@ WHERE COD_VIA in ({})
     
     sender_email = user_mail
     receiver_email=mail
+    #debug_email='roberto.marzocchi@amiu.genova.it'
     debug_email='assterritorio@amiu.genova.it'
     #assterritorio@amiu.genova.it
 
