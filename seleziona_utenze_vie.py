@@ -162,8 +162,8 @@ where cod_strada::integer in ({0})'''.format(codici_via)
 
 
     try:
-	    curr.execute(query)
-	    lista_civici=curr.fetchall()
+        curr.execute(query)
+        lista_civici=curr.fetchall()
     except Exception as e:
         logging.error(e)
 
@@ -191,8 +191,8 @@ join  topo.vie v
 ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
 
     try:
-	    curr2.execute(query2)
-	    lista_civici2=curr2.fetchall()
+        curr2.execute(query2)
+        lista_civici2=curr2.fetchall()
     except Exception as e:
         logging.error(e)
 
@@ -232,8 +232,8 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
 
 
 
-    # Array con i civici neri e rossi
-    i=0
+    # Array con i civici neri e rossi del SIT  (non serve più)
+    # i=0
     k=1
     while i< len(cod_civico):
         if i == 0:
@@ -312,16 +312,15 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
 
 
     logging.info('*****************************************************')
-    logging.info('Civici utenze domestiche su strade')
+    logging.info('Utenze domestiche su strade')
 
     cur = con.cursor()
     query=''' SELECT ID_UTENTE, PROGR_UTENZA, COGNOME, NOME, COD_VIA, DESCR_VIA,
         CIVICO, SUB_CIVICO, COLORE, SCALA, PIANO, INTERNO, CAP, 
         UNITA_URBANISTICA, QUARTIERE, CIRCOSCRIZIONE, ZONA, ABITAZIONE_DI_RESIDENZA,  DESCR_CATEGORIA, DESCR_UTILIZZO
         FROM STRADE.UTENZE_TIA_DOMESTICHE
-        WHERE {}
-        '''.format(civ)
-    
+        WHERE COD_VIA in ({})
+        '''.format(codici_via)
 
     try: 
         lista_domestiche = cur.execute(query)
@@ -344,7 +343,8 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
     workbook.close()
 
 
-
+    logging.info('*****************************************************')
+    logging.info('Civici Utenze domestiche su strade')
     # civici domestiche
     workbook3 = xlsxwriter.Workbook(file_civdomestiche)
     w3 = workbook3.add_worksheet()
@@ -358,11 +358,12 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
 
 
     cur3 = con.cursor()
-    query=''' SELECT DISTINCT COD_VIA, DESCR_VIA,
+    query='''SELECT DISTINCT COD_VIA, DESCR_VIA,
         CIVICO, SUB_CIVICO, COLORE 
         FROM STRADE.UTENZE_TIA_DOMESTICHE
-        WHERE {} ORDER BY DESCR_VIA
-        '''.format(civ)
+        WHERE COD_VIA in ({}) ORDER BY DESCR_VIA
+        '''.format(codici_via) 
+        
 
     #logging.debug(query)
     lista_civdomestiche = cur3.execute(query)
@@ -380,7 +381,7 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
     workbook3.close()
 
     logging.info('*****************************************************')
-    logging.info('Civici utenze non domestiche su strade')
+    logging.info('Uenze non domestiche su strade')
     # non domestiche
     cur2 = con.cursor()
 
@@ -415,8 +416,8 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
 CIVICO, COLORE, SCALA, INTERNO, LETTERA_INTERNO, CAP, 
 UNITA_URBANISTICA, QUARTIERE, CIRCOSCRIZIONE, ZONA, SUPERFICIE, NUM_OCCUPANTI, ABITAZIONE_DI_RESIDENZA,  DESCR_CATEGORIA, DESCR_UTILIZZO
 FROM STRADE.UTENZE_TIA_NON_DOMESTICHE
-WHERE {}
-        '''.format(civ)
+WHERE COD_VIA in ({})
+        '''.format(codici_via)
 
     lista_nondomestiche = cur2.execute(query)
 
@@ -433,7 +434,8 @@ WHERE {}
     workbook2.close()
 
 
-
+    logging.info('*****************************************************')
+    logging.info('Civici Utenze Non domestiche su strade')
     # civici  non domestiche
     workbook4 = xlsxwriter.Workbook(file_civnondomestiche)
     w4 = workbook4.add_worksheet()
@@ -450,8 +452,8 @@ WHERE {}
     query=''' SELECT DISTINCT COD_VIA, DESCR_VIA,
         CIVICO, LETTERA_CIVICO, COLORE 
         FROM STRADE.UTENZE_TIA_NON_DOMESTICHE
-        WHERE {} ORDER BY DESCR_VIA
-        '''.format(civ)
+        WHERE COD_VIA in ({}) ORDER BY DESCR_VIA
+        '''.format(codici_via)
 
     #logging.debug(query)
     lista_civnondomestiche = cur4.execute(query)
@@ -471,139 +473,7 @@ WHERE {}
 
     
 
-    #exit()
-
     
-    i=0
-    #k=1
-    cont=0
-    logging.info('*****************************************************')
-    logging.info('Utenze domestiche su strade')
-
-    # non domestiche
-    cur = con.cursor()
-
-
-    while i< len(cod_civico):
-        query='''
-       SELECT ID_UTENTE, PROGR_UTENZA, COGNOME, NOME, COD_VIA, DESCR_VIA,
-CIVICO, SUB_CIVICO, COLORE, SCALA, PIANO, INTERNO, CAP, 
-UNITA_URBANISTICA, QUARTIERE, CIRCOSCRIZIONE, ZONA, ABITAZIONE_DI_RESIDENZA,  DESCR_CATEGORIA, DESCR_UTILIZZO
-FROM STRADE.UTENZE_TIA_DOMESTICHE
-WHERE COD_CIVICO = '{}' '''.format(cod_civico[i])
-
-       
-        
-
-        #logging.debug(query)
-        lista_domestiche = cur.execute(query)
-        #cur.execute('select * from all_tables')
-        #k=0
-        cc=0
-        for r in lista_domestiche:
-            #if result[7] < = '':
-            j=0
-            while j<len(r):
-                logging.debug((cont+j+1))
-                w.write((cont+cc+1), j, r[j])
-                j+=1
-            cc+=1
-        cont=cont+cc
-        i+=1
-
-
-
-    cur.close()
-    workbook.close()
-
-
-    cur2 = con.cursor()
-
-    workbook2 = xlsxwriter.Workbook(file_nondomestiche)
-    w2 = workbook2.add_worksheet()
-
-
-    w2.write(0, 0, 'ID_UTENTE') 
-    w2.write(0, 1, 'PROGR_UTENZA') 
-    w2.write(0, 2, 'NOMINATIVO') 
-    w2.write(0, 3, 'CFISC_PARIVA')
-    w2.write(0, 4, 'COD_VIA') 
-    w2.write(0, 5, 'DESCR_VIA') 
-    w2.write(0, 6, 'CIVICO') 
-    #w2.write(0, 7, 'SUB_CIVICO')
-    w2.write(0, 8, 'COLORE') 
-    w2.write(0, 9, 'SCALA') 
-    #w2.write(0, 10, 'PIANO') 
-    w2.write(0, 11, 'INTERNO')
-    w2.write(0, 11, 'LETTERA_INTERNO')
-    w2.write(0, 12, 'CAP') 
-    w2.write(0, 13, 'UNITA_URBANISTICA') 
-    w2.write(0, 14, 'QUARTIERE') 
-    w2.write(0, 15, 'CIRCOSCRIZIONE')
-    w2.write(0, 16, 'ABITAZIONE_DI_RESIDENZA') 
-    w2.write(0, 17, 'DESCR_CATEGORIA')
-    w2.write(0, 18, 'DESCR_UTILIZZO') 
-
-
-    i=0
-    #k=1
-    cont=0
-    logging.info('*****************************************************')
-    logging.info('Utenze non domestiche su strade')
-    while i< len(cod_civico):
-        query='''
-       SELECT ID_UTENTE, PROGR_UTENZA, NOMINATIVO, CFISC_PARIVA, COD_VIA, DESCR_VIA,
-CIVICO, COLORE, SCALA, INTERNO, LETTERA_INTERNO, CAP, 
-UNITA_URBANISTICA, QUARTIERE, CIRCOSCRIZIONE, ZONA, SUPERFICIE, NUM_OCCUPANTI, ABITAZIONE_DI_RESIDENZA,  DESCR_CATEGORIA, DESCR_UTILIZZO
-FROM STRADE.UTENZE_TIA_NON_DOMESTICHE
-WHERE COD_CIVICO = '{}' '''.format(cod_civico[i])
-        #logging.debug(query)
-        lista_domestiche = cur2.execute(query)
-        #cur.execute('select * from all_tables')
-        #k=0
-        cc=0
-        for r in lista_domestiche:
-            #if result[7] < = '':
-            j=0
-            while j<len(r):
-                logging.debug((cont+j+1))
-                w2.write((cont+cc+1), j, r[j])
-                j+=1
-            cc+=1
-        cont=cont+cc
-        i+=1
-
-
-
-
-        '''except:
-            logging.warning('Civico {} non ha utenze domestiche'.format(cod_civico[i]))
-        '''
-            
-        '''w.write((i+1), 1, r[1]) 
-        w.write((i+1), 2, r[2]) 
-        w.write((i+1), 3, r[3])
-        w.write((i+1), 4, r[4]) 
-        w.write((i+1), 5, r[5]) 
-        w.write((i+1), 6, r[6]) 
-        w.write((i+1), 7, r[7])
-        w.write((i+1), 8, r'COLORE') 
-        w.write((i+1), 9, 'SCALA') 
-        w.write((i+1), 10, 'PIANO') 
-        w.write((i+1), 11, 'INTERNO')
-        w.write((i+1), 12, 'CAP') 
-        w.write((i+1), 13, 'UNITA_URBANISTICA') 
-        w.write((i+1), 14, 'QUARTIERE') 
-        w.write((i+1), 15, 'CIRCOSCRIZIONE')
-        w.write((i+1), 16, 'ABITAZIONE_DI_RESIDENZA') 
-        w.write((i+1), 17, 'DESCR_CATEGORIA')
-        w.write((i+1), 18, 'DESCR_UTILIZZO')''' 
-        #k+=1
-        i+=1
-            
-    
-    cur2.close()
-    workbook2.close()
 
 
     ###########################
