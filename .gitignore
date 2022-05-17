@@ -14,6 +14,9 @@ osm_file/*.json
 civici/*.geojson
 *.osm
 
+IDEA/*.xlsx
+IDEA/*.log
+
 
 
 # Byte-compiled / optimized / DLL files

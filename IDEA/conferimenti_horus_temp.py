@@ -47,8 +47,8 @@ filename = inspect.getframeinfo(inspect.currentframe()).filename
 path = os.path.dirname(os.path.abspath(filename))
 
 #tmpfolder=tempfile.gettempdir() # get the current temporary directory
-logfile='{}/conferimenti_horus.log'.format(path)
-errorfile='{}/error_conferimenti_horus.log'.format(path)
+logfile='{}/conferimenti_horus_temp.log'.format(path)
+errorfile='{}/error_conferimenti_horus_temp.log'.format(path)
 #if os.path.exists(logfile):
 #    os.remove(logfile)
 
@@ -181,32 +181,12 @@ def main():
     '''
 
 
-    query_select='''select max(id_idea) from idea.conferimenti_horus ch'''
-    try:
-        curr.execute(query_select)
-        max_id0=curr.fetchall()
-    except Exception as e:
-        logging.error(e)
-
-
-
-    k=0       
-    for ii in max_id0:
-        max_id=ii[0] 
-
-
-    #giorno='{}000000'.format((datetime.datetime.today()-datetime.timedelta(days = 11)).strftime('%Y%m%d'))
-    #logger.debug("From date:{}".format(giorno))
-    logger.info('from_id >= {}'.format(max_id))
+    giorno1='20220101000000'
+    giorno2='20220401000000'
+    logger.debug("From date:{}".format(giorno1))
     while check<1:
         logger.info('Page index {}'.format(p))
-        #response = requests.get(api_url, params={'date_from': giorno, 'page_index': p}, headers={'Authorization': 'Token {}'.format(token1)})
-        #######################################################################################################################################
-        # response per max id
-        response = requests.get(api_url, params={'id_from': max_id, 'page_index': p}, headers={'Authorization': 'Token {}'.format(token1)})
-        #######################################################################################################################################
-        # response per piazzola
-        #response = requests.get(api_url, params={'id_isola': '39791', 'page_index': p}, headers={'Authorization': 'Token {}'.format(token1)})
+        response = requests.get(api_url, params={'date_from': giorno1, 'date_to': giorno2, 'page_index': p}, headers={'Authorization': 'Token {}'.format(token1)})
         #response.json()
         logger.debug(response.status_code)
         try:      

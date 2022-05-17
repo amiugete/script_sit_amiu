@@ -203,14 +203,13 @@ join elem.automezzi a
 on a.cdaog3 = p.famiglia_mezzo 
 left join marzocchir.frequenze_ok fo 
 on fo.cod_frequenza = p.frequenza 
-where p.cod_percorso= '{}'    
-    '''.format(codice)
+where p.cod_percorso= %s'''
 
 
 
     try:
-	    curr.execute(query_intestazione)
-	    dettagli_percorso=curr.fetchall()
+        curr.execute(query_intestazione, (codice,))
+        dettagli_percorso=curr.fetchall()
     except Exception as e:
         logging.error(e)
         sent_log_by_mail(filename,logfile)
@@ -247,13 +246,13 @@ join marzocchir.frequenze_ok fo
 on eap.frequenza::int = fo.cod_frequenza  
 join elem.tipi_elemento te 
 on te.tipo_elemento = e.tipo_elemento 
-where id_percorso = (select id_percorso from elem.percorsi p where p.cod_percorso= '{}')  
-order by ap.num_seq asc'''.format(codice)
+where id_percorso = (select id_percorso from elem.percorsi p where p.cod_percorso= %s and id_categoria_uso=3)  
+order by ap.num_seq asc'''
 
 
     try:
-	    curr.execute(query_elementi)
-	    lista_elementi=curr.fetchall()
+        curr.execute(query_elementi, (codice,))
+        lista_elementi=curr.fetchall()
     except Exception as e:
         logging.error(e)
         sent_log_by_mail(filename,logfile)
