@@ -10,8 +10,6 @@ Lo script interroga il WS di IDEA che registra i conferimenti
 
 
 import os, sys, getopt, re  # ,shutil,glob
-
-import argparse
 import requests
 from requests.exceptions import HTTPError
 
@@ -73,8 +71,8 @@ logger = logging.getLogger()
 
 # Create handlers
 c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-#f_handler = logging.StreamHandler()
-f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+f_handler = logging.StreamHandler()
+#f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.ERROR)
@@ -109,7 +107,7 @@ def main():
     curr = conn.cursor()
     #conn.autocommit = True
     #################################################################
-    api_url='{}/conferimentihorus'.format(url_idea)
+    api_url='{}/svotamenti'.format(url_idea)
     headers1 = {'''Authorization: Token {0}'''.format(token1)}
     
     # per ora re-importo tutto, poi sarà da sistematre 
@@ -130,83 +128,14 @@ def main():
     p=1
     check=0
     
-    '''
-    id_piazzola=''
-    try:
-        opts, args = getopt.getopt(argv,"hm:p:",["ifile=","ofile="])
-    except getopt.GetoptError:
-        print('conferimenti_horus.py -i <inputfile> -o <outputfile>')
-        sys.exit(2)
-    for opt, arg in opts:
-        if opt == '-h':
-            print('conferimenti_horus.py -m <mode> [-p <piazzola>')
-            sys.exit()
-        elif opt in ("-m", "--mode"):
-            mode = arg
-        elif opt in ("-p", "--piazzola"):
-            id_piazzola = arg
-    logger.info('Mode is {}'.format(mode))
-    logger.info('Piazzola {}'.format(id_piazzola))
+    #giorno='{}000000'.format((datetime.datetime.today()-datetime.timedelta(days = 1)).strftime('%Y%m%d'))
+    giorno = '20220228000000'
+
+    logger.debug("From date:{}".format(giorno))
     
-
-    parser = argparse.ArgumentParser(description = "conferimenti_horus.py -m <mode> [-p <piazzola>]")
-    parser.add_argument("-h", "--Help", help = 'conferimenti_horus.py -m <mode> [-p <piazzola>]', required = False, default = '')
-    parser.add_argument("-m", "--mode", help = 'Mode: standard or piazzola', required = False, default = 'standard')
-    parser.add_argument("-p", "--piazzola", help = 'id_piazzola', required = False, default = '')
-    
-    argument = parser.parse_args()
-    status = False
-    
-    if argument.Help:
-        print("You have used '-H' or '--Help' with argument: {0}".format(argument.Help))
-        status = True
-    if argument.mode:
-        mode=argument.mode
-        status = True
-    if argument.piazzola:
-        id_piazzola=argument.piazzola
-        status = True
-    
-    if mode == 'standard':
-        giorno='{}000000'.format((datetime.datetime.today()-datetime.timedelta(days = 1)).strftime('%Y%m%d'))
-    elif mode == 'piazzola':
-        giorno='20220101000000'
-        if id_piazzola == '':
-            logger.error('With mode "piazzola" id_piazzola is mandatory')
-            sys.exit(1)  
-    else: 
-        logger.error('Mode non recognized')
-        sys.exit(1)
-
-    '''
-
-
-    query_select='''select max(id_idea) from idea.conferimenti_horus ch'''
-    try:
-        curr.execute(query_select)
-        max_id0=curr.fetchall()
-    except Exception as e:
-        logging.error(e)
-
-
-
-    k=0       
-    for ii in max_id0:
-        max_id=ii[0] 
-
-
-    #giorno='{}000000'.format((datetime.datetime.today()-datetime.timedelta(days = 11)).strftime('%Y%m%d'))
-    #logger.debug("From date:{}".format(giorno))
-    logger.info('from_id >= {}'.format(max_id))
     while check<1:
         logger.info('Page index {}'.format(p))
-        #response = requests.get(api_url, params={'date_from': giorno, 'page_index': p}, headers={'Authorization': 'Token {}'.format(token1)})
-        #######################################################################################################################################
-        # response per max id
-        response = requests.get(api_url, params={'id_from': max_id, 'page_index': p}, headers={'Authorization': 'Token {}'.format(token1)})
-        #######################################################################################################################################
-        # response per piazzola
-        #response = requests.get(api_url, params={'id_isola': '39791', 'page_index': p}, headers={'Authorization': 'Token {}'.format(token1)})
+        response = requests.get(api_url, params={'date_from': giorno, 'page_index': p}, headers={'Authorization': 'Token {}'.format(token1)})
         #response.json()
         logger.debug(response.status_code)
         try:      
@@ -244,24 +173,21 @@ def main():
                 # 14 data 
                 # 6 codice badg 
                 # 7 id_user
-                #if (i % 100)==0:
-                #    logger.debug(i)
                 if float(letture['data'][i][16])>0:
                     #id_isola
-                    #id_isola=letture['data'][i][2]
-                    id_idea=letture['data'][i][0]
-                    id_elemento=letture['data'][i][9]
-                    #descrizione_elemento=letture['data'][i][10]
-                    #cod_cer=letture['data'][i][11]
-                    cod_rifiuto=letture['data'][i][12]
-                    id_badge=letture['data'][i][6]
-                    id_user=letture['data'][i][7]
-                    id_categoria=letture['data'][i][13]
-                    data_conferimento=datetime.datetime.strptime(letture['data'][i][14], "%Y%m%d%H%M%S").strftime("%Y/%m/%d %H:%M:%S")
-                    query_select='''SELECT * FROM idea.conferimenti_horus 
-                    WHERE id_idea=%s'''
+                    id_pdr=letture['data'][i]['id_pdr']
+                    lat=letture['data'][i]['lat']
+                    lon=letture['data'][i]['lng']
+                    cod_cont=letture['data'][i]['cod_contenitore']
+                    riempimento=letture['data'][i]['livello_riempimento']
+                    data_ora_svuotamento=datetime.datetime.strptime(letture['data'][i]['data_ora_svuotamento'], "%Y%m%d%H%M%S").strftime("%Y/%m/%d %H:%M:%S")
+                    p_netto=letture['data'][i]['peso_netto']
+                    p_lordo=letture['data'][i]['peso_lordo']
+                    p_tara=letture['data'][i]['peso_tara']
+                    query_select='''SELECT * FROM idea.svuotamenti 
+                    WHERE cod_cont=%s and data_ora_svuotamento=%s'''
                     try:
-                        curr.execute(query_select, (id_idea,))
+                        curr.execute(query_select, (cod_cont, data_ora_svuotamento))
                         conferimento=curr.fetchall()
                     except Exception as e:
                         logger.error(e)
@@ -269,24 +195,26 @@ def main():
                     curr = conn.cursor()
                     # se c'è già la entry faccio 
                     if len(conferimento)>0: 
-                        query_update='''UPDATE idea.conferimenti_horus
-                        set cod_prodotto=%s, id_badge=%s, id_user=%s, id_categoria=%s, id_elemento=%s, data_ora_conferimento=%s
-                        WHERE id_idea=%s;'''
+                        query_update='''UPDATE idea.svuotamenti
+                        SET id_piazzola=%s, riempimento=%s, peso_netto=%s, peso_lordo=%s, peso_tara=%s
+                        geoloc=st_transform(ST_SetSRID(ST_MakePoint(%s, %s),4326),3003)
+                        WHERE id_elemento_idea=%s and data_ora_conferimento=%s;'''
                         try:
-                            curr.execute(query_update, (cod_rifiuto, id_badge, id_user, id_categoria, id_elemento, data_conferimento, id_idea))
+                            curr.execute(query_update, (id_pdr, riempimento, p_netto, p_lordo, p_tara, lon, lat, cod_cont, data_ora_svuotamento))
                         except Exception as e:
                             logger.error(e)
                     else:
-                        query_insert='''INSERT INTO idea.conferimenti_horus
-        (id_elemento, cod_prodotto, id_badge, id_user, id_categoria, data_ora_conferimento, id_idea)
-        VALUES(%s, %s, %s, %s, %s , %s, %s);'''
+                        query_insert='''INSERT INTO idea.svuotamenti
+                        (id_piazzola, id_elemento_idea, riempimento, data_ora_svuotamento, peso_netto, peso_lordo, peso_tara, geoloc)
+                        VALUES(%s, %s, %s, %s, %s, %s, %s, 
+                        st_transform(ST_SetSRID(ST_MakePoint(%s, %s),4326),3003));;'''
                         try:
-                            curr.execute(query_insert, (id_elemento, cod_rifiuto, id_badge, id_user, id_categoria, data_conferimento, id_idea))
+                            curr.execute(query_insert, (id_pdr, cod_cont, data_ora_svuotamento, riempimento, p_netto, p_lordo, p_tara, lon, lat))
                         except Exception as e:
                             logger.error(e)
                     ########################################################################################
                     # da testare sempre prima senza fare i commit per verificare che sia tutto OK
-                    conn.commit()
+                    #conn.commit()
                     ########################################################################################
                 #print(i,letture['data'][i][9], letture['data'][i][10], letture['data'][i][14], letture['data'][i][16],letture['data'][i][17])
                 i+=1
@@ -303,4 +231,4 @@ def main():
     
     
 if __name__ == "__main__":
-    main() 
+    main()   

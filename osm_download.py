@@ -46,7 +46,7 @@ overpass_url = "http://overpass-api.de/api/interpreter"
 #e="10.646374350606367" n="43.969977647278014" s="43.74798936510469" w="10.288957076844582
 # order is s, w, n, e
 
-comune='Recco'
+comune='Genova'
 osm_file='{}/osm_file/{}.osm'.format(path, comune)
 
 logging.info('Connessione al db')
@@ -199,21 +199,21 @@ with open(osm_file, "w") as file:
     file.write(data)
 file.close()
 
-'''
+
 logging.info('osm 2 pgrouting')
 #Import in Postgres del file data.osm
-p = """osm2pgrouting -f {0} -h {1} -U {2} -d {3} -p {4} -W {5}  --schema {6} --conf={7}""".format(osm_file,
-                                                                                                  host,
-                                                                                                  user,
-                                                                                                  dbname,
+p = """osm2pgrouting -f {0} -h {1} -U {2} -d {3} -p {4} -W {5}  --schema {6} --conf={7} --clean""".format(osm_file,
+                                                                                                  'localhost',
+                                                                                                  user_pgrouting,
+                                                                                                  db_pgrouting,
                                                                                                   port,
-                                                                                                  password,
-                                                                                                  schema,
-                                                                                                  conf)
+                                                                                                  pwd_pgrouting,
+                                                                                                  'network',
+                                                                                                  '{}/osm_import/mapconfig_for_cars.xml'.format(path))
  #"""osm2pgrouting -f data.osm -h localhost -U postgres -d city_routing -p 5432 -W postgresnpwd  --schema network --conf=/usr/share/osm2pgrouting/mapconfig_rail.xml"""
   
 os.system(p)
-'''
+
 
 
 logging.info('*'*20 + ' ESCO NORMALMENTE' + '*'*20) 

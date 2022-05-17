@@ -59,18 +59,10 @@ logging.basicConfig(
     level=logging.INFO)
 
 
-############################################
-#INPUT (da rendere dinamici per  fare WS)
-piazzola = 25931
-asta_old = 1449060006
-asta_new = 1401000003
-ambiente = 'sit' # sit_test, #sit_prog
-#############################################
 
 
-def main():
 
-
+def update_asta_piazzola(piazzola, asta_old, asta_new, ambiente):
 
 
     # carico i mezzi sul DB PostgreSQL
@@ -83,6 +75,7 @@ def main():
 
     curr = conn.cursor()
     conn.autocommit = True
+    # cerco i percorsi che passano da quella piazzola
     query='''select id_elemento, id_percorso, id_categoria_uso, cod_percorso from elem.v_percorsi_per_elemento vppe 
  where id_elemento in (select id_elemento from elem.elementi e where id_piazzola in (%s))'''
     
@@ -104,7 +97,17 @@ def main():
         cod_percorso=u[3]
         id_elemento=u[0]
 
+        descrizione_update = 'Percorso {0} codice {1} aggiornato da script python update_asta_piazzola.py'.format(id_percorso, cod_percorso)
 
+        insert_history='''INSERT INTO util.sys_history ("type","action","description","datetime","id_piazzola","id_percorso", "id_user") VALUES
+	 ('PERCORSO','UPDATE_ELEM', %s, now(), %s, %s, -1);'''
+        curr2= conn.cursor()
+        try:
+            curr2.execute(insert_history,(descrizione_update,piazzola,id_percorso,))
+        except Exception as e:
+            logging.error(e)
+
+        curr2.close()
         query2='''select * from elem.aste_percorso ap where id_percorso = %s and id_asta=%s'''
         curr2= conn.cursor()
         
@@ -207,6 +210,20 @@ def main():
 
     curr.close()
 
+
+
+
+def main():
+    ############################################
+    #INPUT (da rendere dinamici per  fare WS)
+    piazzola = 25696
+    asta_old = 1947420011
+    #asta_new = 1449060006
+    asta_new = 1931560001
+    #asta_old = 1401000003
+    ambiente = 'sit' # sit_test, #sit_prog
+    #############################################
+    update_asta_piazzola(piazzola, asta_old, asta_new, ambiente)
 
 
 
