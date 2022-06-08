@@ -55,6 +55,7 @@ from email.mime.audio import MIMEAudio
 from email.mime.base import MIMEBase
 from email.mime.image import MIMEImage
 from email.mime.text import MIMEText
+from invio_messaggio import *
 
 
 
@@ -343,10 +344,11 @@ where cod_frequenza not in (select cod_frequenza from marzocchir.frequenze_ok_1)
 
         text = message.as_string()
 
-        # Now send or store the message
-        with smtplib.SMTP_SSL(smtp_mail, port_mail, context=context) as s:
-            s.login(user_mail, pwd_mail)
-            s.send_message(message)
+        logging.info("Richiamo la funzione per inviare mail")
+        invio=invio_messaggio(message)
+        logging.info(invio)
+        
+        
     
         ################################################################################################
         # ora siccome è cambiato qualcosa accedo su UO e ricreo il mapping frequenze

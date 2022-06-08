@@ -37,6 +37,7 @@ from email.mime.audio import MIMEAudio
 from email.mime.base import MIMEBase
 from email.mime.image import MIMEImage
 from email.mime.text import MIMEText
+from invio_messaggio import *
 
 
 
@@ -222,76 +223,23 @@ def main():
     message["Bcc"] = debug_email  # Recommended for mass emails
     message.preamble = "File giornaliero con le variazioni"
 
+
+        
+                        
+    # Add body to email
+    message.attach(MIMEText(body, "html"))
+
+    # aggiunto allegato (usando la funzione importata)
+    allegato(message, file_variazioni, nome_file)
     # Add body to email
     message.attach(MIMEText(body, "plain"))
-
-    #filename = file_variazioni  # In same directory as script
-
-
-    ctype, encoding = mimetypes.guess_type(file_variazioni)
-    if ctype is None or encoding is not None:
-        ctype = "application/octet-stream"
-
-    maintype, subtype = ctype.split("/", 1)
-
-    if maintype == "text":
-        fp = open(file_variazioni)
-        # Note: we should handle calculating the charset
-        attachment = MIMEText(fp.read(), _subtype=subtype)
-        fp.close()
-    elif maintype == "image":
-        fp = open(file_variazioni, "rb")
-        attachment = MIMEImage(fp.read(), _subtype=subtype)
-        fp.close()
-    elif maintype == "audio":
-        fp = open(file_variazioni, "rb")
-        attachment = MIMEAudio(fp.read(), _subtype=subtype)
-        fp.close()
-    else:
-        fp = open(file_variazioni, "rb")
-        attachment = MIMEBase(maintype, subtype)
-        attachment.set_payload(fp.read())
-        fp.close()
-        encoders.encode_base64(attachment)
-    attachment.add_header("Content-Disposition", "attachment", filename=nome_file)
-    message.attach(attachment)
-
-    '''
-    # Open PDF file in binary mode
-    with open(filename, "rb") as attachment:
-        # Add file as application/octet-stream
-        # Email client can usually download this automatically as attachment
-        part = MIMEBase("application", "octet-stream")
-        part.set_payload(attachment.read())
-
-
-    # Encode file in ASCII characters to send by email    
-    encoders.encode_base64(part)
-
-    # Add header as key/value pair to attachment part
-    part.add_header(
-        "Content-Disposition",
-        f"attachment; filename= {nome_file}",
-    )
-
-    # Add attachment to message and convert message to string
-    message.attach(part)
-    '''
     
     
     text = message.as_string()
 
-
-
-
-
-
-    with smtplib.SMTP_SSL(smtp_mail, port_mail, context=context) as server:
-        server.login(user_mail, pwd_mail)
-        server.sendmail(user_mail, receiver_email, text)
-        # TODO: Send email here
-
-
+    logging.info("Richiamo la funzione per inviare mail")
+    invio=invio_messaggio(message)
+    logging.info(invio)
 
 
 if __name__ == "__main__":

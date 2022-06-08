@@ -5,7 +5,7 @@
 # Roberto Marzocchi
 
 '''
-Funzione per gestione allegati mail 
+Funzioni per inviare mail e aggiungere allegati usate dentro altri script
 '''
 
 
@@ -18,6 +18,48 @@ from email.mime.audio import MIMEAudio
 from email.mime.base import MIMEBase
 from email.mime.image import MIMEImage
 from email.mime.text import MIMEText
+from invio_messaggio import *
+
+from credenziali import *
+
+def invio_messaggio(messaggio):
+
+    # Create a secure SSL context
+    context = ssl.create_default_context()
+
+    check=0
+    # questo funzionava con GMAIL ma non va bene con SERVER AMIU
+    try:
+        with smtplib.SMTP_SSL(smtp_mail, port_mail, context=context) as server:
+            server.login(user_mail, pwd_mail)
+            server.send_message(messaggio)
+            #server.sendmail(user_mail, receiver_email, text)
+        check=200
+    except Exception as e:
+        e1=e 
+    
+    if check==0:
+        # questo dovrebbe  funzionare con SERVER AMIU INTERNO
+        try:
+            server = smtplib.SMTP(smtp_mail,port_mail)
+            server.ehlo() # Can be omitted
+            #server.starttls(context=context) # Secure the connection
+            #server.ehlo() # Can be omitted
+            #server.login(user_mail, pwd_mail)
+            #server.sendmail(user_mail, receiver_email, text)
+            server.send_message(messaggio)
+            check=200
+        except Exception as e:
+            # Print any error messages to stdout
+            e2=e
+    
+    if check==200: 
+        return check
+    else:
+        check='500 - ERRORI: {} e {}'.format(e1,e2)
+
+    return check
+
 
 
 def allegato(messaggio, file, nome_file):

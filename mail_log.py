@@ -21,6 +21,7 @@ from email.mime.audio import MIMEAudio
 from email.mime.base import MIMEBase
 from email.mime.image import MIMEImage
 from email.mime.text import MIMEText
+from invio_messaggio import *
 
 
 def sent_log_by_mail(script_name, log_file):
@@ -87,14 +88,9 @@ def sent_log_by_mail(script_name, log_file):
 
 
     # Now send or store the message
-    with smtplib.SMTP_SSL(smtp_mail, port_mail, context=context) as s:
-        s.login(user_mail, pwd_mail)
-        s.send_message(message)
+    #logging.info("Richiamo la funzione per inviare mail")
+    invio=invio_messaggio(message)
+    #logging.info(invio)
 
 
 
-
-    #with smtplib.SMTP_SSL(smtp_mail, port_mail, context=context) as server:
-    #    server.login(user_mail, pwd_mail)
-    #    server.sendmail(user_mail, receiver_email, text)
-        # TODO: Send email here

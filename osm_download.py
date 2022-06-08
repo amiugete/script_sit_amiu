@@ -174,6 +174,7 @@ overpass_query ='''
 # </osm-script>
 # '''
 
+"""
 logging.info('Lancio query')
 response = requests.get(overpass_url, params={'data': overpass_query})
                         
@@ -198,7 +199,7 @@ logging.info('Scrivo file .osm')
 with open(osm_file, "w") as file:
     file.write(data)
 file.close()
-
+"""
 
 logging.info('osm 2 pgrouting')
 #Import in Postgres del file data.osm
@@ -208,7 +209,7 @@ p = """osm2pgrouting -f {0} -h {1} -U {2} -d {3} -p {4} -W {5}  --schema {6} --c
                                                                                                   db_pgrouting,
                                                                                                   port,
                                                                                                   pwd_pgrouting,
-                                                                                                  'network',
+                                                                                                  'network2',
                                                                                                   '{}/osm_import/mapconfig_for_cars.xml'.format(path))
  #"""osm2pgrouting -f data.osm -h localhost -U postgres -d city_routing -p 5432 -W postgresnpwd  --schema network --conf=/usr/share/osm2pgrouting/mapconfig_rail.xml"""
   

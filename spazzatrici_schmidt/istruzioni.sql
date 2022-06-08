@@ -14,6 +14,7 @@ CREATE TABLE spazz_schmidt.serialnumbers (
 CREATE TABLE spazz_schmidt.messaggi (
 	gid serial not null,
 	id int NOT NULL,
+	last_valid_id int NOT NULL,
 	serialnumber_id int NOT NULL,
 	routeid varchar NULL,
 	driverid varchar NULL,
