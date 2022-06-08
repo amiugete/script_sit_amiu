@@ -64,6 +64,7 @@ from email.mime.audio import MIMEAudio
 from email.mime.base import MIMEBase
 from email.mime.image import MIMEImage
 from email.mime.text import MIMEText
+from invio_messaggio import *
 
 
 
@@ -577,16 +578,9 @@ WHERE COD_VIA in ({})
 
 
 
-    '''with smtplib.SMTP_SSL(smtp_mail, port_mail, context=context) as server:
-        server.login(user_mail, pwd_mail)
-        server.sendmail(user_mail, receiver_email, text)
-        # TODO: Send email here
-
-    '''
-    # Now send or store the message
-    with smtplib.SMTP_SSL(smtp_mail, port_mail, context=context) as s:
-        s.login(user_mail, pwd_mail)
-        s.send_message(message)
+    logging.info("Richiamo la funzione per inviare mail")
+    invio=invio_messaggio(message)
+    logging.info(invio)
 
     logging.info("Mail inviata a {} e a nostro indirizzo".format(receiver_email))
 

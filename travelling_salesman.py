@@ -97,7 +97,7 @@ from email.mime.audio import MIMEAudio
 from email.mime.base import MIMEBase
 from email.mime.image import MIMEImage
 from email.mime.text import MIMEText
-from allegato_mail import *
+from invio_messaggio import *
 
 
 def main():

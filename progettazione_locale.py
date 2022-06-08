@@ -69,7 +69,7 @@ from email.mime.audio import MIMEAudio
 from email.mime.base import MIMEBase
 from email.mime.image import MIMEImage
 from email.mime.text import MIMEText
-from allegato_mail import *
+from invio_messaggio import *
 
 
 
@@ -384,9 +384,9 @@ AMIU Assistenza Territorio
         #text = message.as_string()
 
         # Now send or store the message
-        with smtplib.SMTP_SSL(smtp_mail, port_mail, context=context) as s:
-            s.login(user_mail, pwd_mail)
-            s.send_message(message) 
+        logging.info("Richiamo la funzione per inviare mail")
+        invio=invio_messaggio(message)
+        logging.info(invio) 
 
     else:
         ################################
@@ -424,9 +424,9 @@ AMIU Assistenza Territorio
         #text = message.as_string()
 
         # Now send or store the message
-        with smtplib.SMTP_SSL(smtp_mail, port_mail, context=context) as s:
-            s.login(user_mail, pwd_mail)
-            s.send_message(message)
+        logging.info("Richiamo la funzione per inviare mail")
+        invio=invio_messaggio(message)
+        logging.info(invio)
 
     currp.close()
     connp.close()
