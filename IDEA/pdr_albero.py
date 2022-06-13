@@ -237,7 +237,7 @@ def main():
                                 desc_elettronica=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['cod_elett']
                                 val_bat_e=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['val_bat']
                                 iccid=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['iccid']
-                                num_tel=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['cod_elett'].strip()
+                                num_tel=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['num_tel'].strip()
                                 f=0
                                 while f < len(letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['bocchette']):
                                     id_bocc=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['bocchette'][f]['id_bocc']
@@ -249,9 +249,9 @@ def main():
                                     val_bat_b=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['bocchette'][f]['val_riemp']
                                     volume_b=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['bocchette'][f]['volume']
                                     f+=1
-                                    query_select="SELECT id_bocchetta FROM idea.censimento_idea WHERE id_bocchetta=%s"
+                                    query_select="SELECT id_bocchetta FROM idea.censimento_idea WHERE id_elemento_idea=%s"
                                     try:
-                                        curr.execute(query_select, (id_bocc,))
+                                        curr.execute(query_select, (id_cont,))
                                         bocchetta=curr.fetchall()
                                     except Exception as e:
                                         logger.error(e)
@@ -265,11 +265,11 @@ def main():
                                         id_elettronica=%s, desc_elett=%s, iccidsim=%s, sim_numtel=%s, val_bat_elettronica=%s,
                                         id_bocchetta=%s, cod_elett_sens=%s, cod_cer_mat=%s, volume_bocchetta=%s,
                                         data_ultimo_agg=%s, val_riemp=%s, val_bat_bocchetta=%s, geoloc=st_transform(ST_SetSRID(ST_MakePoint(%s, %s),4326),3003) 
-                                        WHERE id_bocchetta=%s;'''
+                                        WHERE id_elemento_idea=%s;'''
                                         try:
                                             curr.execute(query_update, (id_pdr,descrizione_pdr,id_cont,tipo_cont,vol_cont,targa_cont,tag_cont,cod_elettronica,
                                             desc_elettronica,iccid,num_tel,val_bat_e,id_bocc,cod_elett_sens,cod_cer_mat,volume_b,data_ultimo_agg,
-                                            val_riemp,val_bat_b,lon,lat,id_bocc))
+                                            val_riemp,val_bat_b,lon,lat,id_cont))
                                         except Exception as e:
                                             logger.error(e)
                                     else:
