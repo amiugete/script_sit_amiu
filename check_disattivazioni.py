@@ -190,7 +190,8 @@ def main():
 
 
     if len(cp_u)>0:
-        file_ut="{0}/report/percorsi_disattivati_su_UO.xlsx".format(path)
+        nome_file_ut='percorsi_disattivati_su_UO.xlsx'
+        file_ut="{0}/report/{1}".format(path, nome_file_ut)
         workbook = xlsxwriter.Workbook(file_ut)
         w1 = workbook.add_worksheet('Dis_UO_att_SIT')
 
@@ -268,7 +269,7 @@ def main():
             <head></head>
             <body>
         <p>
-        Mail generata automaticamente dal codice python check_disattivazioni.py che gira su server amiugis.
+        Mail generata automaticamente dal codice python check_disattivazioni.py che gira ogni mattina su server amiugis.
         </p><p>
 Esistono dei percorsi che risultano disattivati su UO non su SIT . <br> Visualizza l'allegato e controlla i dati che sono stati aggiornati in automatico.
 Se ci sono dei dubbi contatta le UT di riferimento 
@@ -286,11 +287,11 @@ AMIU Assistenza Territorio
         # Create a multipart message and set headers
         message = MIMEMultipart()
         message["From"] = sender_email
-        message["To"] = debug_email
+        message["To"] = receiver_email #debug_mail
         #message["Cc"] = cc_mail
         message["Subject"] = subject
         #message["Bcc"] = debug_email  # Recommended for mass emails
-        message.preamble = "Anomalie turni"
+        message.preamble = "Anomalie percorsi disattivati"
 
         
                         
@@ -298,7 +299,7 @@ AMIU Assistenza Territorio
         message.attach(MIMEText(body, "html"))
 
         # aggiunto allegato (usando la funzione importata)
-        allegato(message, file_ut, 'anomalie_turni.xlsx')
+        allegato(message, file_ut, nome_file_ut)
         
         #text = message.as_string()
 

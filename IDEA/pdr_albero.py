@@ -5,7 +5,7 @@
 # Roberto Marzocchi
 
 '''
-Lo script interroga i WS di IDEA
+Lo script interroga i WS di IDEA (vecchia versione non più usata, in quanto non gestiva la rimozione.. si potrebbe poi rimuovere)
 
 '''
 
@@ -203,6 +203,7 @@ def main():
             if len(letture['data'])==0:
                 check=100
             
+            
             i=0
             while i < len(letture['data']):
                 # 16 lat 17 long
@@ -290,7 +291,7 @@ def main():
                                         except Exception as e:
                                             logger.error(e)
                                 k+=1
-                            logger.debug(id_cont)
+                            logger.info('Contenitore: {0}'.format(id_cont))
                             j+=1
 
 
