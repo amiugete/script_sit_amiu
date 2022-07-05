@@ -8,6 +8,7 @@
 Funzioni per inviare mail e aggiungere allegati usate dentro altri script
 '''
 
+import os, sys
 
 import email, smtplib, ssl
 import mimetypes
@@ -20,7 +21,17 @@ from email.mime.image import MIMEImage
 from email.mime.text import MIMEText
 from invio_messaggio import *
 
+
+
+currentdir = os.path.dirname(os.path.realpath(__file__))
+#parentdir = os.path.dirname(currentdir)
+
+sys.path.append(currentdir)
+
+
 from credenziali import *
+
+
 
 def invio_messaggio(messaggio):
 
@@ -90,3 +101,15 @@ def allegato(messaggio, file, nome_file):
         encoders.encode_base64(attachment)
     attachment.add_header("Content-Disposition", "attachment", filename=nome_file)
     messaggio.attach(attachment)
+
+
+def immagine(messaggio, file):
+    
+    # This example assumes the image is in the current directory
+    fp = open(file, 'rb')
+    msgImage = MIMEImage(fp.read())
+    fp.close()
+
+    # Define the image's ID as referenced above
+    msgImage.add_header('Content-ID', '<image1>')
+    messaggio.attach(msgImage)

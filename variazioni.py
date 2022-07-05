@@ -220,7 +220,7 @@ def main():
     message["From"] = sender_email
     message["To"] = receiver_email
     message["Subject"] = subject
-    message["Bcc"] = debug_email  # Recommended for mass emails
+    #message["Bcc"] = debug_email  # Recommended for mass emails
     message.preamble = "File giornaliero con le variazioni"
 
 

@@ -216,10 +216,10 @@ def update_asta_piazzola(piazzola, asta_old, asta_new, ambiente):
 def main():
     ############################################
     #INPUT (da rendere dinamici per  fare WS)
-    piazzola = 36020
-    asta_old = 3170364501
+    piazzola = 34831
+    asta_old = 3170373879
     #asta_new = 1449060006
-    asta_new = 3170364504
+    asta_new = 3170373996
     #asta_old = 1401000003
     ambiente = 'sit' # sit_test, #sit_prog
     #############################################
