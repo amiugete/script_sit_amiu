@@ -16,12 +16,14 @@ Lo script si divide in 2 parti e deve girare ogni 5':
 
 
 
-- PARTE 2: invio mail di chiusura
---> le mail di chiusura debbono essere inviate a chi ha aperto l'intervento o a chi ha a
+- PARTE 2: invio mail di chiusura / abort
+--> le mail di chiusura debbono essere inviate a chi ha aperto l'intervento o a chi ha le notifiche attive
 
 
 - PARTE 3: invio mail di aggiornamento
 --> le mail di apertura debbono essere inviate tutte a un'unica mail ()
+
+
 '''
 
 
@@ -145,10 +147,12 @@ except Exception as e:
     logger.info('Non ci sono parametri, sono in test')
     test=1
 
+
+debug_email= 'roberto.marzocchi@amiu.genova.it'
 if test==1:
-    hh=host_clone
+    hh=host
     dd=db_test
-    mail_notifiche_apertura='roberto.marzocchi@amiu.genova.it'
+    mail_notifiche_apertura='magmaco@amiu.genova.it'
     und_test='_TEST'
     oggetto= ' (TEST)'
     incipit_mail='''<p style="color:red"><b>Questa mail proviene dagli applicativi di TEST (SIT e Gestione oggetti).
@@ -156,7 +160,7 @@ if test==1:
 else:
     hh=host
     dd=db
-    mail_notifiche_apertura='roberto.marzocchi@amiu.genova.it'
+    mail_notifiche_apertura='magmaco@amiu.genova.it'
     und_test=''
     oggetto =''
     incipit_mail=''
@@ -167,8 +171,8 @@ def connect():
     logger.info('Connessione al db SIT')
     conn = psycopg2.connect(dbname=dd,
                         port=port,
-                        user=user,
-                        password=pwd,
+                        user=user_manut,
+                        password=pwd_manut,
                         host=hh)
     return conn
 
@@ -202,11 +206,13 @@ q.nome as quartiere_comune,
 u.descrizione as UT,
 concat (v.nome, ', ', p.numero_civico) as indirizzo,
 p.riferimento, p.note, e.id,
-string_agg(distinct su2.email, ',') as cc, i.note_chiusura 
+string_agg(distinct su2.email, ',') as cc, i.note_chiusura,
+tp.id as id_priorita, tp.descrizione as priorita
 FROM gestione_oggetti.email e 
 JOIN gestione_oggetti.intervento i on e.intervento_id = i.id 
 JOIN gestione_oggetti.intervento_tipo_intervento iti on iti.intervento_id = i.id 
-JOIN gestione_oggetti.tipo_intervento ti on ti.id = iti.tipo_intervento_id 
+JOIN gestione_oggetti.tipo_intervento ti on ti.id = iti.tipo_intervento_id
+JOIN gestione_oggetti.tipo_priorita tp on tp.id = i.tipo_priorita_id
 JOIN elem_temporanei.elementi e2 on e2.id_elemento = i.elemento_id
 JOIN elem.tipi_elemento te on te.tipo_elemento = e2.tipo_elemento 
 JOIN elem.piazzole p on p.id_piazzola =i.piazzola_id 
@@ -224,7 +230,7 @@ GROUP BY e.intervento_id, i.data_creazione,
 i.piazzola_id, i.elemento_id, e2.matricola, i.descrizione, 
 te.descrizione, m.descrizione,
 q.nome, u.descrizione, v.nome, p.numero_civico,
-p.riferimento, p.note, i.utente, su.email, e.id, i.note_chiusura 
+p.riferimento, p.note, i.utente, su.email, e.id, i.note_chiusura, tp.id , tp.descrizione
 UNION 
 SELECT e.intervento_id, to_char(i.data_creazione,'DD/MM/YYYY ore HH24:MI') as data_creazione ,
 i.utente,su.email,
@@ -235,11 +241,13 @@ q.nome as quartiere_comune,
 u.descrizione as UT,
 concat (v.nome, ', ', p.numero_civico) as indirizzo,
 p.riferimento, p.note, e.id,
-string_agg(distinct su2.email, ',') as cc, i.note_chiusura 
+string_agg(distinct su2.email, ',') as cc, i.note_chiusura,
+tp.id as id_priorita, tp.descrizione as priorita
 FROM gestione_oggetti.email e 
 JOIN gestione_oggetti.intervento i on e.intervento_id = i.id 
 JOIN gestione_oggetti.intervento_tipo_intervento iti on iti.intervento_id = i.id 
-JOIN gestione_oggetti.tipo_intervento ti on ti.id = iti.tipo_intervento_id 
+JOIN gestione_oggetti.tipo_intervento ti on ti.id = iti.tipo_intervento_id
+JOIN gestione_oggetti.tipo_priorita tp on tp.id = i.tipo_priorita_id 
 JOIN elem.elementi e2 on e2.id_elemento = i.elemento_id
 JOIN elem.tipi_elemento te on te.tipo_elemento = e2.tipo_elemento 
 JOIN elem.piazzole p on p.id_piazzola =i.piazzola_id
@@ -257,7 +265,33 @@ GROUP BY e.intervento_id, i.data_creazione,
 i.piazzola_id, i.elemento_id, e2.matricola, i.descrizione, 
 te.descrizione, m.descrizione,
 q.nome, u.descrizione, v.nome, p.numero_civico,
-p.riferimento, p.note, i.utente, su.email, e.id, i.note_chiusura 
+p.riferimento, p.note, i.utente, su.email, e.id, i.note_chiusura, tp.id , tp.descrizione 
+UNION
+SELECT e.intervento_id, to_char(i.data_creazione,'DD/MM/YYYY ore HH24:MI') as data_creazione ,
+i.utente,su.email,
+i.piazzola_id, i.elemento_id, null as matricola, i.descrizione as descrizione_intervento, 
+string_agg(ti.descrizione, ',') as tipo_intervento,
+null as tipo_elemento,  null as municipio,
+null as quartiere_comune,
+null as UT,
+null as indirizzo,
+null as riferimento,
+null as note,
+e.id as id,
+string_agg(distinct su2.email, ',') as cc, i.note_chiusura,
+tp.id as id_priorita, tp.descrizione as priorita
+FROM gestione_oggetti.email e 
+JOIN gestione_oggetti.intervento i on e.intervento_id = i.id 
+JOIN gestione_oggetti.intervento_tipo_intervento iti on iti.intervento_id = i.id 
+JOIN gestione_oggetti.tipo_intervento ti on ti.id = iti.tipo_intervento_id
+JOIN gestione_oggetti.tipo_priorita tp on tp.id = i.tipo_priorita_id  
+LEFT JOIN gestione_oggetti.notifica n on n.intervento_id = i.id 
+LEFT JOIN util.sys_users su2 on n.utente = su2."name"
+LEFT JOIN util.sys_users su on i.utente = su."name"
+WHERE e.data_invio is null and e.tipo_mail ilike %s and e.tipo_mail ilike 'ABORTITO' and ti.id=1
+GROUP BY e.intervento_id, i.data_creazione, 
+i.piazzola_id, i.elemento_id, i.descrizione, 
+i.utente, su.email, i.note_chiusura, e.id, tp.id , tp.descrizione 
 ORDER BY data_creazione'''
 
 
@@ -272,7 +306,7 @@ Si prega di NON RISPONDERE alla presente mail. In caso di problemi con l'applica
     #####################################################################
     
     try:
-        curr.execute(query_select, ('APERTO', 'APERTO'))
+        curr.execute(query_select, ('APERTO', 'APERTO', 'APERTO'))
         lista_interventi_apertura=curr.fetchall()
     except Exception as e:
         logger.error(e)
@@ -287,91 +321,106 @@ Si prega di NON RISPONDERE alla presente mail. In caso di problemi con l'applica
 
     if c==1:
         for ii in lista_interventi_apertura:
-            logger.info('Invio mail  apertura per intervento {}'.format(ii[0]))
-            if ii[6] is None:
-                matr='nd'
-            else: 
-                matr=ii[6]
-            # compongo la mail
-            body='''{16}
-    L'utente {0} ({1}) in data {2} ha creato il seguente intervento:<br>
-    <ul>
-    <li> Tipo intervento:   {3}</li>
-    <li> Descr Intervento:  {4}</li>
-    <li> Piazzola:          <a href="http://{13}/SIT{14}/#!/home/edit-piazzola/{5}/">{5}</a> (Rif:{6} Note:{7})</li>
-    <li> Indirizzo:         {8}</li>
-    <li> UT:                {9}</li>
-    <li> Quartiere/comune:  {10}</li>
-    <li> Elemento:           Tipo: {11} (matr. {12})</li>
-    </ul>
-    Le informazioni di cui sopra si intendono sostitutive del modulo 816 rev. 3 e sono memorizzate sull'applicativo
-    {15}
-    <img src="cid:image1" alt="Logo" width=197>
-    <br>
-    '''.format(ii[2], ii[3], ii[1], ii[8], ii[7], ii[4], ii[14], ii[15], ii[13], ii[12], ii[11], ii[9], matr, host, und_test, footer, incipit_mail)
+            logger.debug(ii[19])
+            if ii[19]==3:
+                logger.info('Invio mail  apertura per intervento {}'.format(ii[0]))
+                if ii[6] is None:
+                    matr='nd'
+                else: 
+                    matr=ii[6]
+                # compongo la mail
+                body='''{16}
+        L'utente {0} ({1}) in data {2} ha creato il seguente intervento:<br>
+        <ul>
+        <li> Tipo intervento:   {3}</li>
+        <li> Descr Intervento:  {4}</li>
+        <li> Piazzola:          <a href="http://{13}/SIT{14}/#!/home/edit-piazzola/{5}/">{5}</a> (Rif:{6} Note:{7})</li>
+        <li> Indirizzo:         {8}</li>
+        <li> UT:                {9}</li>
+        <li> Quartiere/comune:  {10}</li>
+        <li> Elemento:           Tipo: {11} (matr. {12})</li>
+        </ul>
+        Le informazioni di cui sopra si intendono sostitutive del modulo 816 rev. 3 e sono memorizzate sull'applicativo
+        {15}
+        <img src="cid:image1" alt="Logo" width=197>
+        <br>
+        '''.format(ii[2], ii[3], ii[1], ii[8], ii[7], ii[4], ii[14], ii[15], ii[13], ii[12], ii[11], ii[9], matr, host, und_test, footer, incipit_mail)
 
-            logger.debug(body)  
-
-
-            # messaggio='Test invio messaggio'
-
-
-            subject = "NUOVO INTERVENTO RICHIESTO{}".format(oggetto)
-            #body = "Report giornaliero delle variazioni.\n Giorno {}\n\n".format(giorno_file)
-            sender_email = user_mail
-            #receiver_email='assterritorio@amiu.genova.it'
-            #debug_email='roberto.marzocchi@amiu.genova.it'
-
-            receiver_email=mail_notifiche_apertura
-
-            # Create a multipart message and set headers
-            message = MIMEMultipart()
-            message["From"] = 'no_reply@amiu.genova.it'
-            message["To"] = receiver_email
-            message["Subject"] = subject
-            #message["Bcc"] = debug_email  # Recommended for mass emails
-            message.preamble = "Nuovo intervento"
+                logger.debug(body)  
 
 
+                # messaggio='Test invio messaggio'
+
+
+                subject = "NUOVO INTERVENTO RICHIESTO{}".format(oggetto)
+                #body = "Report giornaliero delle variazioni.\n Giorno {}\n\n".format(giorno_file)
+                sender_email = user_mail
+                #receiver_email='assterritorio@amiu.genova.it'
+                #debug_email='roberto.marzocchi@amiu.genova.it'
+
+                receiver_email=mail_notifiche_apertura
+
+                # Create a multipart message and set headers
+                message = MIMEMultipart()
+                message["From"] = 'no_reply@amiu.genova.it'
+                message["To"] = receiver_email
+                message["Subject"] = subject
+                message["Bcc"] = debug_email  # Recommended for mass emails
+                message.preamble = "Nuovo intervento"
+
+
+                    
+                                    
+                # Add body to email
+                message.attach(MIMEText(body, "html"))
+
+
+
+                # aggiunto allegato (usando la funzione importata)
+                #allegato(message, file_variazioni, nome_file)
+                # Add body to email
+                #message.attach(MIMEText(body, "plain"))
                 
-                                
-            # Add body to email
-            message.attach(MIMEText(body, "html"))
 
+                logoname='{}/img/logo_amiu.jpg'.format(parentdir)
+                immagine(message,logoname)
 
+                #text = message.as_string()
 
-            # aggiunto allegato (usando la funzione importata)
-            #allegato(message, file_variazioni, nome_file)
-            # Add body to email
-            #message.attach(MIMEText(body, "plain"))
-            
+                logging.info("Richiamo la funzione per inviare mail")
+                invio=invio_messaggio(message)
+                
 
-            logoname='{}/img/logo_amiu.jpg'.format(parentdir)
-            immagine(message,logoname)
-
-            #text = message.as_string()
-
-            logging.info("Richiamo la funzione per inviare mail")
-            invio=invio_messaggio(message)
-            
-
-            if invio==200:
+                if invio==200:
+                    query_update='''UPDATE gestione_oggetti.email
+                    SET data_invio=now(), "destinatario_A"=%s 
+                    WHERE id=%s
+                    '''
+                    try:
+                        curr1.execute(query_update, (receiver_email,ii[16]))
+                    except Exception as e:
+                        logger.error(e)
+                    #logging.info(invio)
+                    # COMMIT
+                    logger.info('Faccio il commit')
+                    conn.commit()
+                else:
+                    logging.error('Problema invio mail. Error:{}'.format(invio))
+            # se non era da inviare la mail imposto comunque una data ma non metto l'indirizzo
+            else:
+                logger.debug('Sono qua') 
                 query_update='''UPDATE gestione_oggetti.email
-                SET data_invio=now(), "destinatario_A"=%s 
-                WHERE id=%s
+                    SET data_invio=now() 
+                    WHERE id=%s
                 '''
                 try:
-                    curr1.execute(query_update, (receiver_email,ii[16]))
+                    curr1.execute(query_update, (ii[16],))
                 except Exception as e:
                     logger.error(e)
                 #logging.info(invio)
                 # COMMIT
                 logger.info('Faccio il commit')
                 conn.commit()
-            else:
-                logging.error('Problema invio mail. Error:{}'.format(invio))
-
-
 
 
     curr.close()
@@ -382,8 +431,9 @@ Si prega di NON RISPONDERE alla presente mail. In caso di problemi con l'applica
     curr1 = conn.cursor()
 
     #####################################################################
+    # 2 CHIUSURA
     try:
-        curr.execute(query_select, ('CHIUSO', 'CHIUSO'))
+        curr.execute(query_select, ('CHIUSO', 'CHIUSO', 'CHIUSO'))
         lista_interventi_chiusura=curr.fetchall()
     except Exception as e:
         logger.error(e)
@@ -445,7 +495,7 @@ Si prega di NON RISPONDERE alla presente mail. In caso di problemi con l'applica
             if ii[17] != None:
                 message["CC"] = ii[17]
             message["Subject"] = subject
-            #message["Bcc"] = debug_email  # Recommended for mass emails
+            message["Bcc"] = debug_email  # Recommended for mass emails
             message.preamble = "Intervento chiuso"
 
 
@@ -477,6 +527,16 @@ Si prega di NON RISPONDERE alla presente mail. In caso di problemi con l'applica
                     curr1.execute(query_update, (ii[3],ii[16]))
                 except Exception as e:
                     logger.error(e)
+
+                if ii[17] != None:
+                    query_update='''UPDATE gestione_oggetti.email
+                    SET "destinatario_CC"=%s 
+                    WHERE id=%s
+                    '''
+                    try:
+                        curr1.execute(query_update, (ii[3],ii[17]))
+                    except Exception as e:
+                        logger.error(e)   
                 #logging.info(invio)
                 # COMMIT
                 logger.info('Faccio il commit')
@@ -485,6 +545,147 @@ Si prega di NON RISPONDERE alla presente mail. In caso di problemi con l'applica
                 logging.error('Problema invio mail. Error:{}'.format(invio))
     
 
+    curr.close()
+    curr1.close()
+    conn.close()
+    conn=connect()
+    curr = conn.cursor()
+    curr1 = conn.cursor()
+
+
+    #####################################################################
+    # 4 ABORT
+    try:
+        curr.execute(query_select, ('ABORTITO', 'ABORTITO' , 'ABORTITO'))
+        lista_interventi_chiusura=curr.fetchall()
+    except Exception as e:
+        logger.error(e)
+    
+    c=0
+    try: 
+        logger.debug(len(lista_interventi_chiusura))
+        
+        if len(lista_interventi_chiusura) > 0:
+            logger.info('Invio mail ABORTED')
+            c=1
+    except Exception as e:
+        logger.info('Non ci sono nuovi interventi ABORTITI')
+
+
+    if c==1:
+        for ii in lista_interventi_chiusura:
+            logger.info('Invio mail per intervento {} abortito'.format(ii[0]))
+            if ii[6] is None:
+                matr='nd'
+            else: 
+                matr=ii[6]
+            # compongo la mail in casi diversi dal "Nuovo Posizionamento"
+            if ii[9] is None:
+                body='''{6}
+        Gent. {0} <br>
+
+        L'intervento con id {1} contenerva delle informazioni inesatte ed è stato rigettato da <b><i>Manutenzioni Contenitori
+        </i></b> con le seguenti note {2}
+        
+        <br><br>Dettagli intervento:<br>
+        <ul>
+        <li> Tipo intervento:    {3}</li>
+        <li> Descr Intervento:   {4}</li>
+        <li> Data apertura:     {5}</li>
+        </ul>
+        {7}
+        <img src="cid:image1" alt="Logo" width=197>
+        <br>
+        '''.format(ii[2], ii[0], ii[18], ii[8], ii[7], ii[1], incipit_mail, footer)
+
+            else:
+                body='''{16}
+        Gent. {0} <br>
+
+        L'intervento con id {1} contenerva delle informazioni inesatte ed è stato rigettato da <b><i>Manutenzioni Contenitori
+        </i></b> con le seguenti note {2}
+        
+        <br><br>Dettagli intervento:<br>
+        <ul>
+        <li> Tipo intervento:    {3}</li>
+        <li> Descr Intervento:   {4}</li>
+        <li> Piazzola:          <a href="http://{13}/SIT{14}/#!/home/edit-piazzola/{5}/">{5}</a> (Rif:{6} Note:{7})</li>
+        <li> Indirizzo:         {8}</li>
+        <li> UT:                {9}</li>
+        <li> Quartiere/comune:  {10}</li>
+        <li> Elemento:           Tipo: {11} (matr. {12})</li>
+        <li> Data apertura:     {2}</li>
+        </ul>
+        {15}
+        <img src="cid:image1" alt="Logo" width=197>
+        <br>
+        '''.format(ii[2], ii[0], ii[18], ii[8], ii[7], ii[4], ii[14], ii[15], ii[13], ii[12], ii[11], ii[9], matr, host, und_test, footer, incipit_mail)
+
+            logger.debug(body)  
+
+
+            # messaggio='Test invio messaggio'
+
+
+            subject = "INTERVENTO CON INFORMAZIONI INESATTE NON ESEGUITO {}".format(oggetto)
+            #body = "Report giornaliero delle variazioni.\n Giorno {}\n\n".format(giorno_file)
+            sender_email = user_mail
+
+            # Create a multipart message and set headers
+            message = MIMEMultipart()
+            message["From"] = 'no_reply@amiu.genova.it'
+            message["To"] =ii[3]
+            if ii[17] != None:
+                message["CC"] = ii[17]
+            message["Subject"] = subject
+            message["Bcc"] = debug_email  # Recommended for mass emails
+            message.preamble = "Intervento con informazioni inesatte"
+
+
+                
+                                
+            # Add body to email
+            message.attach(MIMEText(body, "html"))
+
+            # aggiunto allegato (usando la funzione importata)
+            #allegato(message, file_variazioni, nome_file)
+            # Add body to email
+            #message.attach(MIMEText(body, "plain"))
+            
+            #aggiungo logo 
+            logoname='{}/img/logo_amiu.jpg'.format(parentdir)
+            immagine(message,logoname)
+            
+            #text = message.as_string()
+
+            logging.info("Richiamo la funzione per inviare mail")
+            invio=invio_messaggio(message)
+            
+            if invio==200:
+                query_update='''UPDATE gestione_oggetti.email
+                SET data_invio=now(), "destinatario_A"=%s 
+                WHERE id=%s
+                '''
+                try:
+                    curr1.execute(query_update, (ii[3],ii[16]))
+                except Exception as e:
+                    logger.error(e)
+                
+                if ii[17] != None:
+                    query_update='''UPDATE gestione_oggetti.email
+                    SET "destinatario_CC"=%s 
+                    WHERE id=%s
+                    '''
+                    try:
+                        curr1.execute(query_update, (ii[3],ii[17]))
+                    except Exception as e:
+                        logger.error(e)   
+                #logging.info(invio)
+                # COMMIT
+                logger.info('Faccio il commit')
+                conn.commit()
+            else:
+                logging.error('Problema invio mail. Error:{}'.format(invio))
 
     
 
@@ -496,12 +697,12 @@ Si prega di NON RISPONDERE alla presente mail. In caso di problemi con l'applica
     curr1 = conn.cursor()
 
     #####################################################################
-
+    # 3 AGGIORNATO
 
    
 
     try:
-        curr.execute(query_select, ('AGGIORNATO', 'AGGIORNATO'))
+        curr.execute(query_select, ('AGGIORNATO', 'AGGIORNATO', 'AGGIORNATO'))
         lista_interventi_agg=curr.fetchall()
     except Exception as e:
         logger.error(e)
@@ -559,7 +760,7 @@ Si prega di NON RISPONDERE alla presente mail. In caso di problemi con l'applica
             message["From"] = 'no_reply@amiu.genova.it'
             message["To"] = receiver_email
             message["Subject"] = subject
-            #message["Bcc"] = debug_email  # Recommended for mass emails
+            message["Bcc"] = debug_email  # Recommended for mass emails
             message.preamble = "Nuovo aggiornamento intervento"
 
 
@@ -600,6 +801,11 @@ Si prega di NON RISPONDERE alla presente mail. In caso di problemi con l'applica
 
 
 
+
+
+    # check se c_handller contiene almeno una riga 
+    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+    logger.info("chiudo le connessioni in maniera definitiva")
 
     curr.close()
     curr1.close()

@@ -76,8 +76,8 @@ logger = logging.getLogger()
 
 # Create handlers
 c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-f_handler = logging.StreamHandler()
-#f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+#f_handler = logging.StreamHandler()
+f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.ERROR)
@@ -164,6 +164,7 @@ def main():
 
     letture = response.json()
     #logger.debug(letture)
+    logger.debug(len(letture))
     i=0
     while i<len(letture):
         colonne=letture[i]
@@ -241,6 +242,7 @@ VALUES(%s, %s, %s, %s);'''
                 logger.error(e)
         ########################################################################################
         # da testare sempre prima senza fare i commit per verificare che sia tutto OK
+        logger.info('Faccio commit')
         conn.commit()
         ########################################################################################
 
@@ -251,7 +253,7 @@ VALUES(%s, %s, %s, %s);'''
 
 
         i+=1
-
+    logger.info('Fine script')
 
 if __name__ == "__main__":
     main()   
