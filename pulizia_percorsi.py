@@ -100,7 +100,7 @@ from invio_messaggio import *
 
 ################################
 # DA CAMBIARE 
-nome_db= db_test
+nome_db= db
 #################################
 
 

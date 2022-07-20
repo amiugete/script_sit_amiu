@@ -19,7 +19,7 @@ from email.mime.audio import MIMEAudio
 from email.mime.base import MIMEBase
 from email.mime.image import MIMEImage
 from email.mime.text import MIMEText
-from invio_messaggio import *
+
 
 
 
@@ -73,7 +73,14 @@ def invio_messaggio(messaggio):
 
 
 
-def allegato(messaggio, file, nome_file):
+def allegato(messaggio, file, file_name):
+    '''
+    Funzione presente nello script invio_messaggio.py per aggiungere un allegato a un messaggio mail
+    Input:
+        - messaggio: 
+        - file: path al file da aggiungere
+        - file_name: nome del file da allegare
+    '''
     ctype, encoding = mimetypes.guess_type(file)
     if ctype is None or encoding is not None:
         ctype = "application/octet-stream"
@@ -99,12 +106,14 @@ def allegato(messaggio, file, nome_file):
         attachment.set_payload(fp.read())
         fp.close()
         encoders.encode_base64(attachment)
-    attachment.add_header("Content-Disposition", "attachment", filename=nome_file)
+    attachment.add_header("Content-Disposition", "attachment", filename=file_name)
     messaggio.attach(attachment)
 
 
 def immagine(messaggio, file):
-    
+    '''
+    Funzione presente nello script invio_messaggio.py per aggiungere un immagine a un messaggio
+    '''
     # This example assumes the image is in the current directory
     fp = open(file, 'rb')
     msgImage = MIMEImage(fp.read())
@@ -113,3 +122,49 @@ def immagine(messaggio, file):
     # Define the image's ID as referenced above
     msgImage.add_header('Content-ID', '<image1>')
     messaggio.attach(msgImage)
+
+
+
+def error_log_mail(error_log_file, receiver_email, script_name, logger_name):
+    '''
+    Funzione presente nello script invio_messaggio.py per inviare l'eventuale LOG con errori via mail
+    Input:
+        - error_log_file
+        - receiver_email
+        - script_name
+        - logger_name
+    '''
+
+    logfile = open(error_log_file, 'r')
+    loglist = logfile.readlines()
+    logfile.close()
+    found = False
+    for line in loglist:
+        if line!='':
+            found = True
+    if found == True: 
+        subject = 'LOG - {}'.format(script_name)
+        body = "In allegato il file con errori e/o warning originato con lo script {}".format(script_name)
+        sender_email = user_mail
+
+
+        # Create a multipart message and set headers
+        message = MIMEMultipart()
+        message["From"] = sender_email
+        message["To"] = receiver_email
+        message["Subject"] = subject
+        #message["Bcc"] = debug_email  # Recommended for mass emails
+        message.preamble = subject
+
+                        
+        # Add body to email
+        message.attach(MIMEText(body, "html"))
+
+        # aggiungi allegato
+        allegato(message, error_log_file,'error.log')
+
+
+        invio_messaggio(message)
+        logger_name.info('Messaggio inviato')
+    else: 
+        logger_name.info('Nessun errore, quindi nessun messaggio inviato')
