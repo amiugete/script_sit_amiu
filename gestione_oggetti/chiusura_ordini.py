@@ -130,7 +130,7 @@ except Exception as e:
     test=1
 
 if test==1:
-    hh=host_clone
+    hh=host
     dd=db_test
     mail_notifiche_apertura='roberto.marzocchi@amiu.genova.it'
     und_test='_TEST'

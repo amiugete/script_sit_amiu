@@ -76,7 +76,7 @@ logger = logging.getLogger()
 
 # Create handlers
 c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-#f_handler = logging.StreamHandler()
+#_handler = logging.StreamHandler()
 f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
@@ -132,12 +132,46 @@ def main():
 
     logger.info("Mi connetto al WS GET {}". format(url_bucher))
     
+    
+    
+    
+
     ms = datetime.datetime.now()
-    yesterday = ms - datetime.timedelta(hours = 3)
     endtime= int(time.mktime(ms.timetuple())) #* 1000
-    starttime= int(time.mktime(yesterday.timetuple())) #* 1000
+
+
+    # recupero lo starttime dai dati che ho già a sistema
+    query_st='''select extract(epoch from max(data_ora)at time zone 'cet')::int as startime,
+    extract(epoch from now() at time zone 'cet')::int as endtime,
+    max(data_ora)
+    from spazz_bucher.messaggi m '''
+    try:
+        curr.execute(query_st)
+        st0=curr.fetchall()
+    except Exception as e:
+        logger.error(e)
+    curr.close()
+    curr = conn.cursor()
+    # se c'è già la entry faccio 
+    if len(st0)>0:
+        for st1 in st0:
+            #starttime=st1[0]
+            #endtime=st1[1]
+            maxt=st1[2]
+        '''logging.debug('Postgres time')
+        logging.debug(starttime)
+        logging.debug(endtime)
+        logging.debug('Python time')
+        #starttime=datetime.datetime.strptime(maxt, '%Y-m-%d %H:%M:%S')'''
+        starttime= int(time.mktime(maxt.timetuple())) #* 1000
+    else:
+        yesterday = ms - datetime.timedelta(hours = 3)
+        starttime= int(time.mktime(yesterday.timetuple())) #* 1000
+    #exit()
+
     logging.debug(starttime)
     logging.debug(endtime)
+    #exit()
 
     #response = requests.get(url_bucher, params={'starttime':starttime, 'endtime': endtime, 'X-Auth-Token':token}, headers={'accept': 'application/json'})
     response = requests.get(url_bucher, params={'starttime':starttime, 'endtime': endtime}, headers={'X-Auth-Token': token})
@@ -163,96 +197,99 @@ def main():
     
 
     letture = response.json()
-    #logger.debug(letture)
+    logger.debug(letture)
     logger.debug(len(letture))
     i=0
-    while i<len(letture):
-        colonne=letture[i]
-        #logger.debug(len(colonne))
-        #logger.debug(colonne)
-        asset_id=letture[i]['asset']['asset_id']
-        sportello=letture[i]['asset']['name']
-        sn=letture[i]['asset']['sn']
-        note=letture[i]['asset']['note']
-        query_select="SELECT * FROM spazz_bucher.mezzi where sn = %s"
-        try:
-            curr.execute(query_select, (sn,))
-            serialnumbers=curr.fetchall()
-        except Exception as e:
-            logger.error(e)
-        curr.close()
-        curr = conn.cursor()
-        # se c'è già la entry faccio 
-        if len(serialnumbers)>0: 
-            query_update='''UPDATE spazz_bucher.mezzi
-            set id=%s, sportello=%s, note= %s
-            WHERE sn=%s;'''
+    if len(letture)>1:
+        while i<len(letture):
+            colonne=letture[i]
+            #logger.debug(len(colonne))
+            #logger.debug(colonne)
+            asset_id=letture[i]['asset']['asset_id']
+            sportello=letture[i]['asset']['name']
+            sn=letture[i]['asset']['sn']
+            note=letture[i]['asset']['note']
+            query_select="SELECT * FROM spazz_bucher.mezzi where sn = %s"
             try:
-                curr.execute(query_update, (asset_id, sportello, note, sn))
+                curr.execute(query_select, (sn,))
+                serialnumbers=curr.fetchall()
             except Exception as e:
                 logger.error(e)
-        else:
-            query_insert='''INSERT INTO spazz_bucher.mezzi
-(id, sportello, note, sn)
-VALUES(%s, %s, %s, %s);'''
+            curr.close()
+            curr = conn.cursor()
+            # se c'è già la entry faccio 
+            if len(serialnumbers)>0: 
+                query_update='''UPDATE spazz_bucher.mezzi
+                set id=%s, sportello=%s, note= %s
+                WHERE sn=%s;'''
+                try:
+                    curr.execute(query_update, (asset_id, sportello, note, sn))
+                except Exception as e:
+                    logger.error(e)
+            else:
+                query_insert='''INSERT INTO spazz_bucher.mezzi
+    (id, sportello, note, sn)
+    VALUES(%s, %s, %s, %s);'''
+                try:
+                    curr.execute(query_insert, (asset_id, sportello, note, sn))
+                except Exception as e:
+                    logger.error(e)
+            ########################################################################################
+            # da testare sempre prima senza fare i commit per verificare che sia tutto OK
+            conn.commit()
+            ########################################################################################
+
+            # leggo la parte restante del messaggio
+            sweeper_mode=letture[i]['sweeper']['status']
+            route_id=letture[i]['route_id']
+            driver_id=letture[i]['operator_id']
+            lat=letture[i]['latitude']
+            lon=letture[i]['longitude']
+            s_time=letture[i]['sample_time']
+            
+
+
+
+            query_select="SELECT * FROM spazz_bucher.messaggi where sportello = %s and data_ora=%s"
             try:
-                curr.execute(query_insert, (asset_id, sportello, note, sn))
+                curr.execute(query_select, (sportello,s_time))
+                serialnumbers=curr.fetchall()
             except Exception as e:
                 logger.error(e)
-        ########################################################################################
-        # da testare sempre prima senza fare i commit per verificare che sia tutto OK
-        conn.commit()
-        ########################################################################################
+            curr.close()
+            curr = conn.cursor()
+            # se c'è già la entry faccio 
+            if len(serialnumbers)>0: 
+                query_update='''UPDATE spazz_bucher.messaggi
+                set routeid =%s, driverid =%s, sweeper_mode =%s, geoloc=ST_SetSRID(ST_MakePoint(%s, %s),4326)
+                WHERE sportello = %s and data_ora=%s;'''
+                try:
+                    curr.execute(query_update, (route_id, driver_id, sweeper_mode, lat, lon, sportello, s_time))
+                except Exception as e:
+                    logger.error(e)
+            else:
+                query_insert='''INSERT INTO spazz_bucher.messaggi
+                (routeid, driverid, sweeper_mode, geoloc, sportello, data_ora)
+                VALUES(%s, %s, %s, ST_SetSRID(ST_MakePoint(%s, %s),4326), %s, %s);'''
+                try:
+                    curr.execute(query_insert, (route_id, driver_id, sweeper_mode, lat, lon, sportello, s_time))
+                except Exception as e:
+                    logger.error(e)
+            ########################################################################################
+            # da testare sempre prima senza fare i commit per verificare che sia tutto OK
+            logger.info('Faccio commit')
+            conn.commit()
+            ########################################################################################
 
-        # leggo la parte restante del messaggio
-        sweeper_mode=letture[i]['sweeper']['status']
-        route_id=letture[i]['route_id']
-        driver_id=letture[i]['operator_id']
-        lat=letture[i]['latitude']
-        lon=letture[i]['longitude']
-        s_time=letture[i]['sample_time']
-        
-
-
-
-        query_select="SELECT * FROM spazz_bucher.messaggi where sportello = %s and data_ora=%s"
-        try:
-            curr.execute(query_select, (sportello,s_time))
-            serialnumbers=curr.fetchall()
-        except Exception as e:
-            logger.error(e)
-        curr.close()
-        curr = conn.cursor()
-        # se c'è già la entry faccio 
-        if len(serialnumbers)>0: 
-            query_update='''UPDATE spazz_bucher.messaggi
-            set routeid =%s, driverid =%s, sweeper_mode =%s, geoloc=ST_SetSRID(ST_MakePoint(%s, %s),4326)
-            WHERE sportello = %s and data_ora=%s;'''
-            try:
-                curr.execute(query_update, (route_id, driver_id, sweeper_mode, lat, lon, sportello, s_time))
-            except Exception as e:
-                logger.error(e)
-        else:
-            query_insert='''INSERT INTO spazz_bucher.messaggi
-            (routeid, driverid, sweeper_mode, geoloc, sportello, data_ora)
-            VALUES(%s, %s, %s, ST_SetSRID(ST_MakePoint(%s, %s),4326), %s, %s);'''
-            try:
-                curr.execute(query_insert, (route_id, driver_id, sweeper_mode, lat, lon, sportello, s_time))
-            except Exception as e:
-                logger.error(e)
-        ########################################################################################
-        # da testare sempre prima senza fare i commit per verificare che sia tutto OK
-        logger.info('Faccio commit')
-        conn.commit()
-        ########################################################################################
-
-        
-        
-        
-        # da aggiornare ultimo utilizzo e ultimo spazzamento nella tabella dei mezzi
+            
+            
+            
+            # da aggiornare ultimo utilizzo e ultimo spazzamento nella tabella dei mezzi
 
 
-        i+=1
+            i+=1
+    else:
+        logger.warning('''Non c'è nulla da leggere''')
     logger.info('Fine script')
 
 if __name__ == "__main__":

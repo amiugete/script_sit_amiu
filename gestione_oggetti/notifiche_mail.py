@@ -153,6 +153,7 @@ if test==1:
     hh=host
     dd=db_test
     mail_notifiche_apertura='magmaco@amiu.genova.it'
+    mail_notifiche_apertura=debug_email
     und_test='_TEST'
     oggetto= ' (TEST)'
     incipit_mail='''<p style="color:red"><b>Questa mail proviene dagli applicativi di TEST (SIT e Gestione oggetti).
@@ -330,7 +331,7 @@ Si prega di NON RISPONDERE alla presente mail. In caso di problemi con l'applica
                     matr=ii[6]
                 # compongo la mail
                 body='''{16}
-        L'utente {0} ({1}) in data {2} ha creato il seguente intervento:<br>
+        L'utente {0} ({1}) in data {2} ha creato il seguente intervento (Priorità <b>{17}</b>):<br>
         <ul>
         <li> Tipo intervento:   {3}</li>
         <li> Descr Intervento:  {4}</li>
@@ -344,7 +345,7 @@ Si prega di NON RISPONDERE alla presente mail. In caso di problemi con l'applica
         {15}
         <img src="cid:image1" alt="Logo" width=197>
         <br>
-        '''.format(ii[2], ii[3], ii[1], ii[8], ii[7], ii[4], ii[14], ii[15], ii[13], ii[12], ii[11], ii[9], matr, host, und_test, footer, incipit_mail)
+        '''.format(ii[2], ii[3], ii[1], ii[8], ii[7], ii[4], ii[14], ii[15], ii[13], ii[12], ii[11], ii[9], matr, host, und_test, footer, incipit_mail, ii[20])
 
                 logger.debug(body)  
 
@@ -534,7 +535,7 @@ Si prega di NON RISPONDERE alla presente mail. In caso di problemi con l'applica
                     WHERE id=%s
                     '''
                     try:
-                        curr1.execute(query_update, (ii[3],ii[17]))
+                        curr1.execute(query_update, (ii[17],ii[16]))
                     except Exception as e:
                         logger.error(e)   
                 #logging.info(invio)
@@ -584,8 +585,8 @@ Si prega di NON RISPONDERE alla presente mail. In caso di problemi con l'applica
                 body='''{6}
         Gent. {0} <br>
 
-        L'intervento con id {1} contenerva delle informazioni inesatte ed è stato rigettato da <b><i>Manutenzioni Contenitori
-        </i></b> con le seguenti note {2}
+        L'intervento con id {1} conteneva delle informazioni inesatte ed è stato rigettato da <b><i>Manutenzioni Contenitori
+        </i></b> con le seguenti note <br><br><b>{2}</b>
         
         <br><br>Dettagli intervento:<br>
         <ul>
@@ -602,8 +603,8 @@ Si prega di NON RISPONDERE alla presente mail. In caso di problemi con l'applica
                 body='''{16}
         Gent. {0} <br>
 
-        L'intervento con id {1} contenerva delle informazioni inesatte ed è stato rigettato da <b><i>Manutenzioni Contenitori
-        </i></b> con le seguenti note {2}
+        L'intervento con id {1} conteneva delle informazioni inesatte ed è stato rigettato da <b><i>Manutenzioni Contenitori
+        </i></b> con le seguenti note <br><br><b>{2}</b>
         
         <br><br>Dettagli intervento:<br>
         <ul>
@@ -677,8 +678,9 @@ Si prega di NON RISPONDERE alla presente mail. In caso di problemi con l'applica
                     WHERE id=%s
                     '''
                     try:
-                        curr1.execute(query_update, (ii[3],ii[17]))
+                        curr1.execute(query_update, (ii[17],ii[16]))
                     except Exception as e:
+                        logger.error('16:{}, 17:{}'.format(ii[16], ii[17]))
                         logger.error(e)   
                 #logging.info(invio)
                 # COMMIT

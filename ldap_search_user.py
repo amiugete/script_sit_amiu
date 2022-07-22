@@ -30,13 +30,15 @@ import inspect, os.path
 import psycopg2
 import sqlite3
 
-
 currentdir = os.path.dirname(os.path.realpath(__file__))
 parentdir = os.path.dirname(currentdir)
 sys.path.append(parentdir)
 
 sys.path.append('../')
 from credenziali import *
+
+# funzioni per inviare messaggi mail
+from invio_messaggio import *
 
 #import requests
 import datetime
@@ -146,8 +148,15 @@ def main():
             
         
         except Exception as e:
+            logger.error('Verificare il seguente utenti su SIT e aggiungere la MAIL, perchè non si riesce a configurare in maniera automatica')
             logger.error(user1)
-            logger.error(e)
+            #logger.error(e)
+    
+
+    # check se c_handller contiene almeno una riga 
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+    logger.info("chiudo le connessioni in maniera definitiva")
+
     curr.close()
     conn.close()
 
