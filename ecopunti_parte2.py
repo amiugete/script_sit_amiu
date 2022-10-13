@@ -85,18 +85,20 @@ def main(argv):
 
     logging.info('Leggo gli input')
     try:
-        opts, args = getopt.getopt(argv,"hm:",["mail="])
+        opts, args = getopt.getopt(argv,"hm:a:",["mail="])
     except getopt.GetoptError:
         logging.error('ecopunti_parte2.py  -m <mail>')
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
-            print('seleziona_utecopunti_parte2.py - m <mail>')
+            print('ecopunti_parte2.py - m <mail>')
             sys.exit()
         elif opt in ("-m", "--mail"):
             mail = arg
             logging.info('Mail cui inviare i dati = {}'.format(mail))
-
+        elif opt in ("-a", "--area"):
+            area = arg
+            logging.info('id area = {}'.format(area))
 
 
     # carico i mezzi sul DB PostgreSQL
@@ -147,6 +149,21 @@ def main(argv):
         cod_civico.append(vv[0])
 
     curr.close()
+    curr = conn.cursor()
+
+
+    query_area='''select replace(nome,' ', '_') as nome_area from etl.aree where id = %s'''
+
+    try:
+        curr.execute(query_area, (area,))
+        n_area=curr.fetchall()
+    except Exception as e:
+        logging.error(e)
+
+    for aa in n_area:
+        nome_area=aa[0]
+
+    curr.close()
 
 
     logging.info('Lista civici')
@@ -165,7 +182,7 @@ def main(argv):
 
 
     
-    nome_file0="{0}_elenco_civici_completo.xlsx".format(giorno_file)
+    nome_file0="{0}_{1}_elenco_civici_completo.xlsx".format(giorno_file, nome_area)
     file_civici="{0}/ecopunti/{1}".format(path,nome_file0)
     
     
@@ -218,10 +235,10 @@ def main(argv):
 
 
 
-    nome_file="{0}_utenze_domestiche.xlsx".format(giorno_file)
-    nome_file2="{0}_utenze_nondomestiche.xlsx".format(giorno_file)
-    nome_file3="{0}_civici_utenze_domestiche.xlsx".format(giorno_file)
-    nome_file4="{0}_civici_utenze_nondomestiche.xlsx".format(giorno_file)
+    nome_file="{0}_{1}_utenze_domestiche.xlsx".format(giorno_file, nome_area)
+    nome_file2="{0}_{1}_utenze_nondomestiche.xlsx".format(giorno_file,nome_area)
+    nome_file3="{0}_{1}_civici_utenze_domestiche.xlsx".format(giorno_file, nome_area)
+    nome_file4="{0}_{1}_civici_utenze_nondomestiche.xlsx".format(giorno_file, nome_area)
     file_domestiche="{0}/ecopunti/{1}".format(path,nome_file)
     file_nondomestiche="{0}/ecopunti/{1}".format(path,nome_file2)
     file_civdomestiche="{0}/ecopunti/{1}".format(path,nome_file3)

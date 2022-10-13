@@ -129,7 +129,7 @@ def main():
 
     # cerco i percorsi attivi su SIT
     query_percorsi=''' select id_percorso, cod_percorso, descrizione, 
-    data_dismissione 
+    data_dismissione, versione
     from elem.percorsi where id_categoria_uso = 3 and data_dismissione is null
     order by cod_percorso'''
 

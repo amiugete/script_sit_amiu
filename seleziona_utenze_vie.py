@@ -66,7 +66,12 @@ from email.mime.image import MIMEImage
 from email.mime.text import MIMEText
 from invio_messaggio import *
 
-
+# funzionde per restituire un dizionario
+def makeDictFactory(cursor):
+    columnNames = [d[0] for d in cursor.description]
+    def createRow(*args):
+        return dict(zip(columnNames, args))
+    return createRow
 
 
 def main(argv):
@@ -121,8 +126,8 @@ def main(argv):
     #aggiorno il prefisso del file
     giorno_file='{}_{}'.format(giorno_file, prefisso1.replace(' ', '_'))
     
-    # carico i mezzi sul DB PostgreSQL
-    logging.info('Leggo il file CSV')
+    # Leggo il file
+    logging.info('Leggo il file CSV {}' . format(file_csv))
 
     with open(file_csv) as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=',')
@@ -255,10 +260,19 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
     nome_file2="{0}_utenze_nondomestiche.xlsx".format(giorno_file)
     nome_file3="{0}_civici_utenze_domestiche.xlsx".format(giorno_file)
     nome_file4="{0}_civici_utenze_nondomestiche.xlsx".format(giorno_file)
+    
+    
+    nome_file5="{0}_file_IDEA.xlsx".format(giorno_file)
+    nome_file6="{0}_file_portale_utenze.xlsx".format(giorno_file)
+       
+    
     file_domestiche="{0}/utenze/{1}".format(path,nome_file)
     file_nondomestiche="{0}/utenze/{1}".format(path,nome_file2)
     file_civdomestiche="{0}/utenze/{1}".format(path,nome_file3)
     file_civnondomestiche="{0}/utenze/{1}".format(path,nome_file4)
+    
+    file_idea="{0}/utenze/{1}".format(path,nome_file5)
+    file_portale_utenze="{0}/utenze/{1}".format(path,nome_file6)
 
 
     nomi_files.append(nome_file)
@@ -269,7 +283,10 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
     files.append(file_civdomestiche)
     nomi_files.append(nome_file4)
     files.append(file_civnondomestiche)
-
+    nomi_files.append(nome_file5)
+    files.append(file_idea)   
+    nomi_files.append(nome_file6)
+    files.append(file_portale_utenze)
 
     
     workbook = xlsxwriter.Workbook(file_domestiche)
@@ -463,8 +480,148 @@ WHERE COD_VIA in ({})
     workbook4.close()
 
 
-    
 
+
+
+
+    logging.info('*****************************************************')
+    logging.info('FILE X IDEA')
+    # civici  non domestiche
+    workbook5 = xlsxwriter.Workbook(file_idea)
+    date_format = workbook5.add_format({'font_size': 9, 'border':   1,
+    'num_format': 'dd/mm/yyyy', 'valign': 'vcenter', 'center_across': True})
+    title = workbook5.add_format({'bold': True,  'font_size': 9, 'border':   1, 'bg_color': '#F9FF33', 'valign': 'vcenter', 'center_across': True,'text_wrap': True})
+    tc =  workbook5.add_format({'border':   1, 'font_size': 9, 'valign': 'vcenter', 'center_across': True, 'text_wrap': True})
+    w5 = workbook5.add_worksheet()
+
+
+    #w5.set_column(0, 10, 15)
+
+
+
+
+    cur5 = con.cursor()
+    query='''SELECT ID_UTENZA, CODICE_IMMOBILE, COD_INTERNO, COD_CIVICO, TIPO_UTENZA, 
+        CATEGORIA, NOMINATIVO, CFISC_PARIVA, COD_VIA, DESCR_VIA, CIVICO,
+        LETTERA_CIVICO, COLORE_CIVICO, SCALA, INTERNO,
+        LETTERA_INTERNO, ZONA_MUNICIPIO, SUBZONA_QUARTIERE, DATA_CESSAZIONE
+        FROM STRADE.UTENZE_ND_X_APP_IDEA 
+        WHERE COD_VIA in ({}) '''.format(codici_via)
+
+
+
+    try:
+        cur5.execute(query)
+        cur5.rowfactory = makeDictFactory(cur5)
+        lista_idea=cur5.fetchall()
+    except Exception as e:
+        logging.error(query)
+        logging.error(e)
+    #logging.debug(query)
+    #lista_civnondomestiche = cur4.execute(query)
+
+
+    rr=1
+    for pp in lista_idea:
+        cc=0
+        for key, value in pp.items():
+            #print(key)
+            #print(value)
+            w5.write(0, cc, key.replace('_', ' '), title)
+            if type(value) is str:
+                w5.write(rr, cc, value, tc)
+            elif type(value) is datetime :
+                w5.write(rr, cc, value, date_format)
+                #logger.debug(type(value))
+            elif type(value) is int :
+                w5.write(rr, cc, value, tc)
+            cc+=1
+        rr+=1
+
+    '''i=1
+    for rr in lista_idea:
+        j=0
+        #logging.debug(len(rr))
+        while j<len(rr):
+            w4.write(i, j, rr[j])
+            j+=1
+        i+=1'''
+
+    cur5.close()
+    workbook5.close()
+
+
+    
+    logging.info('*****************************************************')
+    logging.info('FILE X PORTALE UTENZE')
+    # civici  non domestiche
+    workbook6 = xlsxwriter.Workbook(file_portale_utenze)
+    date_format = workbook6.add_format({'font_size': 9, 'border':   1,
+    'num_format': 'dd/mm/yyyy', 'valign': 'vcenter', 'center_across': True})
+    title = workbook6.add_format({'bold': True,  'font_size': 9, 'border':   1, 'bg_color': '#F9FF33', 'valign': 'vcenter', 'center_across': True,'text_wrap': True})
+    #text_common 
+    tc =  workbook6.add_format({'border':   1, 'font_size': 9, 'valign': 'vcenter', 'center_across': True, 'text_wrap': True})
+    w6 = workbook6.add_worksheet()
+
+
+    w6.set_column(0, 10, 15)
+
+
+
+
+    cur6 = con.cursor()
+    query=''' SELECT ID_UTENZA, RIFERIMENTO_FISCALE, RAGIONE_SOCIALE, COGNOME, NOME, STRADA, CIVICO, CIVICO_LETTERA,
+        CIVICO_COLORE, SCALA, INTERNO, INTERNO_LETTERA, LOCALITA, CAP, MUNICIPIO, QUARTIERE, UNITA_URBANISTICA,
+        TIPOLOGIA_UTENZA, SOTTOTIPOLOGIA_UTENZA, NOTES, FLAG_ANOMALIA, CAMPAGNE
+        FROM STRADE.UTENZE_PORTALE_CONSEGNE_GE 
+        WHERE STRADA in ({}) '''.format(codici_via)
+
+
+
+    try:
+        cur6.execute(query)
+        # cur.rowfactory = makeNamedTupleFactory(cur)
+        cur6.rowfactory = makeDictFactory(cur6)
+        lista_idea=cur6.fetchall()
+    except Exception as e:
+        logging.error(query)
+        logging.error(e)
+    #logging.debug(query)
+    #lista_civnondomestiche = cur4.execute(query)
+
+
+    rr=1
+    for pp in lista_idea:
+        cc=0
+        for key, value in pp.items():
+            #print(key)
+            #print(value)
+            w6.write(0, cc, key.replace('_', ' '), title)
+            
+            if type(value) is str:
+                w6.write(rr, cc, value, tc)
+            elif type(value) is datetime :
+                w6.write(rr, cc, value, date_format)
+                #logger.debug(type(value))
+            elif type(value) is int :
+                w6.write(rr, cc, value, tc)
+            cc+=1
+        rr+=1
+
+    '''i=1
+    for rr in lista_idea:
+        j=0
+        #logging.debug(len(rr))
+        while j<len(rr):
+            w4.write(i, j, rr[j])
+            j+=1
+        i+=1'''
+
+    cur6.close()
+    workbook6.close()
+    
+    
+    
     
 
 
@@ -489,15 +646,30 @@ WHERE COD_VIA in ({})
     sender_email = user_mail
     receiver_email=mail
     #debug_email='roberto.marzocchi@amiu.genova.it'
+    #debug_email2='roberto.marzocchi@amiu.genova.it'
+    debug_email2='calvello@amiu.genova.it'
     debug_email='assterritorio@amiu.genova.it'
+    
     #assterritorio@amiu.genova.it
 
 
-    body = '''Mail automatica con l'invio delle utenze.\n
-    L'applicativo che gestisce l'estrazione delle utenze è stato realizzato dal gruppo GETE.\n 
-    Segnalare tempestivamente eventuali malfunzionamenti inoltrando la presente mail a {}\n\n
-    Giorno {}\n\n
-    AMIU Assistenza Territorio
+    body = '''Mail automatica con l'invio delle utenze generata dallo script seleziona_utenze_vie.py richiamato dalla pagina
+    https://amiugis.amiu.genova.it/utenze/index_vie.php sul server AMIUGIS.<br><br>
+Sono presenti i seguenti file:<br>
+- elenco_vie.txt (PER CONTROLLO)<br>
+- elenco civici completo (PER COMUNICAZIONE)<br>
+- elenco utenze domestiche (PER COMUNICAZIONE)<br>
+- elenco utenze non domestiche (PER COMUNICAZIONE)<br>
+- elenco civici utenze domestiche (PER COMUNICAZIONE)<br>
+- elenco civici utenze non domestiche (PER COMUNICAZIONE)<br>
+- elenco utenze non domestiche da inviare <b>manualmente</b> a IDEA per importazione su loro APP (rif. Marco Zamboni marco.zamboni@ideabs.com)<br>
+- elenco utenze da importare nel portale delle consegne (<b>rif. Laura Calvello in CC alla presente mail<b>)<br><br><br>
+L'applicativo che gestisce l'estrazione delle utenze è stato realizzato dal gruppo Gestione Applicativi del SIGT.<br> 
+Segnalare tempestivamente eventuali malfunzionamenti inoltrando la presente mail a {}<br><br>
+Giorno {}<br><br>
+    AMIU Assistenza Territorio<br>
+     <img src="cid:image1" alt="Logo" width=197>
+    <br>
     '''.format(debug_email, datetime.datetime.today().strftime('%d/%m/%Y'))
     
 
@@ -507,46 +679,23 @@ WHERE COD_VIA in ({})
     message["From"] = sender_email
     message["To"] = receiver_email
     message["Cc"] = debug_email
+    message["Cc"] = debug_email2
     message["Subject"] = subject
     #message["Bcc"] = debug_email  # Recommended for mass emails
     message.preamble = "File con le utenze"
 
     # Add body to email
-    message.attach(MIMEText(body, "plain"))
-
+    #message.attach(MIMEText(body, "plain"))
+    message.attach(MIMEText(body, "html"))
     #filename = file_variazioni  # In same directory as script
 
 
     i=0
     while i < len(files):
-        ctype, encoding = mimetypes.guess_type(files[i])
-        if ctype is None or encoding is not None:
-            ctype = "application/octet-stream"
-
-        maintype, subtype = ctype.split("/", 1)
-
-        if maintype == "text":
-            fp = open(files[i])
-            # Note: we should handle calculating the charset
-            attachment = MIMEText(fp.read(), _subtype=subtype)
-            fp.close()
-        elif maintype == "image":
-            fp = open(files[i], "rb")
-            attachment = MIMEImage(fp.read(), _subtype=subtype)
-            fp.close()
-        elif maintype == "audio":
-            fp = open(files[i], "rb")
-            attachment = MIMEAudio(fp.read(), _subtype=subtype)
-            fp.close()
-        else:
-            fp = open(files[i], "rb")
-            attachment = MIMEBase(maintype, subtype)
-            attachment.set_payload(fp.read())
-            fp.close()
-            encoders.encode_base64(attachment)
-        attachment.add_header("Content-Disposition", "attachment", filename=nomi_files[i])
-        message.attach(attachment)
+        allegato(message, files[i], nomi_files[i])
         i+=1
+        
+        
 
     '''
     # Open PDF file in binary mode
@@ -571,6 +720,10 @@ WHERE COD_VIA in ({})
     '''
     
     
+    #aggiungo logo 
+    logoname='{}/img/logo_amiu.jpg'.format(path)
+    immagine(message,logoname)
+    
     text = message.as_string()
 
 
@@ -582,7 +735,10 @@ WHERE COD_VIA in ({})
     invio=invio_messaggio(message)
     logging.info(invio)
 
-    logging.info("Mail inviata a {} e a nostro indirizzo".format(receiver_email))
+    if invio==200:
+        logging.info("Mail inviata a {} e a nostro indirizzo".format(receiver_email))
+    else:
+        logging.error('Problema invio mail. Error:{}'.format(invio))
 
 
 if __name__ == "__main__":

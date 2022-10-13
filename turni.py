@@ -288,23 +288,25 @@ def main():
         date_format_dispari = workbook.add_format({'num_format': 'dd/mm/yyyy hh:mm', 'bg_color': '#ffcc99'})
 
         w1.set_column(0, 0, 15)
-        w1.set_column(1, 2, 30)
-        w1.set_column(3, 3, 30)
-        w1.set_column(4, 4, 10)
-        w1.set_column(5, 5, 40)
+        w1.set_column(1, 1, 60)
+        w1.set_column(2, 3, 20)
+        w1.set_column(4, 4, 25)
+        w1.set_column(5, 5, 10)
+        w1.set_column(6, 6, 35)
 
 
         w1.write(0, 0, 'COD_PERCORSO', title) 
-        w1.write(0, 1, 'SERVIZIO', title) 
-        w1.write(0, 2, 'DATA ATTIVAZIONE', title) 
-        w1.write(0, 3, 'UO', title) 
-        w1.write(0, 4, 'ID_TURNO', title) 
-        w1.write(0, 5, 'DESCRIZIONE_TURNO', title) 
+        w1.write(0, 1, 'DESCRIZIONE', title) 
+        w1.write(0, 2, 'SERVIZIO', title) 
+        w1.write(0, 3, 'DATA ATTIVAZIONE', title) 
+        w1.write(0, 4, 'UO', title) 
+        w1.write(0, 5, 'ID_TURNO', title) 
+        w1.write(0, 6, 'DESCRIZIONE_TURNO', title) 
         
         i=0
         r=1
         while i< len(percorsi_anomali_uo):
-            select_anomalie= '''SELECT aspu.ID_PERCORSO, as2.DESC_SERVIZIO,
+            select_anomalie= '''SELECT aspu.ID_PERCORSO, aspu.DESCRIZIONE, as2.DESC_SERVIZIO,
             aspu.DTA_ATTIVAZIONE, au.DESC_UO, aspu.ID_TURNO, at2.DESCR_ORARIO  
             FROM ANAGR_SER_PER_UO aspu 
             JOIN ANAGR_TURNI at2 ON at2.ID_TURNO =aspu.ID_TURNO
@@ -324,12 +326,12 @@ def main():
                 j=0
                 while j<len(aa):
                     if i%2==0:
-                        if j==2:
+                        if j==3:
                             w1.write(r, j, aa[j], date_format)
                         else:
                             w1.write(r, j, aa[j], text)
                     else:
-                        if j==2:
+                        if j==3:
                             w1.write(r, j, aa[j], date_format_dispari)
                         else:
                             w1.write(r, j, aa[j], text_dispari)

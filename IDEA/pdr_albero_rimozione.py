@@ -359,7 +359,7 @@ def main():
                         conn.commit()
                         ########################################################################################
                 except Exception as e:
-                    logger.error(e)    
+                    logger.error("Postazione {0} - Errore {1}".format(letture['data'][i][0]['id_pdr'],e))    
                 
                 #print(i,letture['data'][i][9], letture['data'][i][10], letture['data'][i][14], letture['data'][i][16],letture['data'][i][17])
                 i+=1
@@ -462,8 +462,8 @@ def main():
     if len(old_id_pdr_ok)>0:
 
         # Imposto file con contenitori rimossi
-        file_piazzole="{0}/{1}_contenitori_rimossi.xlsx".format(path, giorno_file)
-        workbook = xlsxwriter.Workbook(file_piazzole)
+        file_piazzole2="{0}/{1}_contenitori_rimossi.xlsx".format(path, giorno_file)
+        workbook = xlsxwriter.Workbook(file_piazzole2)
         w1 = workbook.add_worksheet('Elementi rimossi')
 
         w1.set_tab_color('red')
@@ -558,7 +558,7 @@ def main():
         message.attach(MIMEText(body, "plain"))
 
         # aggiunto allegato (usando la funzione importata)
-        allegato(message, file_piazzole, '{}_contenitori_rimossi.xlsx'.format(giorno_file))
+        allegato(message, file_piazzole2, '{}_contenitori_rimossi.xlsx'.format(giorno_file))
         
         #text = message.as_string()
 
@@ -569,6 +569,10 @@ def main():
     else:
         logger.info('Non ci sono elementi da rimuovere')
 
+
+
+    # check se c_handller contiene almeno una riga 
+    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
 
     logger.info("Chiudo definitivamente la connesione al DB")
     #curr.close()
