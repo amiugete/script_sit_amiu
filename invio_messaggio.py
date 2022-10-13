@@ -144,7 +144,8 @@ def error_log_mail(error_log_file, receiver_email, script_name, logger_name):
             found = True
     if found == True: 
         subject = 'LOG - {}'.format(script_name)
-        body = "In allegato il file con errori e/o warning originato con lo script {}".format(script_name)
+        body = '''In allegato il file con errori e/o warning originato con lo script {}<br><br>
+Per info su accesso al server amiugis visualizza la WIKI: http://amiuintranet.amiu.genova.it/content/accesso-server-amiugis'''.format(script_name)
         sender_email = user_mail
 
 

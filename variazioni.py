@@ -21,6 +21,9 @@ import xlsxwriter
 import psycopg2
 
 import datetime
+import holidays
+from workalendar.europe import Italy
+
 
 from credenziali import db, port, user, pwd, host, user_mail, pwd_mail, port_mail, smtp_mail
 
@@ -78,19 +81,78 @@ def main():
     conn.autocommit = True
 
 
+    oggi=datetime.datetime.today()
+    oggi=oggi.replace(hour=0, minute=0, second=0, microsecond=0) 
+    logging.debug('Oggi {}'.format(oggi))
+    
+    
     num_giorno=datetime.datetime.today().weekday()
     giorno=datetime.datetime.today().strftime('%A')
     giorno_file=datetime.datetime.today().strftime('%Y%m%d')
     logging.debug('Il giorno della settimana è {} o meglio {}'.format(num_giorno, giorno))
     
+    
+    
+    holiday_list = []
+    holiday_list_pulita=[]
+    for holiday in holidays.Italy(years=[2022]).items():
+        #print(holiday[0])
+        #print(holiday[1])
+        holiday_list.append(holiday)
+        holiday_list_pulita.append(holiday[0])
+    
+    
+    # AGGIUNGO LA FESTA PATRONALE
+    logging.debug('Anno corrente = {}'.format(oggi.year))
+    holiday_list_pulita.append(datetime.datetime(oggi.year, 6, 24))
+    
     if num_giorno==0:
         num=3
+        # controllo se venerdì era festivo
+        ven = oggi - datetime.timedelta(days = num)
+        if ven in holiday_list_pulita:
+            num=4
+            gio = oggi - datetime.timedelta(days = num)
+            if gio in holiday_list_pulita:
+                num=5
     elif num_giorno in (5,6):
         num=0
         logging.info('Oggi è {0}, lo script non gira'.format(giorno))
         exit()
     else:
         num=1
+        # se oggi è festa
+        if oggi in holiday_list_pulita:
+            num=0
+            logging.info('Oggi è giorno festivo, lo script non gira'.format(giorno))
+            exit()
+        ieri=oggi - datetime.timedelta(days = num)
+        if ieri in holiday_list_pulita:
+            # se ieri era lunedì (es. Pasquetta)
+            logging.debug('Ieri {}'.format(ieri.strftime('%A')))
+            if ieri.weekday()==0:
+                num=4 # da ven in poi
+            # se ieri era martedì
+            elif ieri.weekday()==1:
+                num=2
+                # verifico altro ieri 
+                altroieri=oggi - datetime.timedelta(days = num)
+                # se altro ieri era festivo e lunedì (caso di Natale lunedì e S. Stefano Martedì)
+                if altroieri in holiday_list_pulita:
+                    num=5
+            # altrimenti
+            else: 
+                num=2
+                # verifico altro ieri 
+                altroieri=oggi - datetime.timedelta(days = num)
+                # se altro ieri era festivo e non lunedì (caso di Natale martedì/mercoledì o di due feste vicine)
+                if altroieri in holiday_list_pulita:
+                    num=3
+                    
+                    
+                    
+    
+    
     '''******************************************************************************************************
     NON SONO COMPRESI I PERCORSI STAGIONALI per cui vanno re-importate le variazioni in fase di attivazione 
     ********************************************************************************************************'''
@@ -108,16 +170,28 @@ def main():
         and h.datetime < current_date 
         and (
         (h."type" IN ('PERCORSO') 
-        and h.action IN ('UPDATE_ELEM')
+        and h.action IN ('UPDATE_ELEM', 'UPDATE')
         ) or 
         (h."type" IN ('ASTA PERCORSO') 
-        and h.action IN ('INSERT', 'UPDATE')
+        and h.action IN ('INSERT', 'UPDATE', 'DELETE')
         )
         )
         and pu.responsabile = 'S'
-        and p.id_categoria_uso in (6,3)
+        and p.id_categoria_uso in (3)
         and (p.data_dismissione is null or p.data_dismissione > current_date )
-        order by ut, servizio'''.format(num)
+        union 
+        select p2.cod_percorso , p2.descrizione, s2.descrizione as servizio, u2.descrizione  as ut
+        from elem.percorsi p2 
+        join elem.servizi s2 on s2.id_servizio = p2.id_servizio 
+        inner join elem.percorsi_ut pu2 
+        on pu2.cod_percorso =p2.cod_percorso
+        inner join topo.ut u2 
+        on u2.id_ut = pu2.id_ut 
+        where pu2.responsabile = 'S'
+        and p2.id_categoria_uso in (3)
+        and p2.data_attivazione > (current_date - INTEGER '{0}')
+        order by ut, servizio
+        '''.format(num)
     
 
 
@@ -210,7 +284,18 @@ def main():
 
 
     subject = "Variazioni odierne - File automatico"
-    body = "Report giornaliero delle variazioni.\n Giorno {}\n\n".format(giorno_file)
+    if num==1:
+        gg_text='''dell'ultimo giorno (ieri)'''
+    else:
+        gg_text='''degli ultimi {} giorni'''.format(num)
+    body = """Report giornaliero delle variazioni degli ultimi {} giorni.<br><br><br>
+    L'applicativo che gestisce l'estrazione delle utenze è stato realizzato dal gruppo Gestione Applicativi del SIGT.<br> 
+    Segnalare tempestivamente eventuali malfunzionamenti inoltrando la presente mail a {}<br><br>
+    Giorno {}<br><br>
+    AMIU Assistenza Territorio<br>
+     <img src="cid:image1" alt="Logo" width=197>
+    <br>
+    """.format(gg_text, user_mail, giorno_file)
     sender_email = user_mail
     receiver_email='assterritorio@amiu.genova.it'
     debug_email='roberto.marzocchi@amiu.genova.it'
@@ -229,6 +314,12 @@ def main():
     # Add body to email
     message.attach(MIMEText(body, "html"))
 
+
+    #aggiungo logo 
+    logoname='{}/img/logo_amiu.jpg'.format(path)
+    immagine(message,logoname)
+    
+    
     # aggiunto allegato (usando la funzione importata)
     allegato(message, file_variazioni, nome_file)
     # Add body to email

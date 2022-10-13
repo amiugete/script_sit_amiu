@@ -139,9 +139,9 @@ def main():
     curr = conn.cursor()
     conn.autocommit = True
 
-    # rimuovo la tabella marzocchir.frequenze_ok_1 che serve per vedere le differenze
+    # rimuovo la tabella etl.frequenze_ok_1 che serve per vedere le differenze
     curr0 = conn.cursor()
-    query0='drop table marzocchir.frequenze_ok_1'
+    query0='drop table etl.frequenze_ok_1'
     try:
         curr0.execute(query0)
     except Exception as e:
@@ -150,8 +150,8 @@ def main():
     curr0.close()
 
     # la ricreo pulita
-    query1='''create table marzocchir.frequenze_ok_1 as
-        select * from marzocchir.frequenze_ok 
+    query1='''create table etl.frequenze_ok_1 as
+        select * from etl.frequenze_ok 
         order by cod_frequenza'''
     curr0 = conn.cursor()
     try:
@@ -239,7 +239,7 @@ def main():
                     logging.error('M Non torna')
 
             curr_s = conn.cursor()
-            query_select="SELECT cod_frequenza FROM  marzocchir.frequenze_ok WHERE cod_frequenza={0}".format(freq_int)
+            query_select="SELECT cod_frequenza FROM  etl.frequenze_ok WHERE cod_frequenza={0}".format(freq_int)
             try:
                 curr.execute(query_select)
                 sel=curr.fetchall()
@@ -249,7 +249,7 @@ def main():
 
             if len(sel)==0:
                 query_insert='''
-                INSERT INTO marzocchir.frequenze_ok
+                INSERT INTO etl.frequenze_ok
                 (cod_frequenza, descrizione_short, descrizione_long, num_frequenza, freq_binaria, num_giorni)
                 VALUES({0}, '{1}', '{2}', {0}, '{3}', {4});
                 '''.format(freq_int, descrizione_short, descrizione_long, stringa_binaria, num)
@@ -271,7 +271,7 @@ def main():
     freq_SIT=[]
     freq_UO=[]
     query_select='''select cod_frequenza as "FREQUENZA_SIT", freq_binaria as "FREQUENZA_UO" 
-    from marzocchir.frequenze_ok 
+    from etl.frequenze_ok 
     order by cod_frequenza
     '''
     curr0 = conn.cursor()
@@ -294,8 +294,8 @@ def main():
     ####################################################################################
     # controllo cosa è cambiato
 
-    query2= '''select * from marzocchir.frequenze_ok 
-where cod_frequenza not in (select cod_frequenza from marzocchir.frequenze_ok_1)'''
+    query2= '''select * from etl.frequenze_ok 
+where cod_frequenza not in (select cod_frequenza from etl.frequenze_ok_1)'''
 
     ################################
     # predisposizione mail
@@ -391,7 +391,8 @@ where cod_frequenza not in (select cod_frequenza from marzocchir.frequenze_ok_1)
 
         cur.close()
         con.close()
-
+    else:
+        logging.info("Non ci sono nuove frequenze quindi chiudo tutto")
 
 
 

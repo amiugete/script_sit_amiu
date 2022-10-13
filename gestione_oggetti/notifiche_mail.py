@@ -270,14 +270,13 @@ p.riferimento, p.note, i.utente, su.email, e.id, i.note_chiusura, tp.id , tp.des
 UNION
 SELECT e.intervento_id, to_char(i.data_creazione,'DD/MM/YYYY ore HH24:MI') as data_creazione ,
 i.utente,su.email,
-i.piazzola_id, i.elemento_id, null as matricola, i.descrizione as descrizione_intervento, 
+i.piazzola_id, i.elemento_id, e2.matricola, i.descrizione as descrizione_intervento, 
 string_agg(ti.descrizione, ',') as tipo_intervento,
-null as tipo_elemento,  null as municipio,
-null as quartiere_comune,
-null as UT,
-null as indirizzo,
-null as riferimento,
-null as note,
+te.descrizione as tipo_elemento, m.descrizione as municipio,
+q.nome as quartiere_comune,
+u.descrizione as UT,
+concat (v.nome, ', ', p.numero_civico) as indirizzo,
+p.riferimento, p.note,
 e.id as id,
 string_agg(distinct su2.email, ',') as cc, i.note_chiusura,
 tp.id as id_priorita, tp.descrizione as priorita
@@ -286,13 +285,23 @@ JOIN gestione_oggetti.intervento i on e.intervento_id = i.id
 JOIN gestione_oggetti.intervento_tipo_intervento iti on iti.intervento_id = i.id 
 JOIN gestione_oggetti.tipo_intervento ti on ti.id = iti.tipo_intervento_id
 JOIN gestione_oggetti.tipo_priorita tp on tp.id = i.tipo_priorita_id  
+left JOIN elem.elementi e2 on  i.elemento_id = e2.id_elemento
+left JOIN elem.tipi_elemento te on te.tipo_elemento = e2.tipo_elemento 
+left JOIN elem.piazzole p on p.id_piazzola =i.piazzola_id
+left JOIN elem.aste a on a.id_asta = p.id_asta
+left JOIN topo.vie v on a.id_via = v.id_via
+left JOIN topo.comuni c on c.id_comune = v.id_comune
+left JOIN topo.ut u on a.id_ut = u.id_ut
+left JOIN topo.quartieri q on q.id_quartiere = a.id_quartiere
+LEFT JOIN topo.municipi m on m.id_municipio = a.id_circoscrizione
 LEFT JOIN gestione_oggetti.notifica n on n.intervento_id = i.id 
 LEFT JOIN util.sys_users su2 on n.utente = su2."name"
 LEFT JOIN util.sys_users su on i.utente = su."name"
-WHERE e.data_invio is null and e.tipo_mail ilike %s and e.tipo_mail ilike 'ABORTITO' and ti.id=1
+WHERE e.data_invio is null and (e.tipo_mail ilike %s or e.tipo_mail ilike 'ABORTITO')  
 GROUP BY e.intervento_id, i.data_creazione, 
 i.piazzola_id, i.elemento_id, i.descrizione, 
-i.utente, su.email, i.note_chiusura, e.id, tp.id , tp.descrizione 
+i.utente, su.email, i.note_chiusura, e.id, tp.id , tp.descrizione,
+te.descrizione, m.descrizione, q.nome, u.descrizione, v.nome, p.numero_civico, p.riferimento, p.note, e2.matricola 
 ORDER BY data_creazione'''
 
 

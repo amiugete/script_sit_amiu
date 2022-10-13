@@ -201,7 +201,7 @@ join elem.turni t
 on t.id_turno = p.id_turno 
 join elem.automezzi a 
 on a.cdaog3 = p.famiglia_mezzo 
-left join marzocchir.frequenze_ok fo 
+left join etl.frequenze_ok fo 
 on fo.cod_frequenza = p.frequenza 
 where p.cod_percorso= %s'''
 
@@ -242,7 +242,7 @@ join elem.aste a
 on e.id_asta = a.id_asta 
 join topo.vie v 
 on v.id_via = a.id_via 
-join marzocchir.frequenze_ok fo 
+join etl.frequenze_ok fo 
 on eap.frequenza::int = fo.cod_frequenza  
 join elem.tipi_elemento te 
 on te.tipo_elemento = e.tipo_elemento 

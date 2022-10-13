@@ -44,6 +44,9 @@ import time
 
 import logging
 
+from invio_messaggio import *
+
+
 filename = inspect.getframeinfo(inspect.currentframe()).filename
 path = os.path.dirname(os.path.abspath(filename))
 
@@ -242,6 +245,7 @@ def main():
             # leggo la parte restante del messaggio
             sweeper_mode=letture[i]['sweeper']['status']
             route_id=letture[i]['route_id']
+            trk_id=letture[i]['trkId']
             driver_id=letture[i]['operator_id']
             lat=letture[i]['latitude']
             lon=letture[i]['longitude']
@@ -261,18 +265,18 @@ def main():
             # se c'è già la entry faccio 
             if len(serialnumbers)>0: 
                 query_update='''UPDATE spazz_bucher.messaggi
-                set routeid =%s, driverid =%s, sweeper_mode =%s, geoloc=ST_SetSRID(ST_MakePoint(%s, %s),4326)
+                set routeid =%s, driverid =%s, sweeper_mode =%s, geoloc=ST_SetSRID(ST_MakePoint(%s, %s),4326), trk_id=%s
                 WHERE sportello = %s and data_ora=%s;'''
                 try:
-                    curr.execute(query_update, (route_id, driver_id, sweeper_mode, lat, lon, sportello, s_time))
+                    curr.execute(query_update, (route_id, driver_id, sweeper_mode, lon, lat, trk_id, sportello, s_time))
                 except Exception as e:
                     logger.error(e)
             else:
                 query_insert='''INSERT INTO spazz_bucher.messaggi
-                (routeid, driverid, sweeper_mode, geoloc, sportello, data_ora)
-                VALUES(%s, %s, %s, ST_SetSRID(ST_MakePoint(%s, %s),4326), %s, %s);'''
+                (routeid, driverid, sweeper_mode, geoloc, sportello, data_ora, trk_id)
+                VALUES(%s, %s, %s, ST_SetSRID(ST_MakePoint(%s, %s),4326), %s, %s, %s);'''
                 try:
-                    curr.execute(query_insert, (route_id, driver_id, sweeper_mode, lat, lon, sportello, s_time))
+                    curr.execute(query_insert, (route_id, driver_id, sweeper_mode, lon, lat, sportello, s_time, trk_id))
                 except Exception as e:
                     logger.error(e)
             ########################################################################################
@@ -290,6 +294,9 @@ def main():
             i+=1
     else:
         logger.warning('''Non c'è nulla da leggere''')
+    
+    # check se c_handller contiene almeno una riga 
+    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
     logger.info('Fine script')
 
 if __name__ == "__main__":

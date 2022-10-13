@@ -119,7 +119,7 @@ def update_asta_piazzola(piazzola, asta_old, asta_new, ambiente):
             
         ''' Procedo in due modi diversi'''
         if len(lista_aste_percorsi)==0:
-            logging.info("Non c'è la nuova asta {0}, nel percorso {1}, la aggiungo".format(asta_new, cod_percorso))
+            logging.info("Non c'è la nuova asta {0}, nel percorso {1} (id={2}), la aggiungo".format(asta_new, cod_percorso, id_percorso))
             curr3= conn.cursor()
              #update num_seq
             update =  '''update elem.aste_percorso 
@@ -127,7 +127,7 @@ def update_asta_piazzola(piazzola, asta_old, asta_new, ambiente):
             where id_percorso=%s and num_seq >=(select min(num_seq) FROM elem.aste_percorso where id_percorso = %s and id_asta=%s);'''
             try:
                 curr3.execute(update,(id_percorso, id_percorso, asta_old,))
-                #conn.commit()
+                conn.commit()
             except Exception as e:
                 logging.error(e)
             
@@ -141,7 +141,7 @@ def update_asta_piazzola(piazzola, asta_old, asta_new, ambiente):
 
             try:
                 curr3.execute(insert,(asta_new, id_percorso, asta_old,))
-                #conn.commit()
+                conn.commit()
             except Exception as e:
                 logging.error(e)
                 
@@ -154,7 +154,7 @@ def update_asta_piazzola(piazzola, asta_old, asta_new, ambiente):
                     (select id_asta_percorso from elem.aste_percorso where id_percorso=%s);'''
             try:
                 curr3.execute(update_eap, (id_percorso, asta_new, id_elemento,id_percorso,))
-                #conn.commit()
+                conn.commit()
             except Exception as e:
                 logging.error(e)
             
@@ -192,7 +192,7 @@ def update_asta_piazzola(piazzola, asta_old, asta_new, ambiente):
     
     try:
         curr.execute(update_piazzola,(asta_new, piazzola,))
-        #conn.commit()
+        conn.commit()
     except Exception as e:
         logging.error(e)
         
@@ -203,7 +203,7 @@ def update_asta_piazzola(piazzola, asta_old, asta_new, ambiente):
     
     try:
         curr.execute(update_elementi,(asta_new, piazzola,))
-        #conn.commit()
+        conn.commit()
     except Exception as e:
         logging.error(e)
 
@@ -214,12 +214,20 @@ def update_asta_piazzola(piazzola, asta_old, asta_new, ambiente):
 
 
 def main():
+    # parte propedeutica all'eventuale GUI
+    if os.name == 'nt':
+        domain=os.environ['userdomain']
+    else: 
+        logging.warning('Non sono in windows')
+        domain= 'ND'
+    user=os.getlogin()
+    logging.info('''Dominio ={0}, Utente={1}'''.format(domain, user))
     ############################################
     #INPUT (da rendere dinamici per  fare WS)
-    piazzola = 35114
-    asta_old = 3170374577
+    piazzola = 40611
+    asta_old = 3170373678
     #asta_new = 1449060006
-    asta_new = 3170375595
+    asta_new = 3170376897
     #asta_old = 1401000003
     ambiente = 'sit' # sit_test, #sit_prog
     #############################################

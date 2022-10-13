@@ -42,6 +42,9 @@ import datetime
 
 import logging
 
+from invio_messaggio import *
+
+
 filename = inspect.getframeinfo(inspect.currentframe()).filename
 path = os.path.dirname(os.path.abspath(filename))
 
@@ -72,12 +75,12 @@ logger = logging.getLogger()
 
 # Create handlers
 c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-f_handler = logging.StreamHandler()
-#f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+#f_handler = logging.StreamHandler()
+f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.ERROR)
-f_handler.setLevel(logging.DEBUG)
+f_handler.setLevel(logging.INFO)
 
 
 # Add handlers to the logger
@@ -168,8 +171,11 @@ def main():
             lastid=letture['id']
 
 
-            logger.info('''L'ultimo messaggio ha id {}'''.format(lastid))
-            exit()
+            #logger.info('''L'ultimo messaggio ha id {}'''.format(lastid))
+            if lastid==start_index:
+                logger.info('''Ho letto fino all'ultimo messaggio con id {}'''.format(lastid))
+                check=1
+            #exit()
         
             #################################################################
             logger.info("Mi connetto al WS {0} per leggere i messaggi della spazzatrice con SN {1} a partire da startIndex {2}". format(url_schmidt, sn[0], start_index))
@@ -290,7 +296,8 @@ def main():
                 i+=1
 
 
-    
+    # check se c_handller contiene almeno una riga 
+    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
    
     logger.info("Chiudo definitivamente la connesione al DB")
     curr2.close()
