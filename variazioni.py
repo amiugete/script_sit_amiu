@@ -61,7 +61,7 @@ logfile='{}/log/variazioni.log'.format(path)
 
 logging.basicConfig(format='%(asctime)s\t%(levelname)s\t%(message)s',
     filemode='a', # overwrite or append
-    filename=logfile,
+    #filename=logfile,
     level=logging.DEBUG)
 
 
@@ -82,7 +82,8 @@ def main():
 
 
     oggi=datetime.datetime.today()
-    oggi=oggi.replace(hour=0, minute=0, second=0, microsecond=0) 
+    oggi=oggi.replace(hour=0, minute=0, second=0, microsecond=0)
+    oggi=datetime.date(oggi.year, oggi.month, oggi.day)
     logging.debug('Oggi {}'.format(oggi))
     
     
@@ -95,7 +96,7 @@ def main():
     
     holiday_list = []
     holiday_list_pulita=[]
-    for holiday in holidays.Italy(years=[2022]).items():
+    for holiday in holidays.Italy(years=[(oggi.year -1), (oggi.year)]).items():
         #print(holiday[0])
         #print(holiday[1])
         holiday_list.append(holiday)
@@ -104,15 +105,19 @@ def main():
     
     # AGGIUNGO LA FESTA PATRONALE
     logging.debug('Anno corrente = {}'.format(oggi.year))
-    holiday_list_pulita.append(datetime.datetime(oggi.year, 6, 24))
+    fp = datetime.datetime(oggi.year, 6, 24)
+    festa_patronale=datetime.date(fp.year, fp.month, fp.day)
+    holiday_list_pulita.append(festa_patronale)
     
     if num_giorno==0:
         num=3
         # controllo se venerdì era festivo
         ven = oggi - datetime.timedelta(days = num)
+        ven=datetime.date(ven.year, ven.month, ven.day)
         if ven in holiday_list_pulita:
             num=4
             gio = oggi - datetime.timedelta(days = num)
+            gio=datetime.date(gio.year, gio.month, gio.day)
             if gio in holiday_list_pulita:
                 num=5
     elif num_giorno in (5,6):
@@ -127,6 +132,9 @@ def main():
             logging.info('Oggi è giorno festivo, lo script non gira'.format(giorno))
             exit()
         ieri=oggi - datetime.timedelta(days = num)
+        ieri=datetime.date(ieri.year, ieri.month, ieri.day)
+        #logging.debug('Ieri = {}'.format(ieri))
+        #logging.debug(holiday_list_pulita)
         if ieri in holiday_list_pulita:
             # se ieri era lunedì (es. Pasquetta)
             logging.debug('Ieri {}'.format(ieri.strftime('%A')))
@@ -137,6 +145,7 @@ def main():
                 num=2
                 # verifico altro ieri 
                 altroieri=oggi - datetime.timedelta(days = num)
+                altroieri=datetime.date(altroieri.year, altroieri.month, altroieri.day)
                 # se altro ieri era festivo e lunedì (caso di Natale lunedì e S. Stefano Martedì)
                 if altroieri in holiday_list_pulita:
                     num=5
@@ -145,11 +154,14 @@ def main():
                 num=2
                 # verifico altro ieri 
                 altroieri=oggi - datetime.timedelta(days = num)
+                altroieri=datetime.date(altroieri.year, altroieri.month, altroieri.day)
                 # se altro ieri era festivo e non lunedì (caso di Natale martedì/mercoledì o di due feste vicine)
                 if altroieri in holiday_list_pulita:
                     num=3
                     
-                    
+    
+    logging.debug('num = {}'.format(num))
+    #exit()                
                     
     
     
@@ -190,6 +202,25 @@ def main():
         where pu2.responsabile = 'S'
         and p2.id_categoria_uso in (3)
         and p2.data_attivazione > (current_date - INTEGER '{0}')
+        UNION
+        select distinct p3.cod_percorso , p3.descrizione, s3.descrizione as servizio, u3.descrizione  as ut
+        from elem.elementi e
+        join (
+        select datetime, description, id_piazzola, split_part(replace(description, 'Elementi tipo ', ''), ' ',1) as tipo_elemento 
+        from util.sys_history sh 
+        where type='PIAZZOLA_ELEM' and action = 'UPDATE' and description ilike 'Elementi tipo%' and datetime > (current_date - INTEGER '{0}')
+        and id_percorso is null 
+        ) b on b.id_piazzola=e.id_piazzola and b.tipo_elemento::int = e.tipo_elemento and date_trunc('second', e.data_inserimento) != date_trunc('second', b.datetime)  
+        join elem.elementi_aste_percorso eap on eap.id_elemento = e.id_elemento 
+        join elem.aste_percorso ap on eap.id_asta_percorso = ap.id_asta_percorso 
+        join elem.percorsi p3 on p3.id_percorso = ap.id_percorso 
+        join elem.servizi s3 on s3.id_servizio = p3.id_servizio 
+        inner join elem.percorsi_ut pu3 
+        on pu3.cod_percorso =p3.cod_percorso
+        inner join topo.ut u3 
+        on u3.id_ut = pu3.id_ut 
+        where pu3.responsabile = 'S'
+        and p3.id_categoria_uso in (3)
         order by ut, servizio
         '''.format(num)
     
@@ -288,7 +319,7 @@ def main():
         gg_text='''dell'ultimo giorno (ieri)'''
     else:
         gg_text='''degli ultimi {} giorni'''.format(num)
-    body = """Report giornaliero delle variazioni degli ultimi {} giorni.<br><br><br>
+    body = """Report giornaliero delle variazioni {} .<br><br><br>
     L'applicativo che gestisce l'estrazione delle utenze è stato realizzato dal gruppo Gestione Applicativi del SIGT.<br> 
     Segnalare tempestivamente eventuali malfunzionamenti inoltrando la presente mail a {}<br><br>
     Giorno {}<br><br>

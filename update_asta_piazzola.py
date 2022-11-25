@@ -224,10 +224,10 @@ def main():
     logging.info('''Dominio ={0}, Utente={1}'''.format(domain, user))
     ############################################
     #INPUT (da rendere dinamici per  fare WS)
-    piazzola = 40611
-    asta_old = 3170373678
+    piazzola = 41042
+    asta_old = 1852820061
     #asta_new = 1449060006
-    asta_new = 3170376897
+    asta_new = 1852820063
     #asta_old = 1401000003
     ambiente = 'sit' # sit_test, #sit_prog
     #############################################
