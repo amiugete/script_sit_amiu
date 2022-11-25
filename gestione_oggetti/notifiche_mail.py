@@ -481,12 +481,12 @@ Si prega di NON RISPONDERE alla presente mail. In caso di problemi con l'applica
     <li> UT:                {9}</li>
     <li> Quartiere/comune:  {10}</li>
     <li> Elemento:           Tipo: {11} (matr. {12})</li>
-    <li> Data apertura:     {2}</li>
+    <li> Data apertura:     {17}</li>
     </ul>
     {15}
     <img src="cid:image1" alt="Logo" width=197>
     <br>
-    '''.format(ii[2], ii[0], ii[18], ii[8], ii[7], ii[4], ii[14], ii[15], ii[13], ii[12], ii[11], ii[9], matr, host, und_test, footer, incipit_mail)
+    '''.format(ii[2], ii[0], ii[18], ii[8], ii[7], ii[4], ii[14], ii[15], ii[13], ii[12], ii[11], ii[9], matr, host, und_test, footer, incipit_mail, ii[1])
 
             logger.debug(body)  
 

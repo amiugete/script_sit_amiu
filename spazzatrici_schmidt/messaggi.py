@@ -218,11 +218,13 @@ def main():
                     #"routeId": "string",
                     driverid=letture[i]['header']['driverId']
                     driver2id=letture[i]['header']['driver2Id']
-                    routeId=letture[i]['header']['routeId']
+                    # Il routeId non è nella sezione header ma in quella vehicleRoute -- > spostato sotto
+                    #routeId=letture[i]['header']['routeId']
                 logger.debug('***************************************************')
                 vehicleRoute=letture[i]['vehicleRoute']
                 if vehicleRoute != None:
                     logger.debug('Vehicle route:', vehicleRoute)
+                    routeId=letture[i]['vehicleRoute']['routeId']
                     lat=letture[i]['vehicleRoute']['geoLat']
                     if lat == None:
                         logger.warning('Lat is null')
@@ -236,11 +238,17 @@ def main():
                         latdec=int(float(lat)/100) + (float(lat) - int(float(lat)/100) * 100)/60
                     elif lat[-1]=='S':
                         lat=lat.replace('S','')
-                        latdec=-int(float(lat)/100) + (float(lat) - int(float(lat)/100) * 100)/60
+                        latdec=-(int(float(lat)/100) + (float(lat) - int(float(lat)/100) * 100)/60)
                     else:
                         logger.error('Problem with latitude')
-                    lon=letture[i]['vehicleRoute']['geoLon'].replace('E', '')
-                    londec=int(float(lon)/100) + (float(lon) - int(float(lon)/100) * 100)/60
+                    if lon[-1]=='E':
+                        lon=letture[i]['vehicleRoute']['geoLon'].replace('E','')
+                        londec=int(float(lon)/100) + (float(lon) - int(float(lon)/100) * 100)/60
+                    elif lat[-1]=='W':
+                        lon=letture[i]['vehicleRoute']['geoLon'].replace('W','')
+                        londec=-(int(float(lon)/100) + (float(lon) - int(float(lon)/100) * 100)/60)
+                    else:
+                        logger.error('Problem with longitude')
                     logger.debug('lat = {0}, lon = {1}'.format(latdec, londec))
                     print(datetime.datetime.now())
                     data=letture[i]['vehicleRoute']['sysDate']

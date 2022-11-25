@@ -69,7 +69,7 @@ from invio_messaggio import *
 
 
 def main():
-    # Mi connetto al DB oracle
+    # Mi connetto al DB oracle UO
     cx_Oracle.init_oracle_client(percorso_oracle) # necessario configurare il client oracle correttamente
     #cx_Oracle.init_oracle_client() # necessario configurare il client oracle correttamente
     parametri_con='{}/{}@//{}:{}/{}'.format(user_uo,pwd_uo, host_uo,port_uo,service_uo)
