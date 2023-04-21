@@ -73,7 +73,7 @@ from invio_messaggio import *
 
 
 
-sender_email = user_mail
+#sender_email = user_mail
 receiver_email='assterritorio@amiu.genova.it'
 debug_email='roberto.marzocchi@amiu.genova.it'
 

@@ -360,7 +360,7 @@ def main():
         \n\n\n\n
         AMIU Assistenza Territorio
         '''
-        sender_email = user_mail
+        #sender_email = user_mail
         receiver_email='assterritorio@amiu.genova.it'
         debug_email='roberto.marzocchi@amiu.genova.it'
         #cc_mail='pianar@amiu.genova.it'

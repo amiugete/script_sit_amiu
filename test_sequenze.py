@@ -255,8 +255,21 @@ def main():
     cur2.close()
     
     
+    # testo una funzione
     
+    
+    cur0 = con.cursor()
+    try:
+        ret_func=cur0.callfunc('REP_CREADATEPERCORSI', int, [None])
+        #cur1.rowfactory = makeDictFactory(cur1)
+    except Exception as e:
+        logger.error(sel_uo)
+        logger.error(e)
+    logger.info('Risposta REP_CREADATEPERCORSI={}'.format(ret_func))
 
+    cur0.close()
+    
+    
     # CHIUDO LE CONNESSIONI 
     logger.info("Chiudo definitivamente le connesioni al DB")
     con.close()

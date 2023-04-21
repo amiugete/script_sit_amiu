@@ -151,7 +151,7 @@ def main():
     
     #input
     servizio_base= 108
-    altri_servizi= [135,136]
+    altri_servizi= [103]
     UT = [16,17,231,26,45,49,59,85,87,90]
 
 

@@ -100,7 +100,7 @@ from invio_messaggio import *
 
 ################################
 # DA CAMBIARE 
-nome_db= db
+nome_db='sit'
 #################################
 
 
@@ -113,7 +113,7 @@ def main():
                         port=port,
                         user=user,
                         password=pwd,
-                        host=host_clone)
+                        host=host)
 
     curr = conn.cursor()
     curr1 = conn.cursor()

@@ -364,7 +364,7 @@ Si prega di NON RISPONDERE alla presente mail. In caso di problemi con l'applica
 
                 subject = "NUOVO INTERVENTO RICHIESTO{}".format(oggetto)
                 #body = "Report giornaliero delle variazioni.\n Giorno {}\n\n".format(giorno_file)
-                sender_email = user_mail
+                #sender_email = user_mail
                 #receiver_email='assterritorio@amiu.genova.it'
                 #debug_email='roberto.marzocchi@amiu.genova.it'
 
@@ -496,7 +496,7 @@ Si prega di NON RISPONDERE alla presente mail. In caso di problemi con l'applica
 
             subject = "INTERVENTO CHIUSO{}".format(oggetto)
             #body = "Report giornaliero delle variazioni.\n Giorno {}\n\n".format(giorno_file)
-            sender_email = user_mail
+            #sender_email = user_mail
 
             # Create a multipart message and set headers
             message = MIMEMultipart()
@@ -639,7 +639,7 @@ Si prega di NON RISPONDERE alla presente mail. In caso di problemi con l'applica
 
             subject = "INTERVENTO CON INFORMAZIONI INESATTE NON ESEGUITO {}".format(oggetto)
             #body = "Report giornaliero delle variazioni.\n Giorno {}\n\n".format(giorno_file)
-            sender_email = user_mail
+            #sender_email = user_mail
 
             # Create a multipart message and set headers
             message = MIMEMultipart()
@@ -760,7 +760,7 @@ Si prega di NON RISPONDERE alla presente mail. In caso di problemi con l'applica
 
             subject = "NUOVO AGGIORNAMENTO SU INTERVENTO RICHIESTO{}".format(oggetto)
             #body = "Report giornaliero delle variazioni.\n Giorno {}\n\n".format(giorno_file)
-            sender_email = user_mail
+            #sender_email = user_mail
             #receiver_email='assterritorio@amiu.genova.it'
             #debug_email='roberto.marzocchi@amiu.genova.it'
 

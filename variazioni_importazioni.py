@@ -288,7 +288,7 @@ def main():
         inner join topo.ut u 
         on u.id_ut = pu.id_ut 
         where h.datetime > (current_date - INTEGER '{0}') 
-        and h.datetime < current_date 
+        and h.datetime <= current_date::date 
         and (
         (h."type" IN ('PERCORSO') 
         and h.action IN ('UPDATE_ELEM', 'UPDATE')
@@ -300,6 +300,7 @@ def main():
         and pu.responsabile = 'S'
         and p.id_categoria_uso in (3)
         and (p.data_dismissione is null or p.data_dismissione > current_date )
+        and p.data_attivazione <= current_date::date
         UNION 
         select p2.cod_percorso , p2.descrizione, s2.descrizione as servizio, u2.descrizione  as ut, 
         p2.id_percorso
@@ -312,6 +313,7 @@ def main():
         where pu2.responsabile = 'S'
         and p2.id_categoria_uso in (3)
         and p2.data_attivazione > (current_date - INTEGER '{0}')
+        and p2.data_attivazione <= current_date::date
         UNION
         select distinct p3.cod_percorso , p3.descrizione, s3.descrizione as servizio, u3.descrizione  as ut,
         p3.id_percorso
@@ -319,7 +321,9 @@ def main():
         join (
         select datetime, description, id_piazzola, split_part(replace(description, 'Elementi tipo ', ''), ' ',1) as tipo_elemento 
         from util.sys_history sh 
-        where type='PIAZZOLA_ELEM' and action = 'UPDATE' and description ilike 'Elementi tipo%' and datetime > (current_date - INTEGER '{0}')
+        where type='PIAZZOLA_ELEM' and action = 'UPDATE' and description ilike 'Elementi tipo%' 
+        and sh.datetime > (current_date - INTEGER '{0}')
+        and sh.datetime <= current_date::date
         and id_percorso is null 
         ) b on b.id_piazzola=e.id_piazzola and b.tipo_elemento::int = e.tipo_elemento and date_trunc('second', e.data_inserimento) != date_trunc('second', b.datetime)  
         join elem.elementi_aste_percorso eap on eap.id_elemento = e.id_elemento 
@@ -332,6 +336,8 @@ def main():
         on u3.id_ut = pu3.id_ut 
         where pu3.responsabile = 'S'
         and p3.id_categoria_uso in (3)
+        and (p3.data_dismissione is null or p3.data_dismissione > current_date )
+        and p3.data_attivazione <= current_date::date
         order by ut, servizio
         '''.format(num)
     
@@ -633,7 +639,9 @@ def main():
                     curr1 = conn.cursor()
                     curr2 = conn.cursor()
                     
-                    query_sit1='''select  (row_number() OVER (ORDER BY vt.num_seq)+%s), riferimento,
+                    query_sit1='''select  (row_number() OVER 
+                    (ORDER BY vt.num_seq, case when numero_civico='' then null else numero_civico end nulls last, riferimento)+%s),
+                            riferimento,
                             0 as qta_tot_spazzamento, fo.freq_binaria as frequenza, 
                             case 
                             when COALESCE (vt.ripasso, 0) > 0 then 1
@@ -641,15 +649,15 @@ def main():
                             end ripasso,
                             id_piazzola, id_asta,  lung_trattamento, 
                             vt.cod_percorso, vt.id_via, vt.num_seq as cronologia, 
-                            now() as dta_import, (now()::date)::timestamp as data_prevista, numero_civico, id_elemento, tipo_elemento
+                            now() as dta_import, (now()::date)::timestamp as data_prevista, numero_civico, tipo_elemento
                             from etl.v_tappe vt 
                             join etl.frequenze_ok fo on fo.cod_frequenza = vt.frequenza_elemento::int 
                             where id_percorso = %s 
                             group by vt.num_seq, riferimento,
                             id_piazzola, id_asta, fo.freq_binaria, 
                             ripasso, lung_trattamento, 
-                            vt.cod_percorso, vt.id_via, vt.num_seq, vt.numero_civico, id_elemento, tipo_elemento
-                            order by num_seq, case when numero_civico='' then null else numero_civico end nulls last, riferimento, id_elemento  '''
+                            vt.cod_percorso, vt.id_via, vt.num_seq, vt.numero_civico, tipo_elemento
+                            order by num_seq, case when numero_civico='' then null else numero_civico end nulls last, riferimento  '''
                     
                     
                     
@@ -682,7 +690,8 @@ def main():
                             check_error=1
                             logger.error(tappa)
                             logger.error(query_insert0)
-                            logger.error(e)    
+                            logger.error(e)
+                            check_error=1   
         
         
                         # dopo aver inserito le macro tappe ora mi concentro sulle CONS_PERCORSI_VIE_TAPPE
@@ -706,7 +715,8 @@ def main():
                             check_error=1
                             logger.error(tappa)
                             logger.error(query_insert1)
-                            logger.error(e)                                            
+                            logger.error(e)
+                            check_error=1                                            
 
 
 
@@ -727,15 +737,14 @@ def main():
                         id_elemento, id_piazzola, tipo_elemento, num_seq
                         from etl.v_tappe vt 
                         join etl.frequenze_ok fo on fo.cod_frequenza = vt.frequenza_elemento::int 
-                        where id_percorso = %s and id_elemento = %s and num_seq= %s
-                        order by num_seq, case when numero_civico='' then null else numero_civico end nulls last, riferimento, 
-                        id_elemento'''
+                        where id_percorso = %s and id_piazzola=%s and tipo_elemento = %s and num_seq= %s
+                        order by num_seq, case when numero_civico='' then null else numero_civico end nulls last, id_elemento'''
                         
                         try:
-                            curr2.execute(query_sit2, (vv[4], tappa[14], tappa[10]))
+                            curr2.execute(query_sit2, (vv[4], tappa[5], tappa[14], tappa[10]))
                             sit2=curr2.fetchall()
                         except Exception as e:
-                            logger.error(query_sit2, vv[4], tappa[14], tappa[10] )
+                            logger.error(query_sit2, vv[4], tappa[5], tappa[14], tappa[10] )
                             logger.error(e)
                         
                         
@@ -752,6 +761,7 @@ def main():
                                 logger.error(str(elementi[4]))
                                 logger.error(query_sel_el)
                                 logger.error(e)
+                                check_error=1
                             
                             if len(ee)==1:
                                 # update
@@ -765,6 +775,7 @@ def main():
                                     logger.error(elementi)
                                     logger.error(query_insert4)
                                     logger.error(e)
+                                    check_error=1
                             else:
                                 #insert
                                 query_insert4='''INSERT INTO UNIOPE.CONS_ELEMENTI
@@ -778,6 +789,7 @@ def main():
                                     logger.error(elementi)
                                     logger.error(query_insert4)
                                     logger.error(e)
+                                    check_error=1
 
                             # dopo aver inserito gli elementi ora posso inserire le microtappe
                             try:
@@ -789,6 +801,7 @@ def main():
                                 logger.error('elementi {}'.format(elementi))
                                 logger.error(query_insert3)
                                 logger.error(e)
+                                check_error=1
                         
                     # chiudo connessione oracle
                     cur.close()
@@ -874,7 +887,7 @@ def main():
                     
                     query_sit1='''select  (row_number() OVER (ORDER BY vt.num_seq)+%s), vt.nota_asta,
                             vt.mq_trattati, fo.freq_binaria as frequenza, COALESCE (vt.ripasso, 0) as ripasso,
-                            id_piazzola, id_asta,  lung_trattamento, 
+                            id_asta,  lung_trattamento, 
                             vt.cod_percorso, vt.id_via, vt.num_seq as cronologia, 
                             now() as dta_import, (now()::date)::timestamp as data_prevista
                             from etl.v_tappe vt 
@@ -895,6 +908,7 @@ def main():
                     except Exception as e:
                         logger.error(query_sit1, max_id_macro_tappa, vv[4] )
                         logger.error(e)
+                        check_error=1
                     
                     
                         
@@ -905,16 +919,17 @@ def main():
                         
                         query_insert0='''INSERT INTO UNIOPE.CONS_MACRO_TAPPA
         (ID_MACRO_TAPPA, NOTA_VIA, QTA_TOT_SPAZZAMENTO, FREQUENZA, RIPASSO, ID_ASTA, LUNG_TRATTAMENTO)
-        VALUES(:t1, :t2, :t3, :t4, :t5, :t6, :t7, :t8)'''
+        VALUES(:t1, :t2, :t3, :t4, :t5, :t6, :t7)'''
         
         
                         try:
-                            cur.execute(query_insert0, (tappa[0], tappa[1], tappa[2], tappa[3], tappa[4], tappa[5], tappa[6], tappa[7]))
+                            cur.execute(query_insert0, (tappa[0], tappa[1], tappa[2], tappa[3], tappa[4], tappa[5], tappa[6]))
                             #macro_tappe.append(tappa[0])
                         except Exception as e:
                             logger.error(tappa)
                             logger.error(query_insert0)
-                            logger.error(e)    
+                            logger.error(e)
+                            check_error=1    
         
         
                         # dopo aver inserito le macro tappe ora mi concentro sulle micro
@@ -932,12 +947,13 @@ def main():
                     
                     
                         try:
-                            cur.execute(query_insert1, (tappa[8], tappa[9], tappa[0], tappa[10], tappa[11], tappa[12]))
+                            cur.execute(query_insert1, (tappa[7], tappa[8], tappa[0], tappa[9], tappa[10], tappa[11]))
                             #macro_tappe.append(tappa[2])
                         except Exception as e:
-                            logger.error(tappa)
+                            logger.error('''{}, {},{}, {}, {}, {} '''.format(tappa[7], tappa[8], tappa[0], tappa[9], tappa[10], tappa[11]))
                             logger.error(query_insert1)
                             logger.error(e)
+                            check_error=1
                     
                     # chiudo cursore oracle
                     cur.close()
@@ -994,6 +1010,23 @@ def main():
     if len(cod_percorso)!=len(stato_importazione):
         logger.error('''La lunghezza dell'array stato_importazione non è correttta. VERIFICARE ''')
     
+    
+    
+    # chiamo la funzione per aggiornare la tabella PR_VALIDITA_PERCORSI
+    cur0 = con.cursor()
+    try:
+        ret_func=cur0.callfunc('REP_CREADATEPERCORSI', int, [None])
+        #cur1.rowfactory = makeDictFactory(cur1)
+    except Exception as e:
+        logger.error(sel_uo)
+        logger.error(e)
+    logger.info('Risposta REP_CREADATEPERCORSI={}'.format(ret_func))
+    if ret_func!=0:
+        logger.error('La funzione REP_CREADATEPERCORSI non ha girato correttamente')
+        nota_f_mail='<br><br><b>ATTENZIONE</b> Ci sono stati problemi con la funzione REP_CREADATEPERCORSI'
+    elif ret_func==0: 
+        nota_f_mail='<br><br>Al termine delle importazioni ha anche girato correttamente la funzione REP_CREADATEPERCORSI'
+    cur0.close()
     
        
     if len(cod_percorso)>0:
@@ -1053,18 +1086,18 @@ def main():
         gg_text='''dell'ultimo giorno (ieri)'''
     else:
         gg_text='''degli ultimi {} giorni'''.format(num)
-    body = """Report giornaliero delle variazioni degli ultimi {} giorni.<br><br>
+    body = """Report giornaliero delle variazioni degli ultimi {0} giorni.<br><br>
     
-    <b>IN TEST </b> - I nuovi percorsi sono già stati importati. Verificare la corretta importazione.<br><br><br> 
+    <b>IN TEST </b> - I nuovi percorsi sono già stati importati. Verificare la corretta importazione. {3}<br><br><br> 
     
-    L'applicativo che gestisce l'estrazione delle utenze è stato realizzato dal gruppo Gestione Applicativi del SIGT.<br> 
-    Segnalare tempestivamente eventuali malfunzionamenti inoltrando la presente mail a {}<br><br>
-    Giorno {}<br><br>
+    L'applicativo che gestisce le importazioni su UO in maniera automatica è stato realizzato dal gruppo Gestione Applicativi del SIGT.<br> 
+    Segnalare tempestivamente eventuali malfunzionamenti inoltrando la presente mail a {1}<br><br>
+    Giorno {2}<br><br>
     AMIU Assistenza Territorio<br>
      <img src="cid:image1" alt="Logo" width=197>
     <br>
-    """.format(gg_text, user_mail, oggi1)
-    sender_email = user_mail
+    """.format(gg_text, user_mail, oggi1, nota_f_mail)
+    ##sender_email = user_mail
     receiver_email='assterritorio@amiu.genova.it'
     debug_email='roberto.marzocchi@amiu.genova.it'
 
@@ -1100,8 +1133,7 @@ def main():
     invio=invio_messaggio(message)
     logger.info(invio)
     
-    # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+    
 
     
     ##################################################################################################
@@ -1241,6 +1273,8 @@ def main():
     con.close()
     conn.close()
 
+    # check se c_handller contiene almeno una riga 
+    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
 
 if __name__ == "__main__":
     main()

@@ -128,7 +128,7 @@ def main():
 
     # Mi connetto a SIT (PostgreSQL) per poi recuperare le mail
     nome_db=db
-    logging.info('Connessione al db {}'.format(nome_db))
+    logger.info('Connessione al db {}'.format(nome_db))
     conn = psycopg2.connect(dbname=nome_db,
                         port=port,
                         user=user,
@@ -242,8 +242,8 @@ and to_char(sysdate - (:gg-7), 'yyyymmdd')||'03:59:59' '''
         cur.execute(query_zona, (gg,gg))
         zone=cur.fetchall()
     except Exception as e:
-        logging.error(query_zona)
-        logging.error(e)
+        logger.error(query_zona)
+        logger.error(e)
     logger.debug(gg)
     logger.debug(zone[0][0])
     #zone=['RIMESSE', 'EXTRA GENOVA', 'ZONA LEVANTE', 'ZONA PONENTE', 'ZONA CENTRO']
@@ -285,13 +285,13 @@ and to_char(sysdate - (:gg-7), 'yyyymmdd')||'03:59:59' '''
             curr.execute(q_m, (zone[i][0],))
             mail=curr.fetchall()
         except Exception as e:
-            logging.error(q_m)
-            logging.error(e)
-        logging.debug(len(mail))
+            logger.error(q_m)
+            logger.error(e)
+        logger.debug(len(mail))
         for mm in mail:
             mail_invio=mm[1]
         
-        logging.info('Creo il file per la {}. Creo nuovo file'.format(zone[i][0]))
+        logger.info('Creo il file per la {}. Creo nuovo file'.format(zone[i][0]))
         nome_file="{0}_{1}.xlsx".format(giorno_file, zone[i][0].replace(' ', '_'))
         file_zone="{0}/zone/{1}".format(path,nome_file)
         
@@ -334,8 +334,9 @@ and to_char(sysdate - (:gg-7), 'yyyymmdd')||'03:59:59' '''
             cur.rowfactory = makeDictFactory(cur)
             ut_titolari=cur.fetchall()
         except Exception as e:
-            logging.error(query_ut)
-            logging.error(e)
+            logger.error(query_ut)
+            logger.error('gg={} and zona ={}'.format(gg, zone[i][0]))
+            logger.error(e)
 
         for ut in ut_titolari:
             logger.debug(ut['DESC_UT_TITOLARE'])
@@ -375,8 +376,9 @@ and to_char(sysdate - (:gg-7), 'yyyymmdd')||'03:59:59' '''
                     cur.rowfactory = makeDictFactory(cur)
                     pesi_percorsi=cur.fetchall()
                 except Exception as e:
-                    logging.error(query_UO)
-                    logging.error(e)
+                    logger.error(query_UO)
+                    logger.error(gg, zone[i][0], fasce[t], ut['DESC_UT_TITOLARE'])
+                    logger.error(e)
                 #for pp in pesi_percorsi:
                     #print(pp['ZONA'])
                     #exit()
@@ -497,7 +499,7 @@ and to_char(sysdate - (:gg-7), 'yyyymmdd')||'03:59:59' '''
 
 
         #body = "Report giornaliero delle variazioni.\n Giorno {}\n\n".format(giorno_file)
-        sender_email = user_mail
+        #sender_email = user_mail
         #receiver_email='assterritorio@amiu.genova.it'
         #debug_email='roberto.marzocchi@amiu.genova.it'
 
@@ -506,8 +508,10 @@ and to_char(sysdate - (:gg-7), 'yyyymmdd')||'03:59:59' '''
         # Create a multipart message and set headers
         message = MIMEMultipart()
         message["From"] = 'no_reply@amiu.genova.it'
+        # PER TEST (tolgo l'invio ai capi zona e lo metto solo agli indirizzi in CC che siamo noi)
         message["To"] = receiver_email
         #message["To"] = mail_cc
+        ####################################################
         message["Subject"] = subject
         message["Bcc"] = mail_cc  # Recommended for mass emails
         message.preamble = "Report pesi"
@@ -529,14 +533,14 @@ and to_char(sysdate - (:gg-7), 'yyyymmdd')||'03:59:59' '''
         
         #text = message.as_string()
 
-        logging.info("Richiamo la funzione per inviare mail")
+        logger.info("Richiamo la funzione per inviare mail")
         invio=invio_messaggio(message)
-        logging.info(invio)
+        logger.info(invio)
         if invio==200:
             logger.info('Messaggio inviato')
 
         else:
-            logging.error('Problema invio mail. Error:{}'.format(invio))
+            logger.error('Problema invio mail. Error:{}'.format(invio))
 
 
 

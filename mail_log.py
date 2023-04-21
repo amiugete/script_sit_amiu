@@ -36,7 +36,7 @@ def sent_log_by_mail(script_name, log_file):
     subject = "PROBLEMA SCRIPT PYTHON"
     body = '''Si è verificato  un problema con il seguente script {}\n
     Consulta il file di log {}\n\n'''.format(script_name ,log_file)
-    sender_email = user_mail
+    ##sender_email = user_mail
     receiver_email='assterritorio@amiu.genova.it'
     debug_email='roberto.marzocchi@amiu.genova.it'
 
