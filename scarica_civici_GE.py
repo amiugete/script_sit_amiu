@@ -171,7 +171,7 @@ order by 1'''.format(epsg)
                     body = '''Mail generata automaticamente dal codice python scarica_civici_GE.py che gira su server amiugis\n\n\n:\n
                     Municipio:{}\n
                     Numero civici:{}'''.format(uu[1], len(gj['features']))
-                    sender_email = user_mail
+                    #sender_email = user_mail
                     receiver_email='assterritorio@amiu.genova.it'
                     debug_email='roberto.marzocchi@amiu.genova.it'
                     #cc_mail='pianar@amiu.genova.it'

@@ -144,6 +144,7 @@ def main():
             # parto a leggere da quello StartIndex
             for si in start_id:
                 start_index=si[0]
+                #start_index=416301
 
 
 
@@ -170,8 +171,7 @@ def main():
             letture = response.json()
             lastid=letture['id']
 
-
-            #logger.info('''L'ultimo messaggio ha id {}'''.format(lastid))
+            logger.info('''L'ultimo messaggio ha id {}'''.format(lastid))
             if lastid==start_index:
                 logger.info('''Ho letto fino all'ultimo messaggio con id {}'''.format(lastid))
                 check=1
@@ -204,9 +204,12 @@ def main():
                 #logger.debug(len(colonne))
                 #logger.debug(colonne)
                 logger.debug(letture[i])
+                #print(letture[i])
                 id=letture[i]['id']
                 lv_id=letture[i]['lastValidId']
                 header=letture[i]['header']
+                londec=0
+                #sweepermode=0
                 if header==None:
                     logger.debug('''Non è specificato il codice percorso e/o l'operatore''')
                     driverid = None
@@ -218,6 +221,23 @@ def main():
                     #"routeId": "string",
                     driverid=letture[i]['header']['driverId']
                     driver2id=letture[i]['header']['driver2Id']
+                    routeId = None
+                    
+                    data=letture[i]['header']['sysDate']
+                    logger.debug(data)
+                    gg=int(int(data[0:3])/4)
+                    mm=data[3:5]
+                    aaaa=1985+int(data[5:7])
+                    
+                
+                    ora=letture[i]['header']['sysTime']
+                    logger.debug(ora)
+                    hh=ora[0:2] 
+                    minuti=ora[2:4]
+                    ss=int(ora[4:7])/4
+
+                    data_ora='{}/{}/{} {}:{}:{}'.format(aaaa,mm,gg, hh, minuti, ss)
+                    logger.debug(data_ora)
                     # Il routeId non è nella sezione header ma in quella vehicleRoute -- > spostato sotto
                     #routeId=letture[i]['header']['routeId']
                 logger.debug('***************************************************')
@@ -226,6 +246,7 @@ def main():
                     logger.debug('Vehicle route:', vehicleRoute)
                     routeId=letture[i]['vehicleRoute']['routeId']
                     lat=letture[i]['vehicleRoute']['geoLat']
+                    lon=letture[i]['vehicleRoute']['geoLon']
                     if lat == None:
                         logger.warning('Lat is null')
                         exit()
@@ -250,7 +271,7 @@ def main():
                     else:
                         logger.error('Problem with longitude')
                     logger.debug('lat = {0}, lon = {1}'.format(latdec, londec))
-                    print(datetime.datetime.now())
+                    #print(datetime.datetime.now())
                     data=letture[i]['vehicleRoute']['sysDate']
                     logger.debug(data)
                     gg=int(int(data[0:3])/4)
@@ -267,39 +288,54 @@ def main():
                     data_ora='{}/{}/{} {}:{}:{}'.format(aaaa,mm,gg, hh, minuti, ss)
                     logger.debug(data_ora)
                     #exit()
-                    sweeper=letture[i]['sweeper']
-                    if sweeper!=None:
-                        sweepermode=letture[i]['sweeper']['swprMode']
-                    else:
-                        sweepermode=None
-                    # controllo che non ci sia già un messaggio con quell'id
-                    query_select="SELECT * FROM spazz_schmidt.messaggi where id = %s and serialnumber_id=%s"
+                # leggo sweeper
+                sweeper=letture[i]['sweeper']
+                #print('Sweeper = ')
+                #print(sweeper)
+                if sweeper!=None:
+                    sweepermode=letture[i]['sweeper']['swprMode']
+                else:
+                    sweepermode=0
+                # controllo che non ci sia già un messaggio con quell'id
+                query_select="SELECT * FROM spazz_schmidt.messaggi where id = %s and serialnumber_id=%s"
+                try:
+                    curr.execute(query_select, (id,sn[0]))
+                    serialnumbers=curr.fetchall()
+                except Exception as e:
+                    logger.error(e)
+                curr.close()
+                curr = conn.cursor()
+                # se c'è già la entry faccio 
+                #print(len(serialnumbers),driverid)
+                if len(serialnumbers)==0 and londec > 0:
+                    query_insert="""
+                    INSERT INTO spazz_schmidt.messaggi
+                    (id, last_valid_id, serialnumber_id, routeid, driverid, driver2id, geoloc, data_ora, data_ora_inserimento, sweeper_mode)
+                    VALUES(%s, %s, %s, %s, %s, %s, ST_SetSRID(ST_MakePoint(%s, %s),4326), %s, now(), %s);           
+                    """
                     try:
-                        curr.execute(query_select, (id,sn[0]))
-                        serialnumbers=curr.fetchall()
+                        curr.execute(query_insert, (id, lv_id, sn[0], routeId, driverid, driver2id, londec, latdec, data_ora,sweepermode))
                     except Exception as e:
                         logger.error(e)
-                    curr.close()
-                    curr = conn.cursor()
-                    # se c'è già la entry faccio 
-                    if len(serialnumbers)==0 and londec > 0:
-                        query_insert="""
-                        INSERT INTO spazz_schmidt.messaggi
-                        (id, last_valid_id, serialnumber_id, routeid, driverid, driver2id, geoloc, data_ora, data_ora_inserimento, sweeper_mode)
-                        VALUES(%s, %s, %s, %s, %s, %s, ST_SetSRID(ST_MakePoint(%s, %s),4326), %s, now(), %s);           
-                        """
-                        try:
-                            curr.execute(query_insert, (id, lv_id, sn[0], routeId, driverid, driver2id, londec, latdec, data_ora,sweepermode))
-                        except Exception as e:
-                            logger.error(e)
-                    
-
-                        ########################################################################################
-                        # da testare sempre prima senza fare i commit per verificare che sia tutto OK
-                        conn.commit()
-                        ######################################################################################## """
-            
-                logger.debug('Mode = {}'.format(sweepermode))
+                    #print(query_insert)
+                elif len(serialnumbers)==0 and londec == 0 and (header!=None or vehicleRoute!=None):
+                    query_insert="""
+                    INSERT INTO spazz_schmidt.messaggi
+                    (id, last_valid_id, serialnumber_id, routeid, driverid, driver2id, geoloc, data_ora, data_ora_inserimento, sweeper_mode)
+                    VALUES(%s, %s, %s, %s, %s, %s, (select distinct geoloc from spazz_schmidt.messaggi where id=%s), %s, now(), %s);           
+                    """
+                    try:
+                        curr.execute(query_insert, (id, lv_id, sn[0], routeId, driverid, driver2id, lv_id, data_ora,sweepermode))
+                    except Exception as e:
+                        logger.error(e)
+                    #print(query_insert, (id, lv_id, sn[0], routeId, driverid, driver2id, lv_id, data_ora,sweepermode))
+                ########################################################################################
+                # da testare sempre prima senza fare i commit per verificare che sia tutto OK
+                conn.commit()
+                ######################################################################################## """
+                if sweepermode!=None:
+                    logger.debug('Mode = {}'.format(sweepermode))
+                # da ricommentare per test
                 #exit()
                 i+=1
 
@@ -316,7 +352,8 @@ def main():
     
     #while i
     
-    
+    # check se c_handller contiene almeno una riga 
+    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
     
     
 if __name__ == "__main__":

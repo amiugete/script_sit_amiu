@@ -144,10 +144,11 @@ def update_asta_piazzola(piazzola, asta_old, asta_new, ambiente):
                 conn.commit()
             except Exception as e:
                 logging.error(e)
-                
+            
+            curr3.close()    
             
             
-            
+            curr3= conn.cursor()
             update_eap='''update elem.elementi_aste_percorso 
                     set id_asta_percorso = (select id_asta_percorso from elem.aste_percorso ap where id_percorso = %s and id_asta=%s)
                     where id_elemento = %s and id_asta_percorso in
@@ -160,6 +161,40 @@ def update_asta_piazzola(piazzola, asta_old, asta_new, ambiente):
             
             curr3.close()
 
+            
+            
+            ''' 
+            Se 0 Cambio il tipo della vecchia asta da servizio a trasferimento
+            '''
+            curr3= conn.cursor()
+            
+            test_eap='''select count(*) from elem.elementi_aste_percorso eap where id_asta_percorso in (
+                            select id_asta_percorso from elem.aste_percorso ap where id_percorso = %s and id_asta=%s 
+                        )'''
+            try:
+                curr3.execute(test_eap, (id_percorso, asta_old))
+                lista_test=curr3.fetchall()
+            except Exception as e:
+                logging.error(e)
+            
+            for tt in lista_test:
+                check_test=tt[0]
+            
+            if check_test == 0:
+                update_ap='''update elem.aste_percorso
+                set tipo = 'trasferimento' 
+                where id_percorso = %s and id_asta=%s '''
+                
+                try:
+                    curr3.execute(update_ap, (id_percorso, asta_old))
+                    conn.commit()
+                except Exception as e:
+                    logging.error(e)
+            else:
+                logging.info('''Non cambio tipo asta perchè c'è altra piazzola''')
+                
+                
+            curr3.close()
             
             
             
@@ -224,11 +259,9 @@ def main():
     logging.info('''Dominio ={0}, Utente={1}'''.format(domain, user))
     ############################################
     #INPUT (da rendere dinamici per  fare WS)
-    piazzola = 41042
-    asta_old = 1852820061
-    #asta_new = 1449060006
-    asta_new = 1852820063
-    #asta_old = 1401000003
+    piazzola = 21779
+    asta_old = 2435110007
+    asta_new = 2452600009
     ambiente = 'sit' # sit_test, #sit_prog
     #############################################
     update_asta_piazzola(piazzola, asta_old, asta_new, ambiente)

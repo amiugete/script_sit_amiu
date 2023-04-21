@@ -643,12 +643,12 @@ WHERE COD_VIA in ({})
 
     subject = "Invio utenze zona {}".format(prefisso1)
     
-    sender_email = user_mail
+    #sender_email = user_mail
     receiver_email=mail
     #debug_email='roberto.marzocchi@amiu.genova.it'
     #debug_email2='roberto.marzocchi@amiu.genova.it'
-    debug_email2='calvello@amiu.genova.it'
-    debug_email='assterritorio@amiu.genova.it'
+    debug_email='calvello@amiu.genova.it; assterritorio@amiu.genova.it'
+    #debug_email='assterritorio@amiu.genova.it'
     
     #assterritorio@amiu.genova.it
 
@@ -678,8 +678,8 @@ Giorno {}<br><br>
     message = MIMEMultipart()
     message["From"] = sender_email
     message["To"] = receiver_email
+    #message["Cc"] = debug_email2
     message["Cc"] = debug_email
-    message["Cc"] = debug_email2
     message["Subject"] = subject
     #message["Bcc"] = debug_email  # Recommended for mass emails
     message.preamble = "File con le utenze"

@@ -327,7 +327,7 @@ def main():
      <img src="cid:image1" alt="Logo" width=197>
     <br>
     """.format(gg_text, user_mail, giorno_file)
-    sender_email = user_mail
+    #sender_email = user_mail
     receiver_email='assterritorio@amiu.genova.it'
     debug_email='roberto.marzocchi@amiu.genova.it'
 

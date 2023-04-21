@@ -221,6 +221,9 @@ def main():
                     p_netto=letture['data'][i][12]
                     p_lordo=letture['data'][i][13]
                     p_tara=letture['data'][i][14]
+                    id_percorso=letture['data'][i][15]
+                    cod_percorso=letture['data'][i][16]
+                    desc_percorso=letture['data'][i][17]
                     query_select='''SELECT * FROM idea.svuotamenti WHERE id_idea = %s;'''
                     try:
                         curr.execute(query_select, (id_idea,))
@@ -240,11 +243,12 @@ def main():
                         """
                         query_update='''UPDATE idea.svuotamenti
                         SET id_piazzola=%s, riempimento=%s, peso_netto=%s, peso_lordo=%s, peso_tara=%s,
-                        targa_contenitore=%s, data_ora_svuotamento=%s
+                        targa_contenitore=%s, data_ora_svuotamento=%s, id_percorso_selezionato=%s, codice_percorso_selezionato= %s ,
+                        descrizione_percorso_selezionato = %s
                         WHERE id_idea=%s;'''
                         try:
                             #curr.execute(query_update, (id_pdr, riempimento, p_netto, p_lordo, p_tara, lon, lat, cod_cont, data_ora_svuotamento, id_idea))
-                            curr.execute(query_update, (id_pdr, riempimento, p_netto, p_lordo, p_tara, cod_cont, data_ora_svuotamento, id_idea))
+                            curr.execute(query_update, (id_pdr, riempimento, p_netto, p_lordo, p_tara, cod_cont, data_ora_svuotamento, id_percorso, cod_percorso, desc_percorso, id_idea))
                         except Exception as e:
                             logger.error(query_update)
                             logger.error(e)
@@ -255,14 +259,15 @@ def main():
                         st_transform(ST_SetSRID(ST_MakePoint(%s, %s),4326),3003));'''
                         """
                         query_insert='''INSERT INTO idea.svuotamenti
-                        (id_idea, id_piazzola, targa_contenitore, riempimento, data_ora_svuotamento, peso_netto, peso_lordo, peso_tara)
-                        VALUES(%s, %s, %s, %s, %s, %s, %s, %s);'''
+                        (id_idea, id_piazzola, targa_contenitore, riempimento, data_ora_svuotamento, peso_netto, peso_lordo, peso_tara, 
+                        id_percorso_selezionato, codice_percorso_selezionato, descrizione_percorso_selezionato)
+                        VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);'''
                         #logger.debug(query_insert)
                         try:
                             #curr.execute(query_insert, (id_idea, id_pdr, cod_cont, riempimento, data_ora_svuotamento, p_netto, p_lordo, p_tara, lon, lat))
-                            curr.execute(query_insert, (id_idea, id_pdr, cod_cont, riempimento, data_ora_svuotamento, p_netto, p_lordo, p_tara))
+                            curr.execute(query_insert, (id_idea, id_pdr, cod_cont, riempimento, data_ora_svuotamento, p_netto, p_lordo, p_tara, id_percorso, cod_percorso, desc_percorso))
                         except Exception as e:
-                            logger.error(query_insert, id_idea, id_pdr, cod_cont, riempimento, data_ora_svuotamento, p_netto, p_lordo, p_tara, lon, lat)
+                            logger.error(query_insert, id_idea, id_pdr, cod_cont, riempimento, data_ora_svuotamento, p_netto, p_lordo, p_tara, id_percorso, cod_percorso, desc_percorso)
                             logger.error(e)
                     ########################################################################################
                     # da testare sempre prima senza fare i commit per verificare che sia tutto OK

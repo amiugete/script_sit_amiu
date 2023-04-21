@@ -49,7 +49,7 @@ import logging
 
 filename = inspect.getframeinfo(inspect.currentframe()).filename
 path = os.path.dirname(os.path.abspath(filename))
-
+path1 = os.path.dirname(os.path.dirname(os.path.abspath(filename)))
 giorno_file=datetime.datetime.today().strftime('%Y%m%d%H%M')
 
 
@@ -86,7 +86,7 @@ f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.ERROR)
-f_handler.setLevel(logging.INFO)
+f_handler.setLevel(logging.DEBUG)
 
 
 # Add handlers to the logger
@@ -169,7 +169,7 @@ def main():
     #conn.autocommit = True
     #################################################################
     api_url='{}/pdralbero'.format(url_idea)
-    headers1 = {'''Authorization: Token {0}'''.format(token1)}
+    headers1 = {''' {0}'''.format(token1)}
     
     # per ora re-importo tutto, poi sarà da sistematre 
     '''query_truncate="TRUNCATE TABLE idea.conferimenti_horus CONTINUE IDENTITY RESTRICT;"
@@ -190,7 +190,6 @@ def main():
     check=0
     
     
-
     
     nuovi_id=[]
     nuove_desc=[]
@@ -203,6 +202,8 @@ def main():
 
     while check<1:
         logger.info('Page index {}'.format(p))
+        # se volessi usare un singolo id_pdr per debug (ricordarsi di modificare anche il logger)
+        #response = requests.get(api_url, params={'id_pdr':'23015', 'page_size': 100, 'page_index': p}, headers={'Authorization': 'Token {}'.format(token1)})
         response = requests.get(api_url, params={'page_size': 100, 'page_index': p}, headers={'Authorization': 'Token {}'.format(token1)})
         #response.json()
         logger.debug(response.status_code)
@@ -226,7 +227,7 @@ def main():
             
             logger.debug(len(colonne))
             logger.debug(colonne)
-            #logger.debug(letture['data'])
+            logger.debug(letture['data'])
             
             logger.debug('Lette {} righe dalle API'.format(len(letture['data'])))
             
@@ -282,7 +283,19 @@ def main():
                                     desc_elettronica=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['cod_elett']
                                     val_bat_e=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['val_bat']
                                     iccid=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['iccid']
-                                    num_tel=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['num_tel'].strip()
+                                    if iccid ==None: 
+                                        logger.warning('iccid ND')
+                                        iccid='ND'
+                                    
+                                    num_tel=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['num_tel']
+                                    #num_tel=num_tel.strip()
+                                    
+                                    if num_tel == None: 
+                                        logger.warning('num_tel ND')
+                                        num_tel='ND'
+                                    else:
+                                        num_tel=num_tel.strip()
+                                        
                                     f=0
                                     while f < len(letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['bocchette']):
                                         id_bocc=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['bocchette'][f]['id_bocc']
@@ -309,7 +322,8 @@ def main():
                                             volume_contenitore=%s, targa_contenitore=%s, tag_contenitore=%s,
                                             id_elettronica=%s, desc_elett=%s, iccidsim=%s, sim_numtel=%s, val_bat_elettronica=%s,
                                             id_bocchetta=%s, cod_elett_sens=%s, cod_cer_mat=%s, volume_bocchetta=%s,
-                                            data_ultimo_agg=%s, val_riemp=%s, val_bat_bocchetta=%s, geoloc=st_transform(ST_SetSRID(ST_MakePoint(%s, %s),4326),3003) 
+                                            data_ultimo_agg=%s, val_riemp=%s, val_bat_bocchetta=%s, geoloc=st_transform(ST_SetSRID(ST_MakePoint(%s, %s),4326),3003),
+                                            data_agg_api=now()
                                             WHERE id_elemento_idea=%s;'''
                                             try:
                                                 curr.execute(query_update, (id_pdr,descrizione_pdr,id_cont,tipo_cont,vol_cont,targa_cont,tag_cont,cod_elettronica,
@@ -376,6 +390,7 @@ def main():
     nuovi_id_ok=distinct_list(nuovi_id)
     nuove_desc_ok=distinct_list(nuove_desc)
     if len(nuovi_id_ok)>0:
+        logger.info('Ci sono nuove piazzole - Predispongo il file e mando mail')
         # Imposto file con nuove piazzole
         file_piazzole="{0}/{1}_piazzole_nuove_aggiornate.xlsx".format(path, giorno_file)
         workbook = xlsxwriter.Workbook(file_piazzole)
@@ -408,8 +423,8 @@ def main():
             i+=1
             w1.write(i,0, nuovi_id_ok[i-1],text)
             w1.write(i,1, nuove_desc_ok[i-1],text)
-            w1.write(r,2, contenitori_piazzola(conn, logger, nuovi_id_ok[i-1])[0], text)
-            w1.write(r,3, contenitori_piazzola(conn, logger, nuovi_id_ok[i-1])[1], text)
+            w1.write(i,2, contenitori_piazzola(conn, logger, nuovi_id_ok[i-1])[0], text)
+            w1.write(i,3, contenitori_piazzola(conn, logger, nuovi_id_ok[i-1])[1], text)
         workbook.close()
         
         ################################
@@ -421,10 +436,12 @@ def main():
 
         subject = "NUOVE PIAZZOLE BILATERALI CENSITE DA ID&A"
         body = '''Mail generata automaticamente dal codice python pdr_albero_rimozione.py che gira su server amiugis interrogando i WS di ID&A con il censimento delle piazzole.\n\n
-        \n\n\n\n
-        AMIU Assistenza Territorio
+        <br><br><br>
+        AMIU Assistenza Territorio<br>
+        <img src="cid:image1" alt="Logo" width=197>
+        <br>
         '''
-        sender_email = user_mail
+        #sender_email = user_mail
         receiver_email='assterritorio@amiu.genova.it'
         debug_email='roberto.marzocchi@amiu.genova.it'
         #cc_mail='pianar@amiu.genova.it'
@@ -441,7 +458,11 @@ def main():
         
                         
         # Add body to email
-        message.attach(MIMEText(body, "plain"))
+        message.attach(MIMEText(body, "html"))
+        
+        #aggiungo logo 
+        logoname='{}/img/logo_amiu.jpg'.format(path1)
+        immagine(message,logoname)
 
         # aggiunto allegato (usando la funzione importata)
         allegato(message, file_piazzole, '{}_piazzole_nuove_aggiornate.xlsx'.format(giorno_file))
@@ -535,19 +556,21 @@ def main():
 
         subject = "CONTENITORI RIMOSSI / CON PROBLEMI ELETTRONICA (DA ID&A)"
         body = '''Mail generata automaticamente dal codice python pdr_albero_rimozione.py che gira su server amiugis interrogando i WS di ID&A con il censimento delle piazzole.\n\n
-        \n\n\n\n
-        AMIU Assistenza Territorio
+        <br><br><br>
+        AMIU Assistenza Territorio<br>
+        <img src="cid:image1" alt="Logo" width=197>
+        <br>
         '''
-        sender_email = user_mail
+        #sender_email = user_mail
         receiver_email='assterritorio@amiu.genova.it'
         debug_email='roberto.marzocchi@amiu.genova.it'
-        #cc_mail='pianar@amiu.genova.it'
+        cc_mail='marco.zamboni@ideabs.com; valentina.anamiti@amiu.genova.it'
 
         # Create a multipart message and set headers
         message = MIMEMultipart()
         message["From"] = sender_email
         message["To"] = receiver_email
-        #message["Cc"] = cc_mail
+        message["Cc"] = cc_mail
         message["Subject"] = subject
         #message["Bcc"] = debug_email  # Recommended for mass emails
         message.preamble = "Contenitori rimossi"
@@ -555,7 +578,11 @@ def main():
         
                         
         # Add body to email
-        message.attach(MIMEText(body, "plain"))
+        message.attach(MIMEText(body, "html"))
+        
+        #aggiungo logo 
+        logoname='{}/img/logo_amiu.jpg'.format(path1)
+        immagine(message,logoname)
 
         # aggiunto allegato (usando la funzione importata)
         allegato(message, file_piazzole2, '{}_contenitori_rimossi.xlsx'.format(giorno_file))

@@ -307,7 +307,7 @@ where cod_frequenza not in (select cod_frequenza from etl.frequenze_ok_1)'''
     subject = "FREQUENZA DA AGGIUNGERE A CODICE DI UO"
     body = '''Mail generata automaticamente dal codice python frequenze.py che gira su amiugis\n\n\n
     Frequenze da aggiungere:\n'''
-    sender_email = user_mail
+    #sender_email = user_mail
     receiver_email='assterritorio@amiu.genova.it'
     debug_email='roberto.marzocchi@amiu.genova.it'
     cc_mail='calvello@amiu.genova.it'

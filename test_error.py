@@ -44,6 +44,7 @@ from credenziali import *
 #libreria per gestione log
 import logging
 
+from invio_messaggio import *
 
 #num_giorno=datetime.datetime.today().weekday()
 #giorno=datetime.datetime.today().strftime('%A')
@@ -70,7 +71,8 @@ logger = logging.getLogger()
 
 # Create handlers
 c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+f_handler = logging.StreamHandler()
+#f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.ERROR)
@@ -101,8 +103,24 @@ def main():
     if  count >0:
         print('''C'è un problema''')
         
+    subject = "PROBLEMA SCRIPT PYTHON"
+    body = '''TEST creazione file {} e {}  \n\n'''.format(errorfile ,logfile)
+    #sender_email = user_mail
+    receiver_email='assterritorio@amiu.genova.it'
+    debug_email='roberto.marzocchi@amiu.genova.it'
 
+    # Create a multipart message and set headers
+    message = MIMEMultipart()
+    message["From"] = sender_email
+    message["To"] = debug_email
+    message["Subject"] = subject
+    #message["Bcc"] = debug_email  # Recommended for mass emails
+    message.preamble = "File giornaliero con le variazioni"
 
+    # Add body to email
+    message.attach(MIMEText(body, "plain"))
+    check=invio_messaggio(message)
+    logger.info(check)
 
 if __name__ == "__main__":
     main()  

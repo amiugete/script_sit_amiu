@@ -352,7 +352,7 @@ def main():
 Esistono dei percorsi su UO dove c'è una discordanza di turni fra un UT e l'altra. \nVisualizza l'allegato e contatta le UT di riferimento\n\n\n\n
 AMIU Assistenza Territorio
 '''
-        sender_email = user_mail
+        #sender_email = user_mail
         receiver_email='assterritorio@amiu.genova.it'
         debug_email='roberto.marzocchi@amiu.genova.it'
         #cc_mail='pianar@amiu.genova.it'

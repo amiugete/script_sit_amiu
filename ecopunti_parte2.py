@@ -85,13 +85,13 @@ def main(argv):
 
     logging.info('Leggo gli input')
     try:
-        opts, args = getopt.getopt(argv,"hm:a:",["mail="])
+        opts, args = getopt.getopt(argv,"hm:a:e:",["mail=", "area=", "ecopunti="])
     except getopt.GetoptError:
-        logging.error('ecopunti_parte2.py  -m <mail>')
+        logging.error('ecopunti_parte2.py  -m <mail> -a <area>')
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
-            print('ecopunti_parte2.py - m <mail>')
+            print('ecopunti_parte2.py - m <mail> -a <area> -e <true/false>')
             sys.exit()
         elif opt in ("-m", "--mail"):
             mail = arg
@@ -99,6 +99,17 @@ def main(argv):
         elif opt in ("-a", "--area"):
             area = arg
             logging.info('id area = {}'.format(area))
+        elif opt in ("-e", "--ecopunti"):
+            ecopunto = arg
+            if ecopunto=='true':
+                check_eco=1
+            elif ecopunto=='false':
+                check_eco=2
+            else:
+                print('ecopunti_parte2.py - m <mail> -a <area> -e <true/false>')
+                sys.exit()
+                
+            logging.info('ecopunto = {}'.format(ecopunto))
 
 
     # carico i mezzi sul DB PostgreSQL
@@ -151,20 +162,29 @@ def main(argv):
     curr.close()
     curr = conn.cursor()
 
-
-    query_area='''select replace(nome,' ', '_') as nome_area from etl.aree where id = %s'''
-
+    if check_eco==1:
+        query_area='''select replace(nome,' ', '_') as nome_area from etl.aree_ecopunti where id = %s'''
+    elif check_eco==2:
+        query_area='''select replace(nome,' ', '_') as nome_area from etl.aree where id = %s'''
+        
+    
     try:
         curr.execute(query_area, (area,))
         n_area=curr.fetchall()
     except Exception as e:
         logging.error(e)
+        logging.error(query_area)
+        #logging.error(area)
 
     for aa in n_area:
         nome_area=aa[0]
 
     curr.close()
 
+    if check_eco==1:
+        oggetto_mail='Invio utenze ecopunti ({0})'.format(nome_area)
+    elif check_eco==2:
+        oggetto_mail='Invio utenze area {0}'.format(nome_area)
 
     logging.info('Lista civici')
     curr2 = conn.cursor()
@@ -222,6 +242,7 @@ def main(argv):
 
     # connessione Oracle
     #cx_Oracle.init_oracle_client(lib_dir=r"C:\oracle\instantclient_19_10")
+    logging.info('Connessione a DB Oracle')
     cx_Oracle.init_oracle_client()
     parametri_con='{}/{}@//{}:{}/{}'.format(user_strade,pwd_strade, host_uo,port_uo,service_uo)
     logging.debug(parametri_con)
@@ -290,11 +311,12 @@ def main(argv):
     w.write(0, 14, 'QUARTIERE') 
     w.write(0, 15, 'CIRCOSCRIZIONE')
     w.write(0, 16, 'ABITAZIONE_DI_RESIDENZA') 
-    w.write(0, 17, 'DESCR_CATEGORIA')
-    w.write(0, 18, 'DESCR_UTILIZZO') 
-    w.write(0, 19, 'COD_INTERNO')
-    w.write(0, 20, 'Presenza dato su Saltax?')
-    w.write(0, 21, 'Chiave consegnata?')
+    w.write(0, 17, 'NUM_OCCUPANTI') 
+    w.write(0, 18, 'DESCR_CATEGORIA')
+    w.write(0, 19, 'DESCR_UTILIZZO') 
+    w.write(0, 20, 'COD_INTERNO')
+    w.write(0, 21, 'Presenza dato su Saltax?')
+    w.write(0, 22, 'Chiave consegnata?')
 
 
     logging.info('*****************************************************')
@@ -303,7 +325,7 @@ def main(argv):
     cur = con.cursor()
     query=''' SELECT ID_UTENTE, PROGR_UTENZA, COGNOME, NOME, COD_VIA, DESCR_VIA,
         CIVICO, COLORE, SCALA, PIANO, INTERNO, CAP, 
-        UNITA_URBANISTICA, QUARTIERE, CIRCOSCRIZIONE, ZONA, ABITAZIONE_DI_RESIDENZA,  DESCR_CATEGORIA, DESCR_UTILIZZO, COD_INTERNO
+        UNITA_URBANISTICA, QUARTIERE, CIRCOSCRIZIONE, ZONA, ABITAZIONE_DI_RESIDENZA, NUM_OCCUPANTI, DESCR_CATEGORIA, DESCR_UTILIZZO, COD_INTERNO
         FROM STRADE.UTENZE_TIA_DOMESTICHE
         WHERE COD_CIVICO in {}
         '''.format(civ)
@@ -520,19 +542,18 @@ WHERE COD_CIVICO in {}
    # messaggio='Test invio messaggio'
 
 
-    subject = "Invio utenze ecopunti"
     
-    sender_email = user_mail
+    #sender_email = user_mail
     receiver_email=mail
     debug_email='assterritorio@amiu.genova.it'
     #assterritorio@amiu.genova.it
     #debug_email='roberto.marzocchi@amiu.genova.it'
 
-    body = '''Mail automatica con l'invio delle utenze degli ecopunti.\n
-    L'applicativo che gestisce l'estrazione delle utenze è stato realizzato dal gruppo GETE.\n 
-    Segnalare tempestivamente eventuali malfunzionamenti inoltrando la presente mail a {}\n\n
-    Giorno {}\n\n
-    AMIU Assistenza Territorio
+    body = '''Mail automatica con l'invio delle utenze degli ecopunti.<br>
+    L'applicativo che gestisce l'estrazione delle utenze è stato realizzato dal gruppo <i>APPTE (SIGT)</i>.<br> 
+    Segnalare tempestivamente eventuali malfunzionamenti inoltrando la presente mail a {}<br><br>
+    Giorno {}<br><br>
+    <i>AMIU Assistenza Territorio</i>
     '''.format(debug_email, datetime.datetime.today().strftime('%d/%m/%Y'))
     
 
@@ -542,14 +563,18 @@ WHERE COD_CIVICO in {}
     message["From"] = sender_email
     message["To"] = receiver_email
     message["Cc"] = debug_email
-    message["Subject"] = subject
+    message["Subject"] = oggetto_mail
     #message["Bcc"] = debug_email  # Recommended for mass emails
     message.preamble = "File con le utenze"
 
     # Add body to email
-    message.attach(MIMEText(body, "plain"))
+    message.attach(MIMEText(body, "html"))
 
     #filename = file_variazioni  # In same directory as script
+
+    #aggiungo logo 
+    logoname='{}/img/logo_amiu.jpg'.format(path)
+    immagine(message,logoname)
 
 
     i=0
@@ -608,8 +633,7 @@ WHERE COD_CIVICO in {}
     
     text = message.as_string()
 
-
-
+    
     logging.info("Richiamo la funzione per inviare mail")
     invio=invio_messaggio(message)
     logging.info(invio)
@@ -617,6 +641,12 @@ WHERE COD_CIVICO in {}
     logging.info("Mail inviata a {} e a nostro indirizzo".format(receiver_email))
     
 
+
+    logging.info("CHIUSURA CONNESSIONI DB APERTE")
+    conn.close()
+    con.close()
+    conn_saltax.close()
+    
     exit()
 
     
