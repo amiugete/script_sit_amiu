@@ -555,7 +555,7 @@ and to_char(sysdate - (:gg-7), 'yyyymmdd')||'03:59:59' '''
 
 
     # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it, Riccardo.Piana@amiu.genova.it', os.path.basename(__file__), logger)
     logger.info("chiudo le connessioni in maniera definitiva")
     cur.close()
     con.close()

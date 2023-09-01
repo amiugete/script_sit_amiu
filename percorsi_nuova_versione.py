@@ -267,9 +267,27 @@ VALUES('PERCORSO', 'UPDATE', %s, CURRENT_TIMESTAMP, %s, %s);'''
         
         curr1.close()
         conn.commit()   
+
+        # delete percorsi sospesi
+        curr1 = conn.cursor()
+        if check_error==0:
+            delete_sospesi='''DELETE etl.percorsi_sospesi WHERE id_percorso=%s'''
+            try:
+                curr1.execute(delete_sospesi, (pn[1]))
+                #lista_variazioni=curr.fetchall()
+            except Exception as e:
+                check_error+=1
+                logger.error(delete_sospesi)
+                logger.error(e)   
+            
     
-    
-    
+        curr1.close()
+        conn.commit() 
+
+
+
+
+    # invio mail
     if len(lista_percorsi_new) > 0:
         #mando mail
         logger.info('mando mail')

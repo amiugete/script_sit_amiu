@@ -2,8 +2,11 @@ credenziali.py
 log/*.log
 variazioni/*.csv
 variazioni/*.xlsx
+preconsuntivazioni/*.csv
 ecopunti/*.xlsx
 utenze/*.xlsx
+utenze/input/*.xlsx
+output/input/*.xlsx
 report/*.xlsx
 correzioni_grafo/*.xlsx
 optit/*

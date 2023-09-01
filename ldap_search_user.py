@@ -131,7 +131,7 @@ def main():
         user1=uu[1]
         id1=uu[4]
         try:
-            connect = ldap.initialize('ldap://dcamiu0.amiu.genova.it')
+            connect = ldap.initialize(ldap_url)
             connect.set_option(ldap.OPT_REFERRALS, 0)
             connect.simple_bind_s(ldap_login, ldap_pwd)
             criteria = "(&(objectClass=user)(sAMAccountName={0}))".format(user1)

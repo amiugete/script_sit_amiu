@@ -9,11 +9,28 @@
 import sys,ldap,ldap.asyncsearch
 from credenziali import *
 
-user1='procedure'
+user1='Galleno'
 try:
-    connect = ldap.initialize('ldap://amiu.genova.it')
+
+
+    connect = ldap.initialize(ldap_url)
+    #connect = ldap.initialize("ldaps://amiu.genova.it:636")
+    connect.set_option(ldap.OPT_REFERRALS, 0)
+    
+    connect.set_option(ldap.OPT_PROTOCOL_VERSION, 3)
+    connect.set_option(ldap.OPT_X_TLS,ldap.OPT_X_TLS_DEMAND)
+    connect.set_option(ldap.OPT_X_TLS_DEMAND, True)
+    connect.set_option(ldap.OPT_DEBUG_LEVEL, 255)
+    # This must be the last tls setting to create TLS context.
+    #connect.set_option(ldap.OPT_X_TLS_NEWCTX, ldap.OPT_ON)
+
+    
+    '''
+    connect = ldap.initialize('ldap://amiu.genova.it:389')
     #connect = ldap.initialize('ldap://login.microsoftonline.com')
     connect.set_option(ldap.OPT_REFERRALS, 0)
+    '''
+    
     connect.simple_bind_s('{}@amiu.genova.it'.format(ldap_login), ldap_pwd)
     criteria = "(&(objectClass=user)(sAMAccountName={0}))".format(user1)
     attributes = ['sAMAccountName', 'mail']
@@ -30,7 +47,7 @@ except Exception as e:
 
 exit()
 s = ldap.asyncsearch.List(
-  ldap.initialize('ldap://dcamiu0.amiu.genova.it'),
+  ldap.initialize(ldap_url),
 )
 
 s.startSearch(

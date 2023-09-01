@@ -304,16 +304,17 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
     w.write(0, 7, 'LETTERA_CIVICO')
     w.write(0, 8, 'COLORE') 
     w.write(0, 9, 'SCALA') 
-    w.write(0, 10, 'PIANO') 
-    w.write(0, 11, 'INTERNO')
+    w.write(0, 10, 'INTERNO') 
+    w.write(0, 11, 'LETTERA_INTERNO')
     w.write(0, 12, 'CAP') 
     w.write(0, 13, 'UNITA_URBANISTICA') 
     w.write(0, 14, 'QUARTIERE') 
     w.write(0, 15, 'CIRCOSCRIZIONE')
     w.write(0, 16, 'ZONA') 
     w.write(0, 17, 'ABITAZIONE_DI_RESIDENZA') 
-    w.write(0, 18, 'DESCR_CATEGORIA')
-    w.write(0, 19, 'DESCR_UTILIZZO') 
+    w.write(0, 18, 'NUM_OCCUPANTI') 
+    w.write(0, 19, 'DESCR_CATEGORIA')
+    w.write(0, 20, 'DESCR_UTILIZZO') 
 
 
 
@@ -322,8 +323,9 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
 
     cur = con.cursor()
     query=''' SELECT ID_UTENTE, PROGR_UTENZA, COGNOME, NOME, COD_VIA, DESCR_VIA,
-        CIVICO, SUB_CIVICO, COLORE, SCALA, PIANO, INTERNO, CAP, 
-        UNITA_URBANISTICA, QUARTIERE, CIRCOSCRIZIONE, ZONA, ABITAZIONE_DI_RESIDENZA,  DESCR_CATEGORIA, DESCR_UTILIZZO
+        CIVICO, LETTERA_CIVICO, COLORE, SCALA, INTERNO, LETTERA_INTERNO, CAP, 
+        UNITA_URBANISTICA, QUARTIERE, CIRCOSCRIZIONE, ZONA, ABITAZIONE_DI_RESIDENZA, NUM_OCCUPANTI,
+        DESCR_CATEGORIA, DESCR_UTILIZZO
         FROM STRADE.UTENZE_TIA_DOMESTICHE
         WHERE COD_VIA in ({})
         '''.format(codici_via)
@@ -365,7 +367,7 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
 
     cur3 = con.cursor()
     query='''SELECT DISTINCT COD_VIA, DESCR_VIA,
-        CIVICO, SUB_CIVICO, COLORE 
+        CIVICO, LETTERA_CIVICO, COLORE 
         FROM STRADE.UTENZE_TIA_DOMESTICHE
         WHERE COD_VIA in ({}) ORDER BY DESCR_VIA
         '''.format(codici_via) 
@@ -662,7 +664,7 @@ Sono presenti i seguenti file:<br>
 - elenco utenze non domestiche (PER COMUNICAZIONE)<br>
 - elenco civici utenze domestiche (PER COMUNICAZIONE)<br>
 - elenco civici utenze non domestiche (PER COMUNICAZIONE)<br>
-- elenco utenze non domestiche da inviare <b>manualmente</b> a IDEA per importazione su loro APP (rif. Marco Zamboni marco.zamboni@ideabs.com)<br>
+- elenco utenze non domestiche formato ID&A per importazione su loro APP (rif. Marco Zamboni marco.zamboni@ideabs.com). L'nvio non serve più perchè è stato sostituito da apposito webService<br>
 - elenco utenze da importare nel portale delle consegne (<b>rif. Laura Calvello in CC alla presente mail<b>)<br><br><br>
 L'applicativo che gestisce l'estrazione delle utenze è stato realizzato dal gruppo Gestione Applicativi del SIGT.<br> 
 Segnalare tempestivamente eventuali malfunzionamenti inoltrando la presente mail a {}<br><br>
