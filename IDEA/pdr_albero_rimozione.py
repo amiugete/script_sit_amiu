@@ -261,6 +261,7 @@ def main():
                         id_pdr=letture['data'][i][0]['id_pdr']
                         #id_comune=letture['data'][i][0]['id_comune']
                         descrizione_pdr=letture['data'][i][0]['desc_pdr']
+                        zona=letture['data'][i][0]['zona']
                         lat=float(letture['data'][i][0]['lat'])
                         lon=float(letture['data'][i][0]['lng'])
                         logger.debug('lat={}'.format(lat))
@@ -318,7 +319,7 @@ def main():
                                         # se c'è già la entry faccio 
                                         if len(bocchetta)>0:
                                             query_update='''UPDATE idea.censimento_idea
-                                            SET id_piazzola=%s,  indirizzo_idea=%s, id_elemento_idea=%s, tipo_contenitore=%s,
+                                            SET id_piazzola=%s,  zona= %s, indirizzo_idea=%s, id_elemento_idea=%s, tipo_contenitore=%s,
                                             volume_contenitore=%s, targa_contenitore=%s, tag_contenitore=%s,
                                             id_elettronica=%s, desc_elett=%s, iccidsim=%s, sim_numtel=%s, val_bat_elettronica=%s,
                                             id_bocchetta=%s, cod_elett_sens=%s, cod_cer_mat=%s, volume_bocchetta=%s,
@@ -326,7 +327,7 @@ def main():
                                             data_agg_api=now()
                                             WHERE id_elemento_idea=%s;'''
                                             try:
-                                                curr.execute(query_update, (id_pdr,descrizione_pdr,id_cont,tipo_cont,vol_cont,targa_cont,tag_cont,cod_elettronica,
+                                                curr.execute(query_update, (id_pdr,zona, descrizione_pdr,id_cont,tipo_cont,vol_cont,targa_cont,tag_cont,cod_elettronica,
                                                 desc_elettronica,iccid,num_tel,val_bat_e,id_bocc,cod_elett_sens,cod_cer_mat,volume_b,data_ultimo_agg,
                                                 val_riemp,val_bat_b,lon,lat,id_cont))
                                             except Exception as e:
@@ -335,14 +336,14 @@ def main():
                                             nuovi_id.append(id_pdr)
                                             nuove_desc.append(descrizione_pdr)
                                             query_insert='''INSERT INTO idea.censimento_idea
-                                            (id_piazzola, indirizzo_idea, id_elemento_idea, tipo_contenitore, volume_contenitore, 
+                                            (id_piazzola, zona, indirizzo_idea, id_elemento_idea, tipo_contenitore, volume_contenitore, 
                                             targa_contenitore, tag_contenitore, id_elettronica, desc_elett, iccidsim, 
                                             sim_numtel, val_bat_elettronica, id_bocchetta, cod_elett_sens,
                                             cod_cer_mat, volume_bocchetta, data_ultimo_agg, val_riemp, val_bat_bocchetta, geoloc)
                                             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,st_transform(ST_SetSRID(ST_MakePoint(%s, %s),4326),3003));
                                             '''
                                             try:
-                                                curr.execute(query_insert, (id_pdr,descrizione_pdr,id_cont,tipo_cont,vol_cont,
+                                                curr.execute(query_insert, (id_pdr, zona, descrizione_pdr,id_cont,tipo_cont,vol_cont,
                                                 targa_cont,tag_cont,cod_elettronica,desc_elettronica,iccid,
                                                 num_tel,val_bat_e,id_bocc,cod_elett_sens,
                                                 cod_cer_mat,volume_b,data_ultimo_agg, val_riemp,val_bat_b,lon,lat))

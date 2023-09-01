@@ -37,6 +37,8 @@ sys.path.append(parentdir)
 sys.path.append('../')
 from credenziali import *
 from recupera_token import *
+from footer_mail_idea import *
+
 
 #import requests
 import datetime
@@ -92,7 +94,17 @@ c_handler.setFormatter(cc_format)
 f_handler.setFormatter(cc_format)
 
 
-
+# MAIL - libreria per invio mail
+import email, smtplib, ssl
+import mimetypes
+from email.mime.multipart import MIMEMultipart
+from email import encoders
+from email.message import Message
+from email.mime.audio import MIMEAudio
+from email.mime.base import MIMEBase
+from email.mime.image import MIMEImage
+from email.mime.text import MIMEText
+from invio_messaggio import *
 
 def main():
     #################################################################
@@ -269,19 +281,28 @@ def main():
                     curr = conn.cursor()
                     # se c'è già la entry faccio 
                     if len(conferimento)>0: 
-                        query_update='''UPDATE idea.conferimenti_horus
+                        """query_update='''UPDATE idea.conferimenti_horus
                         set cod_prodotto=%s, id_badge=%s, id_user=%s, id_categoria=%s, id_elemento=%s, data_ora_conferimento=%s
                         WHERE id_idea=%s;'''
+                        """
+                        query_update='''UPDATE idea.conferimenti_horus
+                        set id_user=%s, id_categoria=%s, id_elemento=%s, data_ora_conferimento=%s
+                        WHERE id_idea=%s;'''
                         try:
-                            curr.execute(query_update, (cod_rifiuto, id_badge, id_user, id_categoria, id_elemento, data_conferimento, id_idea))
+                            #curr.execute(query_update, (cod_rifiuto, id_badge, id_user, id_categoria, id_elemento, data_conferimento, id_idea))
+                            curr.execute(query_update, (id_user, id_categoria, id_elemento, data_conferimento, id_idea))
                         except Exception as e:
                             logger.error(e)
                     else:
-                        query_insert='''INSERT INTO idea.conferimenti_horus
+                        """query_insert='''INSERT INTO idea.conferimenti_horus
         (id_elemento, cod_prodotto, id_badge, id_user, id_categoria, data_ora_conferimento, id_idea)
-        VALUES(%s, %s, %s, %s, %s , %s, %s);'''
+        VALUES(%s, %s, %s, %s, %s , %s, %s);'''"""
+                        query_insert='''INSERT INTO idea.conferimenti_horus
+        (id_elemento, id_user, id_categoria, data_ora_conferimento, id_idea)
+        VALUES(%s, %s, %s , %s, %s);'''
                         try:
-                            curr.execute(query_insert, (id_elemento, cod_rifiuto, id_badge, id_user, id_categoria, data_conferimento, id_idea))
+                            #curr.execute(query_insert, (id_elemento, cod_rifiuto, id_badge, id_user, id_categoria, data_conferimento, id_idea))
+                            curr.execute(query_insert, (id_elemento, id_user, id_categoria, data_conferimento, id_idea))
                         except Exception as e:
                             logger.error(e)
                     ########################################################################################
@@ -291,11 +312,74 @@ def main():
                 #print(i,letture['data'][i][9], letture['data'][i][10], letture['data'][i][14], letture['data'][i][16],letture['data'][i][17])
                 i+=1
             p+=1
-   
+    
+    
+    # faccio un check sulle date 
+    curr.close()
+    curr = conn.cursor()
+    query_select='''select max(data_ora_conferimento)
+    from idea.conferimenti_horus ch'''
+    try:
+        curr.execute(query_select)
+        max_date=curr.fetchall()
+    except Exception as e:
+        logging.error(e)
+    
+    for dd in max_date:
+        max_data=dd[0] 
+        
+    
+    if (datetime.datetime.now() - max_data) > datetime.timedelta(hours=24):
+        logger.warning("interval = {0}".format(datetime.datetime.now() - max_data))
+        receiver_email='roberto.marzocchi@amiu.genova.it'
+        mail_cc='assterritorio@amiu.genova.it'
+        
+        
+        # Create a multipart message and set headers
+        message = MIMEMultipart()
+        message["From"] = 'no_reply@amiu.genova.it'
+        # PER TEST (tolgo l'invio ai capi zona e lo metto solo agli indirizzi in CC che siamo noi)
+        message["To"] = indirizzo_mail_idea
+        message["Cc"] = mail_cc
+        ####################################################
+        message["Subject"] = 'WARNING - Ultimo conferimento registrato > 24 ore'
+        message["Bcc"] = mail_cc  # Recommended for mass emails
+        message.preamble = "Ultimo conferimenti > 24 ore"
+
+        body='''L'ultimo conferimento scaricato tramite le API Id&A
+        risale al <b>{0}</b>.
+        <br><br>Verificare la correttezza dei dati
+        {1}
+        <img src="cid:image1" alt="Logo" width=197>
+        <br>'''.format(max_data, footer_mail_idea)
+            
+                            
+        # Add body to email
+        message.attach(MIMEText(body, "html"))
+
+        
+        #aggiungo logo 
+        logoname='{}/img/logo_amiu.jpg'.format(parentdir)
+        immagine(message,logoname)
+        
+        #text = message.as_string()
+
+        logger.info("Richiamo la funzione per inviare mail")
+        invio=invio_messaggio(message)
+        logger.info(invio)
+        if invio==200:
+            logger.info('Messaggio inviato')
+
+        else:
+            logger.error('Problema invio mail. Error:{}'.format(invio))
+
+    
     logger.info("Chiudo definitivamente la connesione al DB")
     curr.close()
     conn.close()
-    
+
+    # check se c_handller contiene almeno una riga 
+    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)    
     
     #while i
     

@@ -304,8 +304,8 @@ def main(argv):
     w.write(0, 7, 'LETTERA_CIVICO')
     w.write(0, 8, 'COLORE') 
     w.write(0, 9, 'SCALA') 
-    w.write(0, 10, 'PIANO') 
-    w.write(0, 11, 'INTERNO')
+    w.write(0, 10, 'INTERNO') 
+    w.write(0, 11, 'LETTERA_INTERNO')
     w.write(0, 12, 'CAP') 
     w.write(0, 13, 'UNITA_URBANISTICA') 
     w.write(0, 14, 'QUARTIERE') 
@@ -324,7 +324,7 @@ def main(argv):
 
     cur = con.cursor()
     query=''' SELECT ID_UTENTE, PROGR_UTENZA, COGNOME, NOME, COD_VIA, DESCR_VIA,
-        CIVICO, COLORE, SCALA, PIANO, INTERNO, CAP, 
+        CIVICO, LETTERA_CIVICO, COLORE, SCALA, INTERNO, LETTERA_INTERNO, CAP, 
         UNITA_URBANISTICA, QUARTIERE, CIRCOSCRIZIONE, ZONA, ABITAZIONE_DI_RESIDENZA, NUM_OCCUPANTI, DESCR_CATEGORIA, DESCR_UTILIZZO, COD_INTERNO
         FROM STRADE.UTENZE_TIA_DOMESTICHE
         WHERE COD_CIVICO in {}

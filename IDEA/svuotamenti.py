@@ -36,6 +36,8 @@ sys.path.append('../')
 from credenziali import *
 from recupera_token import *
 
+from footer_mail_idea import *
+
 #import requests
 import datetime
 
@@ -148,6 +150,7 @@ def main():
     
     
     query_select='''select max(id_idea) from idea.svuotamenti ch'''
+    
     try:
         curr.execute(query_select)
         max_id0=curr.fetchall()
@@ -168,12 +171,36 @@ def main():
     #logger.debug("From date:{}".format(giorno))
     logger.info('from_id >= {}'.format(max_id))
     
+    
+    
+    
+    query_select='''select 
+        case 
+            when max(modificato) is null then '2023-01-01'
+            else max(modificato)
+        end
+        from idea.svuotamenti s '''
+        
+    try:
+        curr.execute(query_select)
+        max_date0=curr.fetchall()
+    except Exception as e:
+        logging.error(e)
+
+
+    
+    
+    k=0       
+    for ii in max_date0:
+        max_date=ii[0]  
+        
     #exit()
     
     while check<1:
         logger.info('Page index {}'.format(p))
         #response = requests.get(api_url, params={'date_from': giorno, 'page_size': 1000, 'page_index': p}, headers={'Authorization': 'Token {}'.format(token1)})
-        response = requests.get(api_url, params={'id_from': max_id, 'page_size': 1000, 'page_index': p}, headers={'Authorization': 'Token {}'.format(token1)})
+        #response = requests.get(api_url, params={'id_from': max_id, 'page_size': 1000, 'page_index': p}, headers={'Authorization': 'Token {}'.format(token1)})
+        response = requests.get(api_url, params={'modified_from': max_date, 'page_size': 1000, 'page_index': p}, headers={'Authorization': 'Token {}'.format(token1)})
         #response.json()
         logger.debug(response.status_code)
         try:      
@@ -224,6 +251,8 @@ def main():
                     id_percorso=letture['data'][i][15]
                     cod_percorso=letture['data'][i][16]
                     desc_percorso=letture['data'][i][17]
+                    sportello=letture['data'][i][18]
+                    modified=letture['data'][i][19]
                     query_select='''SELECT * FROM idea.svuotamenti WHERE id_idea = %s;'''
                     try:
                         curr.execute(query_select, (id_idea,))
@@ -244,11 +273,11 @@ def main():
                         query_update='''UPDATE idea.svuotamenti
                         SET id_piazzola=%s, riempimento=%s, peso_netto=%s, peso_lordo=%s, peso_tara=%s,
                         targa_contenitore=%s, data_ora_svuotamento=%s, id_percorso_selezionato=%s, codice_percorso_selezionato= %s ,
-                        descrizione_percorso_selezionato = %s
+                        descrizione_percorso_selezionato = %s, sportello=%s, modificato=%s
                         WHERE id_idea=%s;'''
                         try:
                             #curr.execute(query_update, (id_pdr, riempimento, p_netto, p_lordo, p_tara, lon, lat, cod_cont, data_ora_svuotamento, id_idea))
-                            curr.execute(query_update, (id_pdr, riempimento, p_netto, p_lordo, p_tara, cod_cont, data_ora_svuotamento, id_percorso, cod_percorso, desc_percorso, id_idea))
+                            curr.execute(query_update, (id_pdr, riempimento, p_netto, p_lordo, p_tara, cod_cont, data_ora_svuotamento, id_percorso, cod_percorso, desc_percorso, sportello, modified, id_idea))
                         except Exception as e:
                             logger.error(query_update)
                             logger.error(e)
@@ -260,14 +289,15 @@ def main():
                         """
                         query_insert='''INSERT INTO idea.svuotamenti
                         (id_idea, id_piazzola, targa_contenitore, riempimento, data_ora_svuotamento, peso_netto, peso_lordo, peso_tara, 
-                        id_percorso_selezionato, codice_percorso_selezionato, descrizione_percorso_selezionato)
-                        VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);'''
+                        id_percorso_selezionato, codice_percorso_selezionato, descrizione_percorso_selezionato, 
+                        sportello, modificato)
+                        VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);'''
                         #logger.debug(query_insert)
                         try:
                             #curr.execute(query_insert, (id_idea, id_pdr, cod_cont, riempimento, data_ora_svuotamento, p_netto, p_lordo, p_tara, lon, lat))
-                            curr.execute(query_insert, (id_idea, id_pdr, cod_cont, riempimento, data_ora_svuotamento, p_netto, p_lordo, p_tara, id_percorso, cod_percorso, desc_percorso))
+                            curr.execute(query_insert, (id_idea, id_pdr, cod_cont, riempimento, data_ora_svuotamento, p_netto, p_lordo, p_tara, id_percorso, cod_percorso, desc_percorso, sportello, modified))
                         except Exception as e:
-                            logger.error(query_insert, id_idea, id_pdr, cod_cont, riempimento, data_ora_svuotamento, p_netto, p_lordo, p_tara, id_percorso, cod_percorso, desc_percorso)
+                            logger.error(query_insert, id_idea, id_pdr, cod_cont, riempimento, data_ora_svuotamento, p_netto, p_lordo, p_tara, id_percorso, cod_percorso, desc_percorso, sportello, modified)
                             logger.error(e)
                     ########################################################################################
                     # da testare sempre prima senza fare i commit per verificare che sia tutto OK
@@ -277,6 +307,67 @@ def main():
                 i+=1
             p+=1
    
+
+
+    # faccio un check sulle date 
+    curr.close()
+    curr = conn.cursor()
+    query_select='''select max(data_ora_svuotamento)
+    from idea.svuotamenti ch'''
+    try:
+        curr.execute(query_select)
+        max_date=curr.fetchall()
+    except Exception as e:
+        logging.error(e)
+    
+    for dd in max_date:
+        max_data=dd[0] 
+        
+    
+    if (datetime.datetime.now() - max_data) > datetime.timedelta(hours=24):
+        logger.warning("interval = {0}".format(datetime.datetime.now() - max_data))
+        receiver_email='roberto.marzocchi@amiu.genova.it'
+        mail_cc='assterritorio@amiu.genova.it'
+        
+        
+        # Create a multipart message and set headers
+        message = MIMEMultipart()
+        message["From"] = 'no_reply@amiu.genova.it'
+        message["To"] = receiver_email
+        message["To"] = mail_cc
+        ####################################################
+        message["Subject"] = 'WARNING - Ultimo conferimento registrato > 24 ore'
+        message["Bcc"] = mail_cc  # Recommended for mass emails
+        message.preamble = "Ultimo svuotamento > 24 ore"
+
+        body='''L'ultimo svuotamento scaricato tramite le API Id&A
+        risale al <b>{0}</b>.
+        <br><br>Verificare la correttezza dei dati
+        {1}
+        <img src="cid:image1" alt="Logo" width=197>
+        <br>'''.format(max_data, footer_mail_idea)
+            
+                            
+        # Add body to email
+        message.attach(MIMEText(body, "html"))
+
+        
+        #aggiungo logo 
+        logoname='{}/img/logo_amiu.jpg'.format(parentdir)
+        immagine(message,logoname)
+        
+        #text = message.as_string()
+
+        logger.info("Richiamo la funzione per inviare mail")
+        invio=invio_messaggio(message)
+        logger.info(invio)
+        if invio==200:
+            logger.info('Messaggio inviato')
+
+        else:
+            logger.error('Problema invio mail. Error:{}'.format(invio))
+
+
     logger.info("Chiudo definitivamente la connesione al DB")
     curr.close()
     conn.close()

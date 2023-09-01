@@ -108,18 +108,18 @@ def codice_mensile(codice_binario1, codice_binario2):
         Dati i due codici binari restituisce il codice mensile
     '''
     cod=''
-    i=0
-    while i<7:
-        if codice_binario1[i:(i+1)]=='1':
-            s=0
-            while s<4:
-                if codice_binario2[s:(s+1)]=='1':
+    s=0
+    while s<4:
+        if codice_binario2[s:(s+1)]=='1':
+            i=0
+            while i<7:
+                if codice_binario1[i:(i+1)]=='1':
                     if cod=='':
                         cod='{}{}'.format(s+1,i+1)
                     else:
                         cod='{}_{}{}'.format(cod,s+1,i+1)
-                s+=1 
-        i+=1
+                i+=1 
+        s+=1
     
     return cod
 

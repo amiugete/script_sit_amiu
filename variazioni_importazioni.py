@@ -5,7 +5,7 @@
 # Roberto Marzocchi
 
 '''
-Lo script verifica le variazioni e manda CSV a assterritorio@amiu.genova.it giornalmemte con la sintesi delle stesse 
+Lo script verifica le variazioni e manda excel a assterritorio@amiu.genova.it giornalmemte con la sintesi delle stesse 
 '''
 
 import os, sys, re  # ,shutil,glob
@@ -49,6 +49,10 @@ from crea_dizionario_da_query import *
 
 
 import csv
+
+
+# per mandare file a EKOVISION
+import pysftp
 
 #LOG
 
@@ -272,7 +276,7 @@ def main():
                     
                     
     
-    
+    check_error=0
     '''******************************************************************************************************
     NON SONO COMPRESI I PERCORSI STAGIONALI per cui vanno re-importate le variazioni in fase di attivazione 
     ********************************************************************************************************'''
@@ -471,9 +475,12 @@ def main():
                 logger.error(query_o3)
                 logger.error(e)      
             """
-                
-            controllo_percorso=int(ret[2])
-            logger.debug(ret)
+            try:    
+                controllo_percorso=int(ret[2])
+            except Exception as e:
+                #logger.error(query_o3)
+                logger.error(e)
+                logger.debug(ret)
             
             cur.close()
                 
@@ -557,7 +564,7 @@ def main():
             
             
             
-            check_error=0
+            
             if tipo_percorso=='R':
                 """
                 devo inserire:
@@ -841,7 +848,11 @@ def main():
                 sel_uo='''SELECT VTP.CRONOLOGIA NUM_SEQ,VTP.ID_VIA, NVL(VTP.NUM_CIVICO,' ') as  NUMERO_CIVICO,
                 NVL(VTP.RIFERIMENTO, ' ') as RIFERIMENTO,
                 VTP.FREQELEM,VTP.TIPO_ELEMENTO, TO_NUMBER(VTP.ID_ELEMENTO) AS ID_ELEM_INT,
-                 NVL(VTP.NOTA_VIA, ' ') as NOTA_VIA
+                CASE 
+	                 WHEN VTP.NOTA_VIA IS NULL AND VTP.RIFERIMENTO IS NOT NULL THEN VTP.RIFERIMENTO
+                 	 ELSE NVL(VTP.NOTA_VIA, ' ')
+                 END
+                  as NOTA_VIA
                 FROM V_TAPPE_ELEMENTI_PERCORSI VTP
                 inner join (select MAX(CPVT.DATA_PREVISTA) data_prevista, CPVT.ID_PERCORSO
                  from CONS_PERCORSI_VIE_TAPPE CPVT
@@ -1023,10 +1034,87 @@ def main():
     logger.info('Risposta REP_CREADATEPERCORSI={}'.format(ret_func))
     if ret_func!=0:
         logger.error('La funzione REP_CREADATEPERCORSI non ha girato correttamente')
-        nota_f_mail='<br><br><b>ATTENZIONE</b> Ci sono stati problemi con la funzione REP_CREADATEPERCORSI'
+        nota_f_mail='''<font color="red"><br><br>
+        <b>ATTENZIONE</b> Ci sono stati problemi con la funzione REP_CREADATEPERCORSI di aggiornamento della tabella PR_VALIDITA_PERCORSI
+        </font>'''
     elif ret_func==0: 
-        nota_f_mail='<br><br>Al termine delle importazioni ha anche girato correttamente la funzione REP_CREADATEPERCORSI'
+        nota_f_mail='<br><br>Al termine delle importazioni ha anche girato correttamente la funzione REP_CREADATEPERCORSI di aggiornamento della tabella PR_VALIDITA_PERCORSI'
     cur0.close()
+    
+    
+    
+    '''INVIO FILE VARIAZIONI PER EKOVISION'''
+    curr.close()
+    logger.info('Ora invio le variazioni ad EKOVISION')
+    check_ekovision=0
+    logger.debug(cod_percorso)
+    cod_percorso_ok=tuple(cod_percorso)
+    logger.debug(cod_percorso_ok)
+    curr = conn.cursor()  
+    query_variazioni_ekovision='''SELECT codice_modello_servizio, ordine, objecy_type, 
+codice, quantita, lato_servizio, percent_trattamento,
+frequenza, numero_passaggi, nota, codice_qualita, codice_tipo_servizio,
+data_inizio, data_fine
+FROM anagrafe_percorsi.v_percorsi_elementi_tratti
+where codice_modello_servizio = ANY (%s)'''
+    
+    #test=curr.mogrify(query_variazioni_ekovision,(cod_percorso_ok,))
+    #print(test)
+    #exit()
+    try:
+        curr.execute(query_variazioni_ekovision,(cod_percorso,))
+        dettaglio_percorsi_ekovision=curr.fetchall()
+    except Exception as e:
+        logger.error(e)
+        check_ekovision=101 # problema query
+    
+    try:    
+        nome_csv_ekovision="variazioni_itinerari_{0}.csv".format(giorno_file)
+        file_variazioni_ekovision="{0}/variazioni/{1}".format(path,nome_csv_ekovision)
+        fp = open(file_variazioni_ekovision, 'w', encoding='utf-8')
+        #myFile = csv.writer(fp, delimiter=';', quotechar='"', quoting=csv.QUOTE_NONNUMERIC)
+        myFile = csv.writer(fp, delimiter=';')
+        fieldnames = ['codice_modello_servizio', 'ordine', 'objecy_type', 
+                      'codice','quantita', 'lato_servizio', 'percent_trattamento',
+                      'frequenza', 'numero_passaggi', 'nota', 'codice_qualita', 'codice_tipo_servizio',
+                      'data_inizio', 'data_fine']
+        myFile.writerow(fieldnames)
+        myFile.writerows(dettaglio_percorsi_ekovision)
+        fp.close()
+    except Exception as e:
+        logger.error(e)
+        check_ekovision=102 # problema file variazioni
+        
+        
+        
+    logger.info('Invio file con le variazioni via SFTP')
+    try: 
+        cnopts = pysftp.CnOpts()
+        cnopts.hostkeys = None
+        srv = pysftp.Connection(host=url_ev_sftp, username=user_ev_sftp,
+    password=pwd_ev_sftp, port= port_ev_sftp,  cnopts=cnopts,
+    log="/tmp/pysftp.log")
+
+        with srv.cd('percorsi/in/'): #chdir to public
+            srv.put(file_variazioni_ekovision) #upload file to nodejs/
+
+        # Closes the connection
+        srv.close()
+    except Exception as e:
+        logger.error(e)
+        check_ekovision=103 # problema invio SFTP
+    
+    
+    if check_ekovision!=0:
+        nota_e_mail='''<font color="red">
+        <br><br><b>ATTENZIONE</b> Problema invio file delle variazioni ad EKOVISION.
+        <br>Codice errore {0}
+        </font>'''.format(check_ekovision)
+    elif check_ekovision==0: 
+        nota_e_mail='''<font color="green">
+        <br><br>Il file delle variazioni è stato inviato correttamente ad EKOVISION</font>'''
+    curr.close()
+    
     
        
     if len(cod_percorso)>0:
@@ -1086,17 +1174,31 @@ def main():
         gg_text='''dell'ultimo giorno (ieri)'''
     else:
         gg_text='''degli ultimi {} giorni'''.format(num)
-    body = """Report giornaliero delle variazioni degli ultimi {0} giorni.<br><br>
+        
+        
+    riepilogo_controlli='''
+    <br><br><b>Riepilogo check</b>:
+    <br> check_error= {0}
+    <br> check_ekovision= {1}
+    '''.format(check_error, check_ekovision)
+       
+    body = """Report giornaliero delle variazioni {0}.<br><br>
     
-    <b>IN TEST </b> - I nuovi percorsi sono già stati importati. Verificare la corretta importazione. {3}<br><br><br> 
+    I nuovi percorsi sono già stati importati. Non dovrebbe servire nessuna verifica.
+    {3}
+    {4}
+    <br>
     
+    <b>Riepilogo controlli  - TEST </b>
+    {5}
+    <br><br><br>
     L'applicativo che gestisce le importazioni su UO in maniera automatica è stato realizzato dal gruppo Gestione Applicativi del SIGT.<br> 
     Segnalare tempestivamente eventuali malfunzionamenti inoltrando la presente mail a {1}<br><br>
     Giorno {2}<br><br>
     AMIU Assistenza Territorio<br>
      <img src="cid:image1" alt="Logo" width=197>
     <br>
-    """.format(gg_text, user_mail, oggi1, nota_f_mail)
+    """.format(gg_text, user_mail, oggi1, nota_f_mail, nota_e_mail, riepilogo_controlli)
     ##sender_email = user_mail
     receiver_email='assterritorio@amiu.genova.it'
     debug_email='roberto.marzocchi@amiu.genova.it'

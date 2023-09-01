@@ -153,6 +153,7 @@ Per info su accesso al server amiugis visualizza la WIKI: http://amiuintranet.am
         message = MIMEMultipart()
         message["From"] = sender_email
         message["To"] = receiver_email
+        message["CC"] = 'roberto.marzocchi@amiu.genova.it'
         message["Subject"] = subject
         #message["Bcc"] = debug_email  # Recommended for mass emails
         message.preamble = subject
@@ -167,5 +168,7 @@ Per info su accesso al server amiugis visualizza la WIKI: http://amiuintranet.am
 
         invio_messaggio(message)
         logger_name.info('Messaggio inviato')
+        return 200
     else: 
         logger_name.info('Nessun errore, quindi nessun messaggio inviato')
+        return 0
