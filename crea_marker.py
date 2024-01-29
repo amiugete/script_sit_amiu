@@ -193,7 +193,7 @@ from elem.tipi_rifiuto where tipo_rifiuto > 1 order by tipo_rifiuto'''
         
     k=0
     while k< len(files):
-        update_foto='''UPDATE elem.piazzole SET foto = 1 WHERE id_piazzola = %s'''
+        update_foto='''UPDATE elem.piazzole SET foto = 1 WHERE id_piazzola = %s and foto = 0'''
         try:
             curr.execute(update_foto, (files[k].split('.')[0],))
         except Exception as e:

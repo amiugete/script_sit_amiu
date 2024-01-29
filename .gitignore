@@ -2,7 +2,15 @@ credenziali.py
 log/*.log
 variazioni/*.csv
 variazioni/*.xlsx
-preconsuntivazioni/*.csv
+
+
+EKOVISION/preconsuntivazioni/*.csv
+EKOVISION/consuntivazioni/*.csv
+EKOVISION/timbrature/*.csv
+EKOVISION/assenze/*.csv
+EKOVISION/pesi/*.csv
+EKOVISION/log/*.log
+
 ecopunti/*.xlsx
 utenze/*.xlsx
 utenze/input/*.xlsx
@@ -21,7 +29,7 @@ civici/*.geojson
 img_sit/*
 !img_sit/README.md
 
-IDEA/*.xlsx
+IDEA/output_file/*.xlsx
 IDEA/*.log
 
 

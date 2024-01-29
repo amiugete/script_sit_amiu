@@ -144,8 +144,10 @@ def error_log_mail(error_log_file, receiver_email, script_name, logger_name):
             found = True
     if found == True: 
         subject = 'LOG - {}'.format(script_name)
-        body = '''In allegato il file con errori e/o warning originato con lo script {}<br><br>
-Per info su accesso al server amiugis visualizza la WIKI: http://amiuintranet.amiu.genova.it/content/accesso-server-amiugis'''.format(script_name)
+        body = '''In allegato il file con errori e/o warning originato con lo script {0}<br><br>
+        Il file completo di log è disponibile all'indirizzo {1} del server <b>amiugis</b><br><br>
+Per info su accesso al server <b>amiugis</b> visualizza la WIKI: 
+https://amiuintranet.amiu.genova.it/content/accesso-server-amiugis'''.format(script_name, error_log_file.replace('error_',''))
         #sender_email = user_mail
 
 
@@ -171,4 +173,61 @@ Per info su accesso al server amiugis visualizza la WIKI: http://amiuintranet.am
         return 200
     else: 
         logger_name.info('Nessun errore, quindi nessun messaggio inviato')
+        return 0
+    
+   
+   
+   
+   
+   
+   
+    
+def warning_log_mail(warning_log_file, receiver_email, script_name, logger_name):
+    '''
+    Funzione presente nello script invio_messaggio.py per inviare l'eventuale LOG con WARNING via mail
+    Input:
+        - error_log_file
+        - receiver_email
+        - script_name
+        - logger_name
+    '''
+
+    logfile = open(warning_log_file, 'r')
+    loglist = logfile.readlines()
+    logfile.close()
+    found = False
+    for line in loglist:
+        if line!='':
+            found = True
+    if found == True: 
+        subject = 'LOG - {}'.format(script_name)
+        body = '''In allegato il file WARNING originato con lo script {0}<br><br>
+        Il file completo di log è disponibile all'indirizzo {1} del server <b>amiugis</b><br><br>
+Per info su accesso al server <b>amiugis</b> visualizza la WIKI: 
+https://amiuintranet.amiu.genova.it/content/accesso-server-amiugis'''.format(script_name, warning_log_file.replace('error_',''))
+        #sender_email = user_mail
+
+
+        # Create a multipart message and set headers
+        message = MIMEMultipart()
+        message["From"] = sender_email
+        message["To"] = receiver_email
+        message["CC"] = 'roberto.marzocchi@amiu.genova.it'
+        message["Subject"] = subject
+        #message["Bcc"] = debug_email  # Recommended for mass emails
+        message.preamble = subject
+
+                        
+        # Add body to email
+        message.attach(MIMEText(body, "html"))
+
+        # aggiungi allegato
+        allegato(message, warning_log_file,'error.log')
+
+
+        invio_messaggio(message)
+        logger_name.info('Messaggio inviato')
+        return 200
+    else: 
+        logger_name.info('Nessun warning, quindi nessun messaggio inviato')
         return 0

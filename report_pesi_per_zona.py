@@ -272,7 +272,7 @@ and to_char(sysdate - (:gg-7), 'yyyymmdd')||'03:59:59' '''
 
     # PER test
     
-    mail_cc='assterritorio@amiu.genova.it, Riccardo.Piana@amiu.genova.it'
+    mail_cc='assterritorio@amiu.genova.it, Riccardo.Piana@amiu.genova.it, Fabio.Fruscione@amiu.genova.it'
     
     #mail_cc='roberto.marzocchi@amiu.genova.it'
 

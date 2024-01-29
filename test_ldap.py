@@ -9,7 +9,7 @@
 import sys,ldap,ldap.asyncsearch
 from credenziali import *
 
-user1='Galleno'
+user1='volpara1'
 try:
 
 
@@ -33,7 +33,7 @@ try:
     
     connect.simple_bind_s('{}@amiu.genova.it'.format(ldap_login), ldap_pwd)
     criteria = "(&(objectClass=user)(sAMAccountName={0}))".format(user1)
-    attributes = ['sAMAccountName', 'mail']
+    attributes = ['sAMAccountName', 'mail', 'uid', 'userprincipalname']
     result = connect.search_s('DC=amiu,DC=genova,DC=it',
                         ldap.SCOPE_SUBTREE, criteria, attributes)
     print(result)
