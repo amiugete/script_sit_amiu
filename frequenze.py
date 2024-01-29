@@ -330,11 +330,20 @@ where cod_frequenza not in (select cod_frequenza from etl.frequenze_ok_1)'''
         frequenze_nuove=curr0.fetchall()
     except Exception as e:
         logging.error(e)
+    
     curr0.close()
 
     check=0
     for fff in frequenze_nuove:
-        body='{} cod_frequenza (SIT)= {} freq_binaria (UO) = {}\n'.format(body, fff[0], fff[4])
+        body = """Aggiungere ricorrenza a EKOVISION:\n
+                1) Servizi --> Anagrafiche --> Configurazione ricorrenze\n
+                2) Aggiungere la ricorrenza usando come codice esterno quello di SIT ({1}) e poi specificare nei dettagli i giorni 
+                che creano quella frequenza. Va fatta manualmente per ogni giorno che compone quella frequenza 
+                (o ricorrenza come la chiama EKOVISION)\n\n
+                Modifiche alla UO (fino a quando necessarie - ref. Calvello e/o Marzocchi):\n
+                {0} cod_frequenza (SIT)= {1} freq_binaria (UO) = {2}\n
+                va modificato il file sul server webamiu\n
+                D$\\Inetpub\\wwwroot\\Uoweb\\Consuntivazione09\\App_Code\\Frequenze.cs \n""".format(body, fff[0], fff[4])
         check=1
 
 

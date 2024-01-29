@@ -156,7 +156,7 @@ def cfr_tappe(tappe_sit, tappe_uo, logger):
             if (tappe_uo[k][7] is None and tappe_sit[k][7] is None) or ( (not tappe_uo[k][7] or re.search("^\s*$", tappe_uo[k][7])) and (not tappe_sit[k][7] or re.search("^\s*$", tappe_sit[k][7])) ):
                 check1=0
             else:
-                if tappe_sit[k][7]!=tappe_uo[k][7]:
+                if tappe_sit[k][7]!=tappe_uo[k][7] and tappe_uo[k][6] is None: # questo controllo va fatto solo nel caso di spazzamenti (ripasso is null)
                     check=1
                     logger.warning('SIT =  {}, UO = {}'.format(tappe_sit[k][7], tappe_uo[k][7]))
             
@@ -276,10 +276,28 @@ def main():
                     
                     
     
-    check_error=0
+    #check_error=0 # va messo sotto 
+    
+    
     '''******************************************************************************************************
     NON SONO COMPRESI I PERCORSI STAGIONALI per cui vanno re-importate le variazioni in fase di attivazione 
     ********************************************************************************************************'''
+    
+    '''IMPORTAZIONE MASSIVA TUTTI PERCORSI APP SPAZZAMENTOselect distinct p.cod_percorso , p.descrizione, s.descrizione as servizio, u.descrizione  as ut,
+        p.id_percorso
+        from elem.percorsi p 
+        inner join elem.percorsi_ut pu 
+        on pu.cod_percorso =p.cod_percorso 
+        inner join elem.servizi s 
+        on s.id_servizio =p.id_servizio
+        inner join topo.ut u 
+        on u.id_ut = pu.id_ut
+       where s.id_servizio in (select distinct id_servizio_sit 
+        from anagrafe_percorsi.anagrafe_tipo at2 
+        where gestito_app_spazzamento = 'S' and id_servizio_sit is not null)
+        and p.id_categoria_uso in (3,6)
+        UNION'''
+    
     query='''select distinct p.cod_percorso , p.descrizione, s.descrizione as servizio, u.descrizione  as ut,
         p.id_percorso
         from util.sys_history h
@@ -363,6 +381,7 @@ def main():
 
            
     for vv in lista_variazioni:
+        check_error=0
         logger.debug(vv[0])
         cod_percorso.append(vv[0])
         descrizione.append(vv[1])
@@ -389,6 +408,34 @@ def main():
 
         curr1.close()
         conn.commit()
+        
+        
+        
+        # update delle NOTE elementi_aste_percorsi per i lavaggi con Botticella
+        curr1 = conn.cursor()
+        update_note='''
+            update elem.aste_percorso ap0
+            set nota = (select string_agg(e.riferimento, ',')
+                from elem.aste_percorso ap  
+                join elem.elementi_aste_percorso eap on eap.id_asta_percorso = ap.id_asta_percorso 
+                join elem.elementi e on eap.id_elemento = e.id_elemento 
+                where ap.id_asta_percorso = ap0.id_asta_percorso and ap.num_seq= ap0.num_seq
+                group by ap.id_asta_percorso, ap.nota
+            )
+            where id_percorso in 
+                (select id_percorso from elem.percorsi p where id_servizio =33 and id_categoria_uso in (3,6))
+        '''
+        
+        try:
+            curr1.execute(update_note)
+            #lista_variazioni=curr.fetchall()
+        except Exception as e:
+            logger.error(update_note)
+            logger.error(e)                                            
+
+        curr1.close()
+        conn.commit()
+        
 
 
 
@@ -578,13 +625,23 @@ def main():
             
                 # PRIMA VERIFICO SE CI SIANO DIFFERENZE CHE GIUSTIFICHINO IMPORTAZIONE
                 curr1 = conn.cursor()
-                sel_sit='''select vt.num_seq, id_via::int, coalesce(numero_civico,' ') as numero_civico , 
+                """"sel_sit='''select vt.num_seq, id_via::int, coalesce(numero_civico,' ') as numero_civico , 
                 coalesce(riferimento,' ') as riferimento, fo.freq_binaria as frequenza,vt.tipo_elemento, vt.id_elemento::int,
                 coalesce(vt.nota_asta, ' ') as nota_asta
                 from etl.v_tappe vt 
                 join etl.frequenze_ok fo on fo.cod_frequenza = vt.frequenza_elemento::int 
                 where id_percorso = %s  
                 order by num_seq , numero_civico, riferimento, id_elemento '''
+                """
+                
+                sel_sit='''select vt.num_seq, id_via::int, coalesce(numero_civico,' ') as numero_civico , 
+                coalesce(riferimento,' ') as riferimento, fo.freq_binaria as frequenza,vt.tipo_elemento, vt.id_elemento::int,
+                coalesce(riferimento, ' ') as nota_asta
+                from etl.v_tappe vt 
+                join etl.frequenze_ok fo on fo.cod_frequenza = vt.frequenza_elemento::int 
+                where id_percorso = %s  
+                order by num_seq , numero_civico, riferimento, id_elemento '''
+                
                 try:
                     curr1.execute(sel_sit, (vv[4],))
                     #logger.debug(query_sit1, max_id_macro_tappa, vv[4] )
@@ -657,13 +714,14 @@ def main():
                             id_piazzola, id_asta,  lung_trattamento, 
                             vt.cod_percorso, vt.id_via, vt.num_seq as cronologia, 
                             now() as dta_import, (now()::date)::timestamp as data_prevista, numero_civico, tipo_elemento
+                            ,nota_asta 
                             from etl.v_tappe vt 
                             join etl.frequenze_ok fo on fo.cod_frequenza = vt.frequenza_elemento::int 
                             where id_percorso = %s 
                             group by vt.num_seq, riferimento,
                             id_piazzola, id_asta, fo.freq_binaria, 
                             ripasso, lung_trattamento, 
-                            vt.cod_percorso, vt.id_via, vt.num_seq, vt.numero_civico, tipo_elemento
+                            vt.cod_percorso, vt.id_via, vt.num_seq, vt.numero_civico, tipo_elemento, nota_asta
                             order by num_seq, case when numero_civico='' then null else numero_civico end nulls last, riferimento  '''
                     
                     
@@ -686,12 +744,12 @@ def main():
                         
                         
                         query_insert0='''INSERT INTO UNIOPE.CONS_MACRO_TAPPA
-                        (ID_MACRO_TAPPA, RIFERIMENTO, QTA_TOT_SPAZZAMENTO, FREQUENZA, RIPASSO, ID_PIAZZOLA, ID_ASTA, LUNG_TRATTAMENTO)
-                        VALUES(:t1, :t2, :t3, :t4, :t5, :t6, :t7, :t8)'''
+                        (ID_MACRO_TAPPA, RIFERIMENTO, QTA_TOT_SPAZZAMENTO, FREQUENZA, RIPASSO, ID_PIAZZOLA, ID_ASTA, LUNG_TRATTAMENTO, NOTA_VIA)
+                        VALUES(:t1, :t2, :t3, :t4, :t5, :t6, :t7, :t8, :t9)'''
         
         
                         try:
-                            cur.execute(query_insert0, (tappa[0], tappa[1], tappa[2], tappa[3], tappa[4], tappa[5], tappa[6], tappa[7]))
+                            cur.execute(query_insert0, (tappa[0], tappa[1], tappa[2], tappa[3], tappa[4], tappa[5], tappa[6], tappa[7], tappa[15]))
                             #macro_tappe.append(tappa[0])
                         except Exception as e:
                             check_error=1
@@ -734,6 +792,11 @@ def main():
                             (SELECT max(ID_MICRO_TAPPA)+1 FROM CONS_MICRO_TAPPA),
                             :t1, :t2, :t3, :t4, :t5, :t6, :t7)'''
 
+                        query_insert3_nopiazzola='''INSERT INTO UNIOPE.CONS_MICRO_TAPPA
+                        (ID_MICRO_TAPPA, ID_MACRO_TAPPA, FREQUENZA, RIPASSO, NUM_CIVICO, POSIZIONE, ID_ELEMENTO, ID_PIAZZOLA)
+                        VALUES(
+                            (SELECT max(ID_MICRO_TAPPA)+1 FROM CONS_MICRO_TAPPA),
+                            :t1, :t2, :t3, :t4, :t5, :t6, NULL)'''
 
                         
 
@@ -799,16 +862,30 @@ def main():
                                     check_error=1
 
                             # dopo aver inserito gli elementi ora posso inserire le microtappe
-                            try:
-                                cur2.execute(query_insert3, (tappa[0], elementi[0], elementi[1], elementi[2], elementi[3], str(elementi[4]), elementi[5]))
-                                #macro_tappe.append(tappa[2])
-                            except Exception as e:
-                                check_error=1
-                                logger.error(tappa[0])
-                                logger.error('elementi {}'.format(elementi))
-                                logger.error(query_insert3)
-                                logger.error(e)
-                                check_error=1
+                            
+                            if elementi[5] is None:
+                                #query_insert3_nopiazzola
+                                try:
+                                    cur2.execute(query_insert3_nopiazzola, (tappa[0], elementi[0], elementi[1], elementi[2], elementi[3], str(elementi[4])))
+                                    #macro_tappe.append(tappa[2])
+                                except Exception as e:
+                                    check_error=1
+                                    logger.error(tappa[0])
+                                    logger.error('elementi {}'.format(elementi))
+                                    logger.error(query_insert3)
+                                    logger.error(e)
+                                    check_error=1
+                            else:
+                                try:
+                                    cur2.execute(query_insert3, (tappa[0], elementi[0], elementi[1], elementi[2], elementi[3], str(elementi[4]), elementi[5]))
+                                    #macro_tappe.append(tappa[2])
+                                except Exception as e:
+                                    check_error=1
+                                    logger.error(tappa[0])
+                                    logger.error('elementi {}'.format(elementi))
+                                    logger.error(query_insert3)
+                                    logger.error(e)
+                                    check_error=1
                         
                     # chiudo connessione oracle
                     cur.close()
@@ -1051,12 +1128,65 @@ def main():
     cod_percorso_ok=tuple(cod_percorso)
     logger.debug(cod_percorso_ok)
     curr = conn.cursor()  
-    query_variazioni_ekovision='''SELECT codice_modello_servizio, ordine, objecy_type, 
-codice, quantita, lato_servizio, percent_trattamento,
-frequenza, numero_passaggi, nota, codice_qualita, codice_tipo_servizio,
-data_inizio, data_fine
-FROM anagrafe_percorsi.v_percorsi_elementi_tratti
-where codice_modello_servizio = ANY (%s)'''
+    
+    """ SENZA TENERE CONTO  DELLE VECCHIE VERSIONI SIT
+    query_variazioni_ekovision='''SELECT codice_modello_servizio, 
+        case 
+        when data_fine is null then ordine 
+        else 1
+        end
+        ordine, objecy_type, 
+        codice, quantita, lato_servizio, percent_trattamento,
+        frequenza, numero_passaggi, nota, codice_qualita, codice_tipo_servizio,
+        data_inizio, data_fine, ripasso
+        FROM anagrafe_percorsi.v_percorsi_elementi_tratti
+        where codice_modello_servizio = ANY (%s) and (data_inizio!=data_fine  or data_fine is null)
+        order by codice_modello_servizio, data_fine, ordine,  ripasso
+        '''
+    """
+    
+    query_variazioni_ekovision='''select 
+codice_modello_servizio,
+coalesce((select distinct ordine from anagrafe_percorsi.v_percorsi_elementi_tratti 
+where codice_modello_servizio = tab.codice_modello_servizio 
+and codice = tab.codice
+and ripasso = tab.ripasso and data_fine is null ),1)
+as ordine,
+objecy_type, 
+  codice, quantita, lato_servizio, percent_trattamento,
+coalesce((select distinct frequenza from anagrafe_percorsi.v_percorsi_elementi_tratti 
+where codice_modello_servizio = tab.codice_modello_servizio 
+and codice = tab.codice
+and ripasso = tab.ripasso and data_fine is null),0)
+as 
+  frequenza, 
+  numero_passaggi, nota,
+  codice_qualita, codice_tipo_servizio,
+min(data_inizio) as data_inizio, 
+case 
+	when max(data_fine) = '20991231' then null 
+	else max(data_fine)
+end data_fine, ripasso
+from (
+	  SELECT codice_modello_servizio, ordine, objecy_type, 
+  codice, quantita, lato_servizio, percent_trattamento,frequenza,
+  ripasso, numero_passaggi, replace(coalesce(nota,''),'DA PIAZZOLA','') as nota,
+  codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine
+	 FROM anagrafe_percorsi.v_percorsi_elementi_tratti where data_inizio!=coalesce(data_fine, '20991231')
+	 union 
+	   SELECT codice_modello_servizio, ordine, objecy_type, 
+  codice, quantita, lato_servizio, percent_trattamento,frequenza,
+  ripasso, numero_passaggi, replace(coalesce(nota,''),'DA PIAZZOLA','') as nota,
+  codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231')
+	 FROM anagrafe_percorsi.v_percorsi_elementi_tratti_ovs where data_inizio!=coalesce(data_fine, '20991231')
+ ) tab 
+ where codice_modello_servizio = ANY (%s) 
+ group by codice_modello_servizio,  objecy_type, 
+  codice, quantita, lato_servizio, percent_trattamento,
+  ripasso, numero_passaggi, nota,
+  codice_qualita, codice_tipo_servizio
+  order by codice_modello_servizio, data_fine, ordine,  ripasso'''
+    
     
     #test=curr.mogrify(query_variazioni_ekovision,(cod_percorso_ok,))
     #print(test)
@@ -1077,7 +1207,7 @@ where codice_modello_servizio = ANY (%s)'''
         fieldnames = ['codice_modello_servizio', 'ordine', 'objecy_type', 
                       'codice','quantita', 'lato_servizio', 'percent_trattamento',
                       'frequenza', 'numero_passaggi', 'nota', 'codice_qualita', 'codice_tipo_servizio',
-                      'data_inizio', 'data_fine']
+                      'data_inizio', 'data_fine', 'ripasso']
         myFile.writerow(fieldnames)
         myFile.writerows(dettaglio_percorsi_ekovision)
         fp.close()

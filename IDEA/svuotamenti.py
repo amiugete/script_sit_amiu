@@ -336,7 +336,7 @@ def main():
         message["To"] = receiver_email
         message["To"] = mail_cc
         ####################################################
-        message["Subject"] = 'WARNING - Ultimo conferimento registrato > 24 ore'
+        message["Subject"] = 'WARNING - Ultimo svuotamento registrato > 24 ore'
         message["Bcc"] = mail_cc  # Recommended for mass emails
         message.preamble = "Ultimo svuotamento > 24 ore"
 

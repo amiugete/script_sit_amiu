@@ -48,13 +48,13 @@ logging.basicConfig(
 
 #comune='recco'
 #ut=2032
-#quartiere=2031
+#quartiere=2037
 #via_senzanome=200001
 
-comune='uscio'
-ut=2032
-quartiere=2032
-via_senzanome=550001
+comune='sori'
+ut=189
+quartiere=2037
+via_senzanome=650001
 
 
 
@@ -120,14 +120,7 @@ def main():
         geom=aa[5]
         lunghezza=aa[6]
 
-        curr1 = conn.cursor()
-        insert_geom='''INSERT INTO geo.grafostradale
-            (id, geoloc, osm_id)
-            VALUES({0}, '{1}', {2});'''.format(id_asta, geom, osm_id)
-
-        logging.debug(insert_geom)
-        curr1.execute(insert_geom)
-        curr1.close()
+        
 
         curr2 = conn.cursor()
 
@@ -155,6 +148,22 @@ def main():
         curr2.execute(insert_attrib)
         curr2.close()
 
+
+        curr1 = conn.cursor()
+        if osm_id is None:
+            insert_geom='''INSERT INTO geo.grafostradale
+            (id, geoloc)
+            VALUES({0}, '{1}');'''.format(id_asta, geom)
+        else:
+            insert_geom='''INSERT INTO geo.grafostradale
+            (id, geoloc, osm_id)
+            VALUES({0}, '{1}', {2});'''.format(id_asta, geom, osm_id)
+
+        logging.debug(insert_geom)
+        curr1.execute(insert_geom)
+        curr1.close()
+        
+        
         if check_update==1:
             curr3 = conn.cursor()
             update_attrib='''update elem.aste 

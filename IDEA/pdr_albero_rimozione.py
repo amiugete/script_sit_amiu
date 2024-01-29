@@ -45,6 +45,7 @@ from recupera_token import *
 #import requests
 import datetime
 
+
 import logging
 
 filename = inspect.getframeinfo(inspect.currentframe()).filename
@@ -81,8 +82,8 @@ logger = logging.getLogger()
 
 # Create handlers
 c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-#f_handler = logging.StreamHandler()
-f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+f_handler = logging.StreamHandler()
+#f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.ERROR)
@@ -188,7 +189,7 @@ def main():
     #exit()
     p=1
     check=0
-    
+    check_pdr_intero=0
     
     
     nuovi_id=[]
@@ -203,7 +204,7 @@ def main():
     while check<1:
         logger.info('Page index {}'.format(p))
         # se volessi usare un singolo id_pdr per debug (ricordarsi di modificare anche il logger)
-        #response = requests.get(api_url, params={'id_pdr':'23015', 'page_size': 100, 'page_index': p}, headers={'Authorization': 'Token {}'.format(token1)})
+        #response = requests.get(api_url, params={'id_pdr':'24667', 'page_size': 100, 'page_index': p}, headers={'Authorization': 'Token {}'.format(token1)})
         response = requests.get(api_url, params={'page_size': 100, 'page_index': p}, headers={'Authorization': 'Token {}'.format(token1)})
         #response.json()
         logger.debug(response.status_code)
@@ -259,113 +260,129 @@ def main():
                     if float(letture['data'][i][0]['lat'])>0:
                         #id_isola
                         id_pdr=letture['data'][i][0]['id_pdr']
+                        try: 
+                            id_pdr_int=int(id_pdr)
+                        except Exception as e2:
+                            check_pdr_intero=1
+                            logger.warning("{0}, {1} - Non c'è ancora un codice AMIU".format(e2, id_pdr)) 
                         #id_comune=letture['data'][i][0]['id_comune']
                         descrizione_pdr=letture['data'][i][0]['desc_pdr']
                         zona=letture['data'][i][0]['zona']
                         lat=float(letture['data'][i][0]['lat'])
                         lon=float(letture['data'][i][0]['lng'])
                         logger.debug('lat={}'.format(lat))
-                        j=0
-                        while j < len(letture['data'][i][0]['contenitori']):
-                            logger.debug('i={} / j={}'.format(i,j))
-                            id_cont=letture['data'][i][0]['contenitori'][j]['id_cont']
-                            targa_cont=letture['data'][i][0]['contenitori'][j]['targa']
-                            #desc_cont=letture['data'][i][0]['contenitori'][j]['id_cont']
-                            tipo_cont=letture['data'][i][0]['contenitori'][j]['tipo_contenitore']
-                            vol_cont=letture['data'][i][0]['contenitori'][j]['volume']
-                            tag_cont=letture['data'][i][0]['contenitori'][j]['tag']
-                            
-                            # se non ha elettronica vuol dire che è stato spostato
-                            try: 
-                            
-                                k=0
-                                while k < len(letture['data'][i][0]['contenitori'][j]['elettroniche']):
-                                    cod_elettronica=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['cod_elett']
-                                    desc_elettronica=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['cod_elett']
-                                    val_bat_e=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['val_bat']
-                                    iccid=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['iccid']
-                                    if iccid ==None: 
-                                        logger.warning('iccid ND')
-                                        iccid='ND'
-                                    
-                                    num_tel=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['num_tel']
-                                    #num_tel=num_tel.strip()
-                                    
-                                    if num_tel == None: 
-                                        logger.warning('num_tel ND')
-                                        num_tel='ND'
-                                    else:
-                                        num_tel=num_tel.strip()
-                                        
-                                    f=0
-                                    while f < len(letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['bocchette']):
-                                        id_bocc=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['bocchette'][f]['id_bocc']
-                                        cod_elett_sens=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['bocchette'][f]['cod_elett_sens']
-                                        data_ultimo_agg=datetime.datetime.strptime(letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['bocchette'][f]['data_ultimo_agg'], "%Y%m%d%H%M%S").strftime("%Y/%m/%d %H:%M:%S")
-                                        cod_cer_mat=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['bocchette'][f]['cod_cer_mat']
-                                        #desc_mat=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['bocchette'][f]['desc_mat']
-                                        val_riemp=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['bocchette'][f]['val_riemp']
-                                        val_bat_b=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['bocchette'][f]['val_riemp']
-                                        volume_b=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['bocchette'][f]['volume']
-                                        f+=1
-                                        query_select="SELECT id_bocchetta FROM idea.censimento_idea WHERE id_elemento_idea=%s"
-                                        try:
-                                            curr.execute(query_select, (id_cont,))
-                                            bocchetta=curr.fetchall()
-                                        except Exception as e:
-                                            logger.error(e)
-                                        curr.close()
-                                        curr = conn.cursor()
-                                        # se c'è già la entry faccio 
-                                        if len(bocchetta)>0:
-                                            query_update='''UPDATE idea.censimento_idea
-                                            SET id_piazzola=%s,  zona= %s, indirizzo_idea=%s, id_elemento_idea=%s, tipo_contenitore=%s,
-                                            volume_contenitore=%s, targa_contenitore=%s, tag_contenitore=%s,
-                                            id_elettronica=%s, desc_elett=%s, iccidsim=%s, sim_numtel=%s, val_bat_elettronica=%s,
-                                            id_bocchetta=%s, cod_elett_sens=%s, cod_cer_mat=%s, volume_bocchetta=%s,
-                                            data_ultimo_agg=%s, val_riemp=%s, val_bat_bocchetta=%s, geoloc=st_transform(ST_SetSRID(ST_MakePoint(%s, %s),4326),3003),
-                                            data_agg_api=now()
-                                            WHERE id_elemento_idea=%s;'''
-                                            try:
-                                                curr.execute(query_update, (id_pdr,zona, descrizione_pdr,id_cont,tipo_cont,vol_cont,targa_cont,tag_cont,cod_elettronica,
-                                                desc_elettronica,iccid,num_tel,val_bat_e,id_bocc,cod_elett_sens,cod_cer_mat,volume_b,data_ultimo_agg,
-                                                val_riemp,val_bat_b,lon,lat,id_cont))
-                                            except Exception as e:
-                                                logger.error(e)
-                                        else:
-                                            nuovi_id.append(id_pdr)
-                                            nuove_desc.append(descrizione_pdr)
-                                            query_insert='''INSERT INTO idea.censimento_idea
-                                            (id_piazzola, zona, indirizzo_idea, id_elemento_idea, tipo_contenitore, volume_contenitore, 
-                                            targa_contenitore, tag_contenitore, id_elettronica, desc_elett, iccidsim, 
-                                            sim_numtel, val_bat_elettronica, id_bocchetta, cod_elett_sens,
-                                            cod_cer_mat, volume_bocchetta, data_ultimo_agg, val_riemp, val_bat_bocchetta, geoloc)
-                                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,st_transform(ST_SetSRID(ST_MakePoint(%s, %s),4326),3003));
-                                            '''
-                                            try:
-                                                curr.execute(query_insert, (id_pdr, zona, descrizione_pdr,id_cont,tipo_cont,vol_cont,
-                                                targa_cont,tag_cont,cod_elettronica,desc_elettronica,iccid,
-                                                num_tel,val_bat_e,id_bocc,cod_elett_sens,
-                                                cod_cer_mat,volume_b,data_ultimo_agg, val_riemp,val_bat_b,lon,lat))
-                                            except Exception as e:
-                                                logger.error(e)
-                                    k+=1
-                            except:
-                                logger.warning('Il contenitore {0} non ha elettronica, lo considero rimosso'.format(id_cont))
-                                # controllo se ho il contenitore sul DB
-                                query_select = '''SELECT id_piazzola FROM idea.censimento_idea WHERE id_elemento_idea=%s'''
-                                curr.execute(query_select, (id_cont,))
-                                lista_pp=curr.fetchall()
-                                if len(lista_pp)>0:
-                                    query_delete='''DELETE FROM idea.censimento_idea WHERE id_elemento_idea=%s'''
-                                    curr.execute(query_delete, (id_cont,))
-                                    old_id_pdr.append(id_pdr)
-                                    old_id_cont.append(id_cont)
-                                    old_id_targa.append(targa_cont)
+                        if check_pdr_intero==0:
+                            j=0
+                            while j < len(letture['data'][i][0]['contenitori']):
+                                logger.debug('i={} / j={}'.format(i,j))
+                                id_cont=letture['data'][i][0]['contenitori'][j]['id_cont']
+                                targa_cont=letture['data'][i][0]['contenitori'][j]['targa']
+                                #desc_cont=letture['data'][i][0]['contenitori'][j]['id_cont']
+                                tipo_cont=letture['data'][i][0]['contenitori'][j]['tipo_contenitore']
+                                vol_cont=letture['data'][i][0]['contenitori'][j]['volume']
+                                tag_cont=letture['data'][i][0]['contenitori'][j]['tag']
+                                if letture['data'][i][0]['contenitori'][j]['data_installazione']:
+                                    data_installazione=datetime.datetime.strptime(letture['data'][i][0]['contenitori'][j]['data_installazione'], '%Y%m%d%H%M%S')
                                 else:
-                                    logger.debug('Non faccio nulla')
-                            logger.info('Contenitore: {0}'.format(id_cont))
-                            j+=1
+                                    data_installazione=None
+                                # se non ha elettronica vuol dire che è stato spostato
+                                try:
+                                
+                                    k=0
+                                    while k < len(letture['data'][i][0]['contenitori'][j]['elettroniche']):
+                                        cod_elettronica=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['cod_elett']
+                                        logger.debug(cod_elettronica)
+                                        desc_elettronica=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['desc_elett']
+                                        val_bat_e=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['val_bat']
+                                        iccid=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['iccid']
+                                        if iccid ==None: 
+                                            logger.warning('iccid ND')
+                                            iccid='ND'
+                                        
+                                        num_tel=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['num_tel']
+                                        #num_tel=num_tel.strip()
+                                        
+                                        if num_tel == None: 
+                                            logger.warning('num_tel ND')
+                                            num_tel='ND'
+                                        else:
+                                            num_tel=num_tel.strip()
+                                            
+                                        f=0
+                                        while f < len(letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['bocchette']):
+                                            id_bocc=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['bocchette'][f]['id_bocc']
+                                            cod_elett_sens=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['bocchette'][f]['cod_elett_sens']
+                                            data_ultimo_agg=datetime.datetime.strptime(letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['bocchette'][f]['data_ultimo_agg'], "%Y%m%d%H%M%S").strftime("%Y/%m/%d %H:%M:%S")
+                                            cod_cer_mat=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['bocchette'][f]['cod_cer_mat']
+                                            #desc_mat=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['bocchette'][f]['desc_mat']
+                                            val_riemp=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['bocchette'][f]['val_riemp']
+                                            val_bat_b=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['bocchette'][f]['val_bat']
+                                            volume_b=letture['data'][i][0]['contenitori'][j]['elettroniche'][k]['bocchette'][f]['volume']
+                                            f+=1
+                                            query_select="SELECT id_bocchetta FROM idea.censimento_idea WHERE id_elemento_idea=%s"
+                                            try:
+                                                curr.execute(query_select, (id_cont,))
+                                                bocchetta=curr.fetchall()
+                                            except Exception as e:
+                                                logger.error(query_select)
+                                                logger.error(e)
+                                            curr.close()
+                                            curr = conn.cursor()
+                                            # se c'è già la entry faccio 
+                                            if len(bocchetta)>0 and id_pdr != 'MAG':
+                                                query_update='''UPDATE idea.censimento_idea
+                                                SET id_piazzola=%s,  zona= %s, indirizzo_idea=%s, id_elemento_idea=%s, tipo_contenitore=%s,
+                                                volume_contenitore=%s, targa_contenitore=%s, tag_contenitore=%s,
+                                                id_elettronica=%s, desc_elett=%s, iccidsim=%s, sim_numtel=%s, val_bat_elettronica=%s,
+                                                id_bocchetta=%s, cod_elett_sens=%s, cod_cer_mat=%s, volume_bocchetta=%s,
+                                                data_ultimo_agg=%s, val_riemp=%s, val_bat_bocchetta=%s, data_installazione=%s, geoloc=st_transform(ST_SetSRID(ST_MakePoint(%s, %s),4326),3003),
+                                                data_agg_api=now()
+                                                WHERE id_elemento_idea=%s;'''
+                                                try:
+                                                    curr.execute(query_update, (id_pdr,zona, descrizione_pdr,id_cont,tipo_cont,vol_cont,targa_cont,tag_cont,cod_elettronica,
+                                                    desc_elettronica,iccid,num_tel,val_bat_e,id_bocc,cod_elett_sens,cod_cer_mat,volume_b,data_ultimo_agg,
+                                                    val_riemp,val_bat_b,data_installazione, lon,lat,id_cont))
+                                                except Exception as e:
+                                                    logger.error(query_update)
+                                                    logger.error(e)
+                                            elif id_pdr != 'MAG':
+                                                nuovi_id.append(id_pdr)
+                                                nuove_desc.append(descrizione_pdr)
+                                                query_insert='''INSERT INTO idea.censimento_idea
+                                                (id_piazzola, zona, indirizzo_idea, id_elemento_idea, tipo_contenitore, volume_contenitore, 
+                                                targa_contenitore, tag_contenitore, id_elettronica, desc_elett, iccidsim, 
+                                                sim_numtel, val_bat_elettronica, id_bocchetta, cod_elett_sens,
+                                                cod_cer_mat, volume_bocchetta, data_ultimo_agg, val_riemp, val_bat_bocchetta, data_installazione, geoloc)
+                                                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, %s, st_transform(ST_SetSRID(ST_MakePoint(%s, %s),4326),3003));
+                                                '''
+                                                try:
+                                                    curr.execute(query_insert, (id_pdr, zona, descrizione_pdr,id_cont,tipo_cont,vol_cont,
+                                                    targa_cont,tag_cont,cod_elettronica,desc_elettronica,iccid,
+                                                    num_tel,val_bat_e,id_bocc,cod_elett_sens,
+                                                    cod_cer_mat,volume_b,data_ultimo_agg, val_riemp,val_bat_b, data_installazione, lon,lat))
+                                                except Exception as e:
+                                                    logger.error(query_insert, (id_pdr, zona, descrizione_pdr,id_cont,tipo_cont,vol_cont,
+                                                    targa_cont,tag_cont,cod_elettronica,desc_elettronica,iccid,
+                                                    num_tel,val_bat_e,id_bocc,cod_elett_sens,
+                                                    cod_cer_mat,volume_b,data_ultimo_agg, val_riemp,val_bat_b,data_installazione,lon,lat) )
+                                                    logger.error(e)
+                                        k+=1
+                                except Exception as e:
+                                    logger.warning('Il contenitore {0} non ha elettronica, lo considero rimosso'.format(id_cont))
+                                    # controllo se ho il contenitore sul DB
+                                    query_select = '''SELECT id_piazzola FROM idea.censimento_idea WHERE id_elemento_idea=%s'''
+                                    curr.execute(query_select, (id_cont,))
+                                    lista_pp=curr.fetchall()
+                                    if len(lista_pp)>0:
+                                        query_delete='''DELETE FROM idea.censimento_idea WHERE id_elemento_idea=%s'''
+                                        curr.execute(query_delete, (id_cont,))
+                                        old_id_pdr.append(id_pdr)
+                                        old_id_cont.append(id_cont)
+                                        old_id_targa.append(targa_cont)
+                                    else:
+                                        logger.debug('Non faccio nulla')
+                                logger.info('Contenitore: {0}'.format(id_cont))
+                                j+=1
 
 
                         
@@ -393,7 +410,7 @@ def main():
     if len(nuovi_id_ok)>0:
         logger.info('Ci sono nuove piazzole - Predispongo il file e mando mail')
         # Imposto file con nuove piazzole
-        file_piazzole="{0}/{1}_piazzole_nuove_aggiornate.xlsx".format(path, giorno_file)
+        file_piazzole="{0}/output_file/{1}_piazzole_nuove_aggiornate.xlsx".format(path, giorno_file)
         workbook = xlsxwriter.Workbook(file_piazzole)
         w1 = workbook.add_worksheet('Piazzole nuove o aggiornate')
 
@@ -484,7 +501,7 @@ def main():
     if len(old_id_pdr_ok)>0:
 
         # Imposto file con contenitori rimossi
-        file_piazzole2="{0}/{1}_contenitori_rimossi.xlsx".format(path, giorno_file)
+        file_piazzole2="{0}/output_file/{1}_contenitori_rimossi.xlsx".format(path, giorno_file)
         workbook = xlsxwriter.Workbook(file_piazzole2)
         w1 = workbook.add_worksheet('Elementi rimossi')
 

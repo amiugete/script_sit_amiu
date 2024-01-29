@@ -85,11 +85,11 @@ def main(argv):
     try:
         opts, args = getopt.getopt(argv,"hi:",["input="])
     except getopt.GetoptError:
-        logging.error('progettazione_locale.py -i <input sqlite3 file>')
+        logging.error('update_piazzole_mergin_app.py -i <input sqlite3 file>')
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
-            print('progettazione_locale.py -i <input sqlite3 file>')
+            print('update_piazzole_mergin_app.py -i <input sqlite3 file>')
             sys.exit()
         elif opt in ("-i", "--input"):
             sqlite_file = arg

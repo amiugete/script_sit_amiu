@@ -370,6 +370,123 @@ def main():
         ut.append(vv[3])
         
        
+       
+    print(cod_percorso)
+    cod_percorso_reimp=['0101004101',
+'0101039401',
+'0101359602',
+'0101360502',
+'0101360602',
+'0101360802',
+'0101361502',
+'0101361602',
+'0101361702',
+'0101367201',
+'0101371203',
+'0101380401',
+'0101382903',
+'0103003604',
+'0103004104',
+'0103004304',
+'0103004504',
+'0103004904',
+'0103005204',
+'0103005304',
+'0103005904',
+'0103006404',
+'0111003501',
+'0111003501',
+'0111003903',
+'0111003903',
+'0111004009',
+'0111004101',
+'0111004101',
+'0111004401',
+'0111004401',
+'0111007302',
+'0111007403',
+'0111007602',
+'0201012703',
+'0201238802',
+'0202008203',
+'0203005001',
+'0203005101',
+'0203008501',
+'0203008602',
+'0203008701',
+'0203008802',
+'0212000301',
+'0212000401',
+'0212000501',
+'0212000601',
+'0213238902',
+'0213244502',
+'0213244502',
+'0303005101',
+'0500114301',
+'0500122501',
+'0500123201',
+'0500123801',
+'0500124001',
+'0501004001',
+'0502006702',
+'0502007003',
+'0503000101',
+'0503000201',
+'0503000301',
+'0503000401',
+'0503000501',
+'0503000601',
+'0503000701',
+'0503000801',
+'0503000901',
+'0503001001',
+'0503001101',
+'0503001201',
+'0503001401',
+'0503001501',
+'0503001601',
+'0503001701',
+'0503001801',
+'0503001901',
+'0507109701',
+'0507113602',
+'0507114401',
+'0507114901',
+'0507116202',
+'0507116303',
+'0507123503',
+'0507125301',
+'0507127902',
+'0507130902',
+'0508048202',
+'0508061901',
+'0502AD4102',
+'0501RE4001',
+'0101362101',
+'0101354701',
+'0101371002',
+'0508042201',
+'0507110601',
+'0101040603',
+'0507129401',
+'0101032702',
+'0500116601',
+'0500108602',
+'0111003501',
+'0111003401',
+'0111003301',
+'0508OM7202',
+'0501OM3602',
+'0500114202',
+'0500105503',
+'0500114102',
+'0500105403',
+'0101350401',
+'0101350501',
+'0101350601'    
+    ]
+    
     curr.close()
     logger.info('Ora invio le variazioni ad EKOVISION')
     check_ekovision=0
@@ -377,18 +494,53 @@ def main():
     cod_percorso_ok=tuple(cod_percorso)
     logger.debug(cod_percorso_ok)
     curr = conn.cursor()  
-    query_variazioni_ekovision='''SELECT codice_modello_servizio, ordine, objecy_type, 
-codice, quantita, lato_servizio, percent_trattamento,
-frequenza, numero_passaggi, nota, codice_qualita, codice_tipo_servizio,
-data_inizio, data_fine
-FROM anagrafe_percorsi.v_percorsi_elementi_tratti
-where codice_modello_servizio = ANY (%s)'''
+    query_variazioni_ekovision='''select 
+codice_modello_servizio,
+coalesce((select distinct ordine from anagrafe_percorsi.v_percorsi_elementi_tratti 
+where codice_modello_servizio = tab.codice_modello_servizio 
+and codice = tab.codice
+and ripasso = tab.ripasso and data_fine is null ),1)
+as ordine,
+objecy_type, 
+  codice, quantita, lato_servizio, percent_trattamento,
+coalesce((select distinct frequenza from anagrafe_percorsi.v_percorsi_elementi_tratti 
+where codice_modello_servizio = tab.codice_modello_servizio 
+and codice = tab.codice
+and ripasso = tab.ripasso and data_fine is null),0)
+as 
+  frequenza, 
+  numero_passaggi, nota,
+  codice_qualita, codice_tipo_servizio,
+min(data_inizio) as data_inizio, 
+case 
+	when max(data_fine) = '20991231' then null 
+	else max(data_fine)
+end data_fine, ripasso
+from (
+	  SELECT codice_modello_servizio, ordine, objecy_type, 
+  codice, quantita, lato_servizio, percent_trattamento,frequenza,
+  ripasso, numero_passaggi, replace(coalesce(nota,''),'DA PIAZZOLA','') as nota,
+  codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine
+	 FROM anagrafe_percorsi.v_percorsi_elementi_tratti where data_inizio!=coalesce(data_fine, '20991231')
+	 union 
+	   SELECT codice_modello_servizio, ordine, objecy_type, 
+  codice, quantita, lato_servizio, percent_trattamento,frequenza,
+  ripasso, numero_passaggi, replace(coalesce(nota,''),'DA PIAZZOLA','') as nota,
+  codice_qualita, codice_tipo_servizio, data_inizio, data_fine
+	 FROM anagrafe_percorsi.v_percorsi_elementi_tratti_ovs where data_inizio!=coalesce(data_fine, '20991231')
+ ) tab 
+ where codice_modello_servizio = ANY (%s) 
+ group by codice_modello_servizio,  objecy_type, 
+  codice, quantita, lato_servizio, percent_trattamento,
+  ripasso, numero_passaggi, nota,
+  codice_qualita, codice_tipo_servizio
+  order by codice_modello_servizio, data_fine, ordine,  ripasso'''
     
     #test=curr.mogrify(query_variazioni_ekovision,(cod_percorso_ok,))
     #print(test)
     #exit()
     try:
-        curr.execute(query_variazioni_ekovision,(cod_percorso,))
+        curr.execute(query_variazioni_ekovision,(cod_percorso_reimp,))
         dettaglio_percorsi_ekovision=curr.fetchall()
     except Exception as e:
         logger.error(e)
@@ -403,7 +555,7 @@ where codice_modello_servizio = ANY (%s)'''
         fieldnames = ['codice_modello_servizio', 'ordine', 'objecy_type', 
                       'codice','quantita', 'lato_servizio', 'percent_trattamento',
                       'frequenza', 'numero_passaggi', 'nota', 'codice_qualita', 'codice_tipo_servizio',
-                      'data_inizio', 'data_fine']
+                      'data_inizio', 'data_fine', 'ripasso']
         myFile.writerow(fieldnames)
         myFile.writerows(dettaglio_percorsi_ekovision)
         fp.close()

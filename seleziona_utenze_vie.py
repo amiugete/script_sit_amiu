@@ -104,7 +104,7 @@ def main(argv):
  
     logging.info('Leggo gli input')
     try:
-        opts, args = getopt.getopt(argv,"hi:p:m:",["ifile=","prefix=", "mail="])
+        opts, args = getopt.getopt(argv,"hi:p:m:c:",["ifile=","prefix=", "mail="])
     except getopt.GetoptError:
         logging.error('seleziona_utenze_vie.py -i <inputfile> -p <prefisso> -m <mail>')
         sys.exit(2)
@@ -121,7 +121,13 @@ def main(argv):
         elif opt in ("-m", "--mail"):
             mail = arg
             logging.info('Mail cui inviare i dati = {}'.format(mail))
+        elif opt in ("-c", "--consegne"):
+            consegne = arg
+            logging.info('Da inserire sul portale consegne (1) o no (0) (default 0) = {}'.format(mail))
 
+
+    consegne=int(consegne)
+    logging.debug(consegne)
 
     #aggiorno il prefisso del file
     giorno_file='{}_{}'.format(giorno_file, prefisso1.replace(' ', '_'))
@@ -261,18 +267,18 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
     nome_file3="{0}_civici_utenze_domestiche.xlsx".format(giorno_file)
     nome_file4="{0}_civici_utenze_nondomestiche.xlsx".format(giorno_file)
     
-    
-    nome_file5="{0}_file_IDEA.xlsx".format(giorno_file)
-    nome_file6="{0}_file_portale_utenze.xlsx".format(giorno_file)
+    if consegne == 1:
+        nome_file5="{0}_file_IDEA.xlsx".format(giorno_file)
+        nome_file6="{0}_file_portale_utenze.xlsx".format(giorno_file)
        
     
     file_domestiche="{0}/utenze/{1}".format(path,nome_file)
     file_nondomestiche="{0}/utenze/{1}".format(path,nome_file2)
     file_civdomestiche="{0}/utenze/{1}".format(path,nome_file3)
     file_civnondomestiche="{0}/utenze/{1}".format(path,nome_file4)
-    
-    file_idea="{0}/utenze/{1}".format(path,nome_file5)
-    file_portale_utenze="{0}/utenze/{1}".format(path,nome_file6)
+    if consegne == 1:
+        file_idea="{0}/utenze/{1}".format(path,nome_file5)
+        file_portale_utenze="{0}/utenze/{1}".format(path,nome_file6)
 
 
     nomi_files.append(nome_file)
@@ -283,10 +289,11 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
     files.append(file_civdomestiche)
     nomi_files.append(nome_file4)
     files.append(file_civnondomestiche)
-    nomi_files.append(nome_file5)
-    files.append(file_idea)   
-    nomi_files.append(nome_file6)
-    files.append(file_portale_utenze)
+    if consegne ==1:
+        nomi_files.append(nome_file5)
+        files.append(file_idea)   
+        nomi_files.append(nome_file6)
+        files.append(file_portale_utenze)
 
     
     workbook = xlsxwriter.Workbook(file_domestiche)
@@ -485,142 +492,142 @@ WHERE COD_VIA in ({})
 
 
 
-
-    logging.info('*****************************************************')
-    logging.info('FILE X IDEA')
-    # civici  non domestiche
-    workbook5 = xlsxwriter.Workbook(file_idea)
-    date_format = workbook5.add_format({'font_size': 9, 'border':   1,
-    'num_format': 'dd/mm/yyyy', 'valign': 'vcenter', 'center_across': True})
-    title = workbook5.add_format({'bold': True,  'font_size': 9, 'border':   1, 'bg_color': '#F9FF33', 'valign': 'vcenter', 'center_across': True,'text_wrap': True})
-    tc =  workbook5.add_format({'border':   1, 'font_size': 9, 'valign': 'vcenter', 'center_across': True, 'text_wrap': True})
-    w5 = workbook5.add_worksheet()
-
-
-    #w5.set_column(0, 10, 15)
+    if consegne == 1:
+        logging.info('*****************************************************')
+        logging.info('FILE X IDEA')
+        # civici  non domestiche
+        workbook5 = xlsxwriter.Workbook(file_idea)
+        date_format = workbook5.add_format({'font_size': 9, 'border':   1,
+        'num_format': 'dd/mm/yyyy', 'valign': 'vcenter', 'center_across': True})
+        title = workbook5.add_format({'bold': True,  'font_size': 9, 'border':   1, 'bg_color': '#F9FF33', 'valign': 'vcenter', 'center_across': True,'text_wrap': True})
+        tc =  workbook5.add_format({'border':   1, 'font_size': 9, 'valign': 'vcenter', 'center_across': True, 'text_wrap': True})
+        w5 = workbook5.add_worksheet()
 
 
-
-
-    cur5 = con.cursor()
-    query='''SELECT ID_UTENZA, CODICE_IMMOBILE, COD_INTERNO, COD_CIVICO, TIPO_UTENZA, 
-        CATEGORIA, NOMINATIVO, CFISC_PARIVA, COD_VIA, DESCR_VIA, CIVICO,
-        LETTERA_CIVICO, COLORE_CIVICO, SCALA, INTERNO,
-        LETTERA_INTERNO, ZONA_MUNICIPIO, SUBZONA_QUARTIERE, DATA_CESSAZIONE
-        FROM STRADE.UTENZE_ND_X_APP_IDEA 
-        WHERE COD_VIA in ({}) '''.format(codici_via)
-
-
-
-    try:
-        cur5.execute(query)
-        cur5.rowfactory = makeDictFactory(cur5)
-        lista_idea=cur5.fetchall()
-    except Exception as e:
-        logging.error(query)
-        logging.error(e)
-    #logging.debug(query)
-    #lista_civnondomestiche = cur4.execute(query)
-
-
-    rr=1
-    for pp in lista_idea:
-        cc=0
-        for key, value in pp.items():
-            #print(key)
-            #print(value)
-            w5.write(0, cc, key.replace('_', ' '), title)
-            if type(value) is str:
-                w5.write(rr, cc, value, tc)
-            elif type(value) is datetime :
-                w5.write(rr, cc, value, date_format)
-                #logger.debug(type(value))
-            elif type(value) is int :
-                w5.write(rr, cc, value, tc)
-            cc+=1
-        rr+=1
-
-    '''i=1
-    for rr in lista_idea:
-        j=0
-        #logging.debug(len(rr))
-        while j<len(rr):
-            w4.write(i, j, rr[j])
-            j+=1
-        i+=1'''
-
-    cur5.close()
-    workbook5.close()
-
-
-    
-    logging.info('*****************************************************')
-    logging.info('FILE X PORTALE UTENZE')
-    # civici  non domestiche
-    workbook6 = xlsxwriter.Workbook(file_portale_utenze)
-    date_format = workbook6.add_format({'font_size': 9, 'border':   1,
-    'num_format': 'dd/mm/yyyy', 'valign': 'vcenter', 'center_across': True})
-    title = workbook6.add_format({'bold': True,  'font_size': 9, 'border':   1, 'bg_color': '#F9FF33', 'valign': 'vcenter', 'center_across': True,'text_wrap': True})
-    #text_common 
-    tc =  workbook6.add_format({'border':   1, 'font_size': 9, 'valign': 'vcenter', 'center_across': True, 'text_wrap': True})
-    w6 = workbook6.add_worksheet()
-
-
-    w6.set_column(0, 10, 15)
+        #w5.set_column(0, 10, 15)
 
 
 
 
-    cur6 = con.cursor()
-    query=''' SELECT ID_UTENZA, RIFERIMENTO_FISCALE, RAGIONE_SOCIALE, COGNOME, NOME, STRADA, CIVICO, CIVICO_LETTERA,
-        CIVICO_COLORE, SCALA, INTERNO, INTERNO_LETTERA, LOCALITA, CAP, MUNICIPIO, QUARTIERE, UNITA_URBANISTICA,
-        TIPOLOGIA_UTENZA, SOTTOTIPOLOGIA_UTENZA, NOTES, FLAG_ANOMALIA, CAMPAGNE
-        FROM STRADE.UTENZE_PORTALE_CONSEGNE_GE 
-        WHERE STRADA in ({}) '''.format(codici_via)
+        cur5 = con.cursor()
+        query='''SELECT ID_UTENZA, CODICE_IMMOBILE, COD_INTERNO, COD_CIVICO, TIPO_UTENZA, 
+            CATEGORIA, NOMINATIVO, CFISC_PARIVA, COD_VIA, DESCR_VIA, CIVICO,
+            LETTERA_CIVICO, COLORE_CIVICO, SCALA, INTERNO,
+            LETTERA_INTERNO, ZONA_MUNICIPIO, SUBZONA_QUARTIERE, DATA_CESSAZIONE
+            FROM STRADE.UTENZE_ND_X_APP_IDEA 
+            WHERE COD_VIA in ({}) '''.format(codici_via)
 
 
 
-    try:
-        cur6.execute(query)
-        # cur.rowfactory = makeNamedTupleFactory(cur)
-        cur6.rowfactory = makeDictFactory(cur6)
-        lista_idea=cur6.fetchall()
-    except Exception as e:
-        logging.error(query)
-        logging.error(e)
-    #logging.debug(query)
-    #lista_civnondomestiche = cur4.execute(query)
+        try:
+            cur5.execute(query)
+            cur5.rowfactory = makeDictFactory(cur5)
+            lista_idea=cur5.fetchall()
+        except Exception as e:
+            logging.error(query)
+            logging.error(e)
+        #logging.debug(query)
+        #lista_civnondomestiche = cur4.execute(query)
 
 
-    rr=1
-    for pp in lista_idea:
-        cc=0
-        for key, value in pp.items():
-            #print(key)
-            #print(value)
-            w6.write(0, cc, key.replace('_', ' '), title)
-            
-            if type(value) is str:
-                w6.write(rr, cc, value, tc)
-            elif type(value) is datetime :
-                w6.write(rr, cc, value, date_format)
-                #logger.debug(type(value))
-            elif type(value) is int :
-                w6.write(rr, cc, value, tc)
-            cc+=1
-        rr+=1
+        rr=1
+        for pp in lista_idea:
+            cc=0
+            for key, value in pp.items():
+                #print(key)
+                #print(value)
+                w5.write(0, cc, key.replace('_', ' '), title)
+                if type(value) is str:
+                    w5.write(rr, cc, value, tc)
+                elif type(value) is datetime :
+                    w5.write(rr, cc, value, date_format)
+                    #logger.debug(type(value))
+                elif type(value) is int :
+                    w5.write(rr, cc, value, tc)
+                cc+=1
+            rr+=1
 
-    '''i=1
-    for rr in lista_idea:
-        j=0
-        #logging.debug(len(rr))
-        while j<len(rr):
-            w4.write(i, j, rr[j])
-            j+=1
-        i+=1'''
+        '''i=1
+        for rr in lista_idea:
+            j=0
+            #logging.debug(len(rr))
+            while j<len(rr):
+                w4.write(i, j, rr[j])
+                j+=1
+            i+=1'''
 
-    cur6.close()
-    workbook6.close()
+        cur5.close()
+        workbook5.close()
+
+
+        
+        logging.info('*****************************************************')
+        logging.info('FILE X PORTALE UTENZE')
+        # civici  non domestiche
+        workbook6 = xlsxwriter.Workbook(file_portale_utenze)
+        date_format = workbook6.add_format({'font_size': 9, 'border':   1,
+        'num_format': 'dd/mm/yyyy', 'valign': 'vcenter', 'center_across': True})
+        title = workbook6.add_format({'bold': True,  'font_size': 9, 'border':   1, 'bg_color': '#F9FF33', 'valign': 'vcenter', 'center_across': True,'text_wrap': True})
+        #text_common 
+        tc =  workbook6.add_format({'border':   1, 'font_size': 9, 'valign': 'vcenter', 'center_across': True, 'text_wrap': True})
+        w6 = workbook6.add_worksheet()
+
+
+        w6.set_column(0, 10, 15)
+
+
+
+
+        cur6 = con.cursor()
+        query=''' SELECT ID_UTENZA, RIFERIMENTO_FISCALE, RAGIONE_SOCIALE, COGNOME, NOME, STRADA, CIVICO, CIVICO_LETTERA,
+            CIVICO_COLORE, SCALA, INTERNO, INTERNO_LETTERA, LOCALITA, CAP, MUNICIPIO, QUARTIERE, UNITA_URBANISTICA,
+            TIPOLOGIA_UTENZA, SOTTOTIPOLOGIA_UTENZA, NOTES, FLAG_ANOMALIA, CAMPAGNE
+            FROM STRADE.UTENZE_PORTALE_CONSEGNE_GE 
+            WHERE STRADA in ({}) '''.format(codici_via)
+
+
+
+        try:
+            cur6.execute(query)
+            # cur.rowfactory = makeNamedTupleFactory(cur)
+            cur6.rowfactory = makeDictFactory(cur6)
+            lista_idea=cur6.fetchall()
+        except Exception as e:
+            logging.error(query)
+            logging.error(e)
+        #logging.debug(query)
+        #lista_civnondomestiche = cur4.execute(query)
+
+
+        rr=1
+        for pp in lista_idea:
+            cc=0
+            for key, value in pp.items():
+                #print(key)
+                #print(value)
+                w6.write(0, cc, key.replace('_', ' '), title)
+                
+                if type(value) is str:
+                    w6.write(rr, cc, value, tc)
+                elif type(value) is datetime :
+                    w6.write(rr, cc, value, date_format)
+                    #logger.debug(type(value))
+                elif type(value) is int :
+                    w6.write(rr, cc, value, tc)
+                cc+=1
+            rr+=1
+
+        '''i=1
+        for rr in lista_idea:
+            j=0
+            #logging.debug(len(rr))
+            while j<len(rr):
+                w4.write(i, j, rr[j])
+                j+=1
+            i+=1'''
+
+        cur6.close()
+        workbook6.close()
     
     
     
@@ -649,7 +656,10 @@ WHERE COD_VIA in ({})
     receiver_email=mail
     #debug_email='roberto.marzocchi@amiu.genova.it'
     #debug_email2='roberto.marzocchi@amiu.genova.it'
-    debug_email='calvello@amiu.genova.it; assterritorio@amiu.genova.it'
+    if consegne == 1:
+        debug_email='calvello@amiu.genova.it; assterritorio@amiu.genova.it'
+    else: 
+        debug_email='assterritorio@amiu.genova.it'
     #debug_email='assterritorio@amiu.genova.it'
     
     #assterritorio@amiu.genova.it
@@ -663,16 +673,20 @@ Sono presenti i seguenti file:<br>
 - elenco utenze domestiche (PER COMUNICAZIONE)<br>
 - elenco utenze non domestiche (PER COMUNICAZIONE)<br>
 - elenco civici utenze domestiche (PER COMUNICAZIONE)<br>
-- elenco civici utenze non domestiche (PER COMUNICAZIONE)<br>
-- elenco utenze non domestiche formato ID&A per importazione su loro APP (rif. Marco Zamboni marco.zamboni@ideabs.com). L'nvio non serve più perchè è stato sostituito da apposito webService<br>
-- elenco utenze da importare nel portale delle consegne (<b>rif. Laura Calvello in CC alla presente mail<b>)<br><br><br>
+- elenco civici utenze non domestiche (PER COMUNICAZIONE)<br>'''
+
+    if consegne == 1:
+        body ='''{}- elenco utenze non domestiche formato ID&A per importazione su loro APP (rif. Marco Zamboni marco.zamboni@ideabs.com). L'invio non serve più perchè è stato sostituito da apposito webService<br>
+- elenco utenze da importare nel portale delle consegne (<b>rif. Laura Calvello in CC alla presente mail<b>)'''.format(body)
+    
+    body='''{}<br><br><br>''
 L'applicativo che gestisce l'estrazione delle utenze è stato realizzato dal gruppo Gestione Applicativi del SIGT.<br> 
 Segnalare tempestivamente eventuali malfunzionamenti inoltrando la presente mail a {}<br><br>
 Giorno {}<br><br>
     AMIU Assistenza Territorio<br>
      <img src="cid:image1" alt="Logo" width=197>
     <br>
-    '''.format(debug_email, datetime.datetime.today().strftime('%d/%m/%Y'))
+    '''.format(body, debug_email, datetime.datetime.today().strftime('%d/%m/%Y'))
     
 
 

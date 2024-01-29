@@ -141,6 +141,7 @@ def main():
     #exit()
     p=1
     check=0
+    timeout_retry=0
     
     '''
     id_piazzola=''
@@ -223,13 +224,16 @@ def main():
         logger.debug(response.status_code)
         try:      
             response.raise_for_status()
+            timeout_retry=0
             # access JSOn content
             #jsonResponse = response.json()
             #print("Entire JSON response")
             #print(jsonResponse)
         except HTTPError as http_err:
-            logger.error(f'HTTP error occurred: {http_err}')
-            check=500
+            logger.warning(f'HTTP error occurred: {http_err}')
+            #check=500
+            check=504 #timeout
+            timeout_retry+=1
         except Exception as err:
             logger.error(f'Other error occurred: {err}')
             logger.error(response.json())
@@ -312,6 +316,14 @@ def main():
                 #print(i,letture['data'][i][9], letture['data'][i][10], letture['data'][i][14], letture['data'][i][16],letture['data'][i][17])
                 i+=1
             p+=1
+        elif check==504 and timeout_retry<=10 :
+            check=0
+            logger.warning('HTTP error: {0} - Retry: {1}'.format(504, timeout_retry)) 
+        elif check==504 and timeout_retry>10 :
+            check=504
+            logger.error('Errore {0}'.format(504))    
+        else:
+            logger.info('Esco dal ciclo') 
     
     
     # faccio un check sulle date 
