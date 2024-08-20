@@ -170,9 +170,15 @@ def main():
     e.id_piazzola,
     eap.id_elemento,
     max(eap.id_asta_percorso) as id_asta_percorso_max,
-    string_agg(eap.id_asta_percorso::text, ',' order by eap.id_asta_percorso) as aste_percorso, 
+    string_agg(eap.id_asta_percorso::text, ',' order by ap2.num_seq) as aste_percorso, 
     count(distinct ripasso) as ripassi_regisrati_sit,
-    count(eap.id_asta_percorso) as num_aste_percorso
+    count(eap.id_asta_percorso) as num_aste_percorso,
+    p.descrizione,
+    coalesce((select su.email from util.sys_history sh 
+    join util.sys_users su on su.id_user= sh.id_user where 
+    sh.id_percorso= p.id_percorso and e.id_piazzola = sh.id_piazzola 
+    and sh.id_user!=179 
+    order by datetime desc limit 1), 'assterritorio@amiu.genova.it')
     from elem.elementi_aste_percorso eap
     join elem.elementi e on e.id_elemento = eap.id_elemento 
     join elem.aste_percorso ap2 on ap2.id_asta_percorso = eap.id_asta_percorso 
@@ -183,7 +189,7 @@ def main():
         from elem.aste_percorso ap 
         where id_percorso in (select id_percorso from elem.percorsi where id_categoria_uso in (3,6))
     )
-    group by eap.id_elemento, p.id_percorso, p.cod_percorso, p.versione, e.id_piazzola
+    group by eap.id_elemento, p.id_percorso, p.cod_percorso, p.versione, e.id_piazzola, p.descrizione
     having count(distinct ripasso) != count(eap.id_asta_percorso);
     '''
     
@@ -226,7 +232,15 @@ def main():
             logger.error(insert_query)
         conn.commit()
     
-    
+        body_mail='''ATTENZIONE<br>Poco fa, sul percorso <ul> <li><b>Codice</b>: {}</li> <li><b>Descrizione</b>: {}</li></ul>
+        L'utente <i><b>{}</b></i> ha inserito 2 volte la piazzola <b>{}</b>. Il secondo inserimento è automaticamente considerato un ripasso. 
+        
+        Se così non fosse è sufficiente rimuovere il secondo inserimento su
+        <a href="https://amiupostgres.amiu.genova.it/SIT/#!/percorsi/percorso-details/?idPercorso={}"> SIT </a>
+        '''.format(ap[1], ap[9], ap[10].split('@')[0], ap[3],ap[0])
+        ripasso_mail(body_mail, ap[10], os.path.basename(__file__), logger)
+        #ap[9]  #descrizione percorso
+        #ap[10] #mail
     
     
     

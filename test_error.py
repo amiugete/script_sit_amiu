@@ -121,6 +121,9 @@ def main():
     message.attach(MIMEText(body, "plain"))
     check=invio_messaggio(message)
     logger.info(check)
+    
+    
+    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it; roberto.marzocchi@gmail.com', os.path.basename(__file__), logger)
 
 if __name__ == "__main__":
     main()  

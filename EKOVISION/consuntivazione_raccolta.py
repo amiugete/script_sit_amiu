@@ -77,7 +77,7 @@ f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.ERROR)
-f_handler.setLevel(logging.DEBUG)
+f_handler.setLevel(logging.INFO)
 
 
 # Add handlers to the logger
@@ -108,6 +108,8 @@ import csv
 
 
 
+from descrizione_percorso import *  
+
     
      
 
@@ -133,6 +135,7 @@ def main():
     long=[]
     ripasso=[]
     qual=[]
+    mail_arr=[]
     
     
     # Get today's date
@@ -189,13 +192,16 @@ def main():
 	e.fatto,
 	trim(replace(e.causale, ' - (no in questa giornata)', '')) as descr_causale,
 	ct.id as causale,
-	concat('TOTEM Matricola ', e.codice) as sorgente_dati, 
+	concat('TOTEM Badge ', e.codice, ' - Matr. ', vpes.matricola::text, ' - ', vpes.cognome, ' ', vpes.nome) as sorgente_dati, 
 	e.inser as data_insert, 
     e.id_tappa as tappa, 
-    e.nota_via as note_totem /* è il campo con le note*/
+    e.nota_via as note_totem /* è il campo con le note*/,
+    mu.mail
 	from raccolta.cons_percorsi_raccolta_amiu t
 	join raccolta.effettuati_amiu e on e.id_tappa::bigint =  t.id_tappa::bigint
+  	left join totem.v_personale_ekovision_step1 vpes on vpes.codice_badge::text = e.codice 
 	left join raccolta.causali_testi ct on trim(replace(e.causale, ' - (no in questa giornata)', '')) ilike trim(ct.descrizione)
+    left join servizi.mail_ut mu on mu.id_uo::int  = t.id_uo::int
 	where 
 	trim(replace(e.causale, ' - (no in questa giornata)', '')) != '' 
 	and datalav >= '2024-01-29'
@@ -219,8 +225,8 @@ def main():
 
     for cc in lista_causali:
         if cc[0] == None:
-            logger.error('''La causale {} non è riconosciuta. Andare sull'HUB ggiungere un id nella tabella raccolta.causali_testo'''.format(aa[1])) 
-            error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+            logger.error('''La causale {} non è riconosciuta. Andare sull'HUB ggiungere un id nella tabella raccolta.causali_testo'''.format(cc[1])) 
+            error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
             exit()
     
     logger.info('CONTROLLO CAUSALI TERMINATO')
@@ -252,7 +258,13 @@ def main():
                             '0500106803',
                             '0501002001',
                             '0501002201',
-                            '0501002301'
+                            '0501002301',
+                            '0502005402', 
+                            '0102005501',
+                            '0111000301',
+                            '0111000402',
+                            '0111000501',
+                            '0502006201'
                          ):
         
         
@@ -263,8 +275,8 @@ def main():
             join elem.turni t on t.id_turno =p.id_turno  
                         where ep.id_percorso_sit is not null  
                         and ep.cod_percorso = %s 
-                        and ep.data_inizio_validita < %s 
-                        and ep.data_fine_validita >= %s'''
+                        and ep.data_inizio_validita <= %s 
+                        and ep.data_fine_validita > %s'''
             
             try:
                 curr.execute(query_id_percorso, (vv[1], vv[2], vv[2]))
@@ -282,6 +294,7 @@ def main():
                 logger.error(query_id_percorso)
                 logger.error('Codice percorso = {}'.format(vv[1]))
                 logger.error('Data rif = {}'.format(vv[2]))
+                error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
                 exit()
                 
             #logger.debug(id_percorso_sit)
@@ -321,11 +334,11 @@ def main():
                 union 
                 select id_elemento, id_piazzola  from history.elementi e
                 ) ee on ee.id_elemento = eap1.id_elemento     
-                where id_piazzola= %s and coalesce(data_eliminazione, '2099-12-31') > %s
+                where id_piazzola= %s and coalesce(data_eliminazione, '2099-12-31')::date >= %s and data_inserimento::date < %s
                 '''
             
             try:
-                curr.execute(query_elementi, (id_percorso_sit, id_percorso_sit,id_percorso_sit,id_percorso_sit,vv[3], vv[2]))
+                curr.execute(query_elementi, (id_percorso_sit, id_percorso_sit,id_percorso_sit,id_percorso_sit,vv[3], vv[2], vv[2]))
                 lista_elementi=curr.fetchall()
             except Exception as e:
                 logger.error('NON TROVO GLI ELEMENTI  SUL SIT')
@@ -335,7 +348,7 @@ def main():
                 logger.error('Id percorso SIT = {}'.format(id_percorso_sit))
                 logger.error('id_piazzola = {}'.format(vv[3]))
                 logger.error(e)
-                error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
                 exit()
             
             # vv[4] num_elementi
@@ -371,6 +384,7 @@ def main():
                     logger.error(vv[11])
                     logger.error('''{0} {1} {2} {3}'''.format(vv[1], vv[2].strftime('%Y-%m-%d'), vv[11], int(vv[0])))
                     logger.error(e)
+                    error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
                     exit()
                                     
                 # se ci fosse un punteggio superiore o una consuntivazione del RUT (serve fino a quando il backoffice è di WingSOFT non servirà più dopo)
@@ -391,7 +405,8 @@ def main():
                     lat.append(None)
                     long.append(None)
                     ripasso.append(aa[2])
-                    qual.append(None)                                 
+                    qual.append(None) 
+                    mail_arr.append(vv[13])                                
 
                     
         # mi salvo sempre il max_id    
@@ -401,7 +416,7 @@ def main():
     
     
     
-    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+    headers = {'Content-Type': 'application/x-www-form-urlencoded', 'Cache-Control': 'no-cache'}
 
     data_json={'user': eko_user, 
         'password': eko_pass,
@@ -413,21 +428,27 @@ def main():
     cod_percorsi_distinct=[]
     date_distinct=[]
     turno_distinct=[]
+    mail_arr_distinct=[]
+    sorgente_dati_distinct=[]
     logger.debug(len(cod_percorso))
     while k<len(cod_percorso):
-        logger.debug(k)
+        #logger.debug(k)
         if k==0:
             cod_percorsi_distinct.append(cod_percorso[k])
             date_distinct.append(data_percorso[k])
             turno_distinct.append(id_turno[k])
+            mail_arr_distinct.append(mail_arr[k])
+            sorgente_dati_distinct.append(sorgente_dati[k])
         if k > 0 and cod_percorso[k]!= cod_percorso[k-1]:
             cod_percorsi_distinct.append(cod_percorso[k])
             date_distinct.append(data_percorso[k])
             turno_distinct.append(id_turno[k])
+            mail_arr_distinct.append(mail_arr[k])
+            sorgente_dati_distinct.append(sorgente_dati[k])
         k+=1
         
     
-    
+    logger.info('Controllo se le schede di lavoro esistono')
     k=0
     while k< len(cod_percorsi_distinct):
         # qua provo il WS
@@ -462,7 +483,7 @@ def main():
             if len(letture['schede_lavoro']) == 0:
                 #va creata la scheda di lavoro
                 logger.info('Va creata la scheda di lavoro')
-                """
+                
                 curr.close()
                 curr = conn.cursor()
                 
@@ -508,6 +529,14 @@ def main():
                     id_scheda=letture2['crea_schede_lavoro'][0]['id']
                     check_creazione_scheda=1
                 except Exception as e:
+                    query_insert='''INSERT INTO anagrafe_percorsi.creazione_schede_lavoro
+                            (id, cod_percorso, "data", id_scheda_ekovision, "check")
+                            VALUES(%s, %s, %s, NULL, %s);'''
+                    try:        
+                        curr.execute(query_insert, (int(ruid),cod_percorsi_distinct[k], date_distinct[k], check_creazione_scheda))
+                    except Exception as e1:
+                        logger.error(query_insert)
+                        logger.error(e1)        
                     logger.error(e)
                     logger.error(' - id: {}'.format(ruid))
                     logger.error(' - Cod_percorso: {}'.format(cod_percorsi_distinct[k]))
@@ -523,10 +552,12 @@ def main():
                     conn.close()
                     exit()
                     
+                
+                # Cerco la descrizione del percorso
                     
                     
                     
-                if check_creazione_scheda ==1:
+                if check_creazione_scheda==1:
                     query_insert='''INSERT INTO anagrafe_percorsi.creazione_schede_lavoro
                             (id, cod_percorso, "data", id_scheda_ekovision, "check")
                             VALUES(%s, %s, %s, %s, %s);'''
@@ -537,28 +568,41 @@ def main():
                 try:
                     if check_creazione_scheda ==1:
                         curr.execute(query_insert, (int(ruid),cod_percorsi_distinct[k], date_distinct[k], id_scheda, check_creazione_scheda))
+                        body_mail='''E' arrivata una consuntivazione da totem per il percorso {} - {} in data {}.
+                        <br>Origine del dato:{}
+                        <br>Non esistendo la scheda per il giorno in questione è stata creata in automatico.
+                        La nuova scheda ha ID {}'''.format(cod_percorsi_distinct[k],
+                                                           descrizione_percorso(cod_percorsi_distinct[k],  date_distinct[k], curr, logger),
+                                                           date_distinct[k], sorgente_dati_distinct[k], id_scheda)           
+                        creazione_scheda_mail(body_mail, mail_arr_distinct[k], os.path.basename(__file__), logger)
+                        conn.commit()
                     else:
                         curr.execute(query_insert, (int(ruid),cod_percorsi_distinct[k], date_distinct[k], check_creazione_scheda))
+                        conn.commit()
                 except Exception as e:
                     logger.error(query_insert)
                     logger.error(e)
                     
-            """       
+                 
             elif len(letture['schede_lavoro']) > 0 : 
                 id_scheda=letture['schede_lavoro'][0]['id_scheda_lav']
                 try:
-                    id_turno_ekovision=int(letture['schede_lavoro'][0]['cod_turno_ext'])
-                    logger.info(id_scheda)
-                    if id_turno_ekovision != int(turno_distinct[k]):
-                        logger.warning('Anomalia turni per percorso {0}. Scheda di lavoro {1} del {2}. Turno UO ={3}, Turno Ekovision={4}'.format(cod_percorsi_distinct[k], id_scheda, date_distinct[k], turno_distinct[k], id_turno_ekovision))
-                        warning_log_mail(logfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                    if letture['schede_lavoro'][0]['cod_turno_ext'] is None or letture['schede_lavoro'][0]['cod_turno_ext'] =='':
+                        logger.warning('Anomalia. Nessun turno su Eovision per il percorso {0}. Scheda di lavoro {1} del {2}. Turno UO ={3}'.format(cod_percorsi_distinct[k], id_scheda, date_distinct[k], turno_distinct[k]))
+                    else: 
+                        id_turno_ekovision=int(letture['schede_lavoro'][0]['cod_turno_ext'])
+                        logger.info(id_scheda)
+                        if id_turno_ekovision != int(turno_distinct[k]):
+                            logger.warning('Anomalia turni per percorso {0}. Scheda di lavoro {1} del {2}. Turno UO ={3}, Turno Ekovision={4}'.format(cod_percorsi_distinct[k], id_scheda, date_distinct[k], turno_distinct[k], id_turno_ekovision))
+                            warning_log_mail(logfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
                 except Exception as e:
                     logger.error(e)
                     logger.error(letture)
                     logger.error('Errore NON BLOCCANTE turni scheda {}'.format(id_scheda))
     
         k+=1
-        #conn.commit() 
+        # committo l'inserimento nella tabella di creazione delle schede
+        conn.commit() 
     
     
     if datetime.today() >= datetime.strptime('29/01/2024', '%d/%m/%Y'):
@@ -665,7 +709,7 @@ def main():
            
 
     # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
     logger.info("chiudo le connessioni in maniera definitiva")
     
     currc.close()

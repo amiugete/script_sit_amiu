@@ -82,7 +82,7 @@ def main(argv):
     path     = os.path.dirname(os.path.abspath(filename))
 
 
-    giorno_file=datetime.datetime.today().strftime('%Y%m%d')
+    giorno_file=datetime.datetime.today().strftime('%Y%m%d%H%M%S')
 
     #giorno_file='{}_{}'.format(giorno_file, prefisso1.replace(' ', '_'))
 

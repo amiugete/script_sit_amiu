@@ -86,8 +86,8 @@ logger = logging.getLogger()
 
 # Create handlers
 c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-f_handler = logging.StreamHandler()
-#f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+#f_handler = logging.StreamHandler()
+f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.WARNING)
@@ -130,7 +130,7 @@ def main():
     # Apertura file excel
     logger.info("Apro il file excel")
 
-    xlsx_file='{0}/update_piazzole/template_update.xlsx'.format(path)
+    xlsx_file='{0}/update_piazzole/template_update_lombino.xlsx'.format(path)
 
     wb = openpyxl.load_workbook(xlsx_file)
 

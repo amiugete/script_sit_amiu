@@ -107,7 +107,7 @@ from invio_messaggio import *
 import csv
 
 
-
+from descrizione_percorso import *  
     
      
 
@@ -131,7 +131,7 @@ def main():
     long=[]
     ripasso=[]
     qual=[]
-    
+    mail_arr=[]
     
     # Get today's date
     #presentday = datetime.now() # or presentday = datetime.today()
@@ -188,16 +188,19 @@ def main():
 	e.causale as descr_causale,
 	ct.id as causale,
 	case 
-		when e.punteggio::int > 0 and e.punteggio::int < 100 then concat('Svolto al ', e.punteggio,'%')
+		when e.punteggio::int > 0 and e.punteggio::int < 100 then concat('Svolto al ', e.punteggio,'% CAUSALE: ', ct.id ,' - ',  e.causale)
 	end note_causale, 
-	concat('TOTEM Matricola ', e.codice) as sorgente_dati, 
+	concat('TOTEM Badge ', e.codice, ' - Matr. ', vpes.matricola::text, ' - ', vpes.cognome, ' ', vpes.nome) as sorgente_dati, 
 	e.datainsert, 
     e.tappa, 
-    e.punteggio
+    e.punteggio,
+    mu.mail
 	from spazzamento.cons_percorsi_spazz_x_app t
 	join spazzamento.effettuati e on e.tappa::int =  t.id_tappa_raggr::int
+ 	left join totem.v_personale_ekovision_step1 vpes on vpes.codice_badge::text = e.codice 
 	left join spazzamento.causali_testi ct on trim(e.causale) ilike trim(ct.descrizione)
-	where e.id > (select max(max_id) from spazzamento.invio_consuntivazioni_ekovision ice)
+ 	left join servizi.mail_ut mu on mu.id_uo::int  =t.id_uo::int 
+	where e.id > (select coalesce(max(max_id),0) from spazzamento.invio_consuntivazioni_ekovision ice)
 	order by 1'''
     
     # prima di tutto faccio un controllo che non ci siano causali che non so gestire e nel caso fermo tutto il passaggio dati e lancio allarme
@@ -217,7 +220,7 @@ def main():
     for cc in lista_causali:
         if cc[0] == None:
             logger.error('''La causale {} non è riconosciuta. Andare sull'HUB ggiungere un id nella tabella spazzamento.causali_testo'''.format(aa[1])) 
-            error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+            error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
             exit()
     
     logger.info('CONTROLLO CAUSALI TERMINATO')
@@ -264,9 +267,11 @@ def main():
             )'''
             # se nota asta fosse nulla
             if vv[4]==None:
-                query_aste='''{} and ap.nota is null'''.format(query_aste)
+                query_aste='''{} and (ap.nota is null or trim(ap.nota) = '') '''.format(query_aste)
             else:
-                query_aste='''{} and trim(ap.nota) like %s'''.format(query_aste) 
+                #query_aste='''{} and trim(ap.nota) like %s'''.format(query_aste) 
+                query_aste='''{} and similarity(trim(ap.nota), trim(%s))>=1'''.format(query_aste) 
+                
                 
             try:
                 # se nota asta fosse nulla
@@ -283,7 +288,7 @@ def main():
                 logger.error('Id Via = {}'.format(vv[3]))
                 logger.error('Nota = {}'.format(vv[4]))
                 logger.error(e)
-                error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
                 exit()
             for aa in lista_aste:
                 #logger.debug(aa[0])       
@@ -328,7 +333,7 @@ def main():
                             logger.error(int(aa[3]))
                             logger.error(select_componenti)
                             logger.error(e)
-                            error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                            error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
                             exit()
                         for cc in componenti:
                             cod_percorso.append(vv[1])
@@ -344,7 +349,8 @@ def main():
                             lat.append(None)
                             long.append(None)
                             ripasso.append(None)
-                            qual.append(vv[12])                                 
+                            qual.append(vv[12])
+                            mail_arr.append(vv[13])                                 
                     else:
                         cod_percorso.append(vv[1])
                         data_percorso.append(vv[2].strftime("%Y%m%d"))
@@ -359,7 +365,8 @@ def main():
                         lat.append(None)
                         long.append(None)
                         ripasso.append(aa[4])
-                        qual.append(vv[12]) 
+                        qual.append(vv[12])
+                        mail_arr.append(vv[13])  
                     
         # mi salvo sempre il max_id    
         max_id=vv[0]
@@ -384,6 +391,8 @@ def main():
     cod_percorsi_distinct=[]
     date_distinct=[]
     turno_distinct=[]
+    mail_arr_distinct=[]
+    sorgente_dati_distinct=[]
     logger.debug('Lunghezza array cod_percorso {}'.format(len(cod_percorso)))
     while k<len(cod_percorso):
         #logger.debug(k)
@@ -391,10 +400,15 @@ def main():
             cod_percorsi_distinct.append(cod_percorso[k])
             date_distinct.append(data_percorso[k])
             turno_distinct.append(id_turno[k])
+            mail_arr_distinct.append(mail_arr[k])
+            sorgente_dati_distinct.append(sorgente_dati[k])
         if k > 0 and cod_percorso[k]!= cod_percorso[k-1]:
             cod_percorsi_distinct.append(cod_percorso[k])
             date_distinct.append(data_percorso[k])
             turno_distinct.append(id_turno[k])
+            mail_arr_distinct.append(mail_arr[k])
+            sorgente_dati_distinct.append(sorgente_dati[k])
+
         k+=1
         
     
@@ -485,7 +499,7 @@ def main():
                     logger.error(' - Data: {}'.format(date_distinct[k]))
                     #logger.error('Id Scheda: {}'.format(id_scheda[k]))
                     # check se c_handller contiene almeno una riga 
-                    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                    error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
                     logger.info("chiudo le connessioni in maniera definitiva")
                     currc.close()
                     #currc1.close()
@@ -508,11 +522,163 @@ def main():
                 try:
                     if check_creazione_scheda ==1:
                         curr.execute(query_insert, (int(ruid),cod_percorsi_distinct[k], date_distinct[k], id_scheda, check_creazione_scheda))
+                        conn.commit() 
+                        body_mail='''E' arrivata una consuntivazione da totem per il percorso {} - {} in data {}.
+                        <br>Origine del dato:{}
+                        <br>Non esistendo la scheda per il giorno in questione è stata creata in automatico.
+                        La nuova scheda ha ID {}'''.format(cod_percorsi_distinct[k],
+                                                           descrizione_percorso(cod_percorsi_distinct[k],  date_distinct[k], curr, logger),
+                                                           date_distinct[k], sorgente_dati_distinct[k], id_scheda)           
+                        creazione_scheda_mail(body_mail, mail_arr_distinct[k], os.path.basename(__file__), logger)
                     else:
                         curr.execute(query_insert, (int(ruid),cod_percorsi_distinct[k], date_distinct[k], check_creazione_scheda))
+                        conn.commit() 
                 except Exception as e:
                     logger.error(query_insert)
                     logger.error(e)
+                
+                
+                    
+                if check_creazione_scheda ==1: 
+                    logger.info('Forzo la pre-consuntivizione delle tappe non fatte perchè di fatto questo percorso non era previsto, quindi tutto ciò che non ho consuntivato è non previsto')   
+                    # nei casi di creazione schede devo anche forzare la pre-consuntivazione delle tappe non fatte che altrimenti su Ekovision risulterebbero tutte da fare 
+                    query_hub= '''select 
+                        null as id, 
+                        t.id_percorso as idpercorso,
+                        to_date(%s, 'YYYYMMDD')::date as datalav ,
+                        t.id_via,
+                        trim(t.nota_via) as nota_via,
+                        2 as flag_esecuzione, 
+                        null as descr_causale,
+                        999 as causale,
+                        null as note_causale, 
+                        'Preconsuntivazione percorso straordinario' as sorgente_dati, 
+                        now() as datainsert, 
+                        t.id_tappa_raggr as tappa, 
+                        0 as punteggio,
+                        null as mail
+                        from spazzamento.cons_percorsi_spazz_x_app t
+                        where t.id_percorso = %s
+                        and t.data_inizio <= to_date(%s, 'YYYYMMDD')
+                        and t.data_fine > to_date(%s, 'YYYYMMDD')
+                        and t.id_tappa_raggr::varchar not in (
+                            select tappa from spazzamento.effettuati e1 
+                            where e1.idpercorso = %s 
+                            and e1.datalav=to_date(%s 'YYYYMMDD')
+                        ) '''
+                    try:
+                        currc.execute(query_hub, (date_distinct[k], 
+                                                cod_percorsi_distinct[k],
+                                                date_distinct[k],
+                                                date_distinct[k], 
+                                                cod_percorsi_distinct[k],
+                                                date_distinct[k]))
+                        lista_x_via2=currc.fetchall()
+                    except Exception as e:
+                        logger.error(query_effettuati_totem)
+                        logger.error(e)
+
+                    for vv2 in lista_x_via2:
+                        query_aste='''select ap.id_asta, p.id_turno, p.id_servizio, ap.id_asta_percorso, coalesce(ap.ripasso_fittizio,0) as ripasso_fittizio
+                        from 
+                        (select id_asta, id_asta_percorso, id_percorso, nota, ap1.ripasso_fittizio, data_inserimento, now()::date + interval '100 years' as data_eliminazione 
+                        from elem.aste_percorso ap1 
+                        where tipo= 'servizio'
+                        union 
+                        select id_asta, id_asta_percorso, id_percorso, nota, 0 as ripasso_fittizio, data_inserimento, data_eliminazione 
+                        from history.aste_percorso ap2
+                        where tipo= 'servizio' and data_eliminazione > %s) as ap
+                        join elem.percorsi p on p.id_percorso = ap.id_percorso 
+                        where ap.id_percorso = 
+                        (
+                            select id_percorso_sit  from anagrafe_percorsi.date_percorsi_sit_uo ep 
+                            where id_percorso_sit is not null  
+                            and cod_percorso = %s 
+                            and data_inizio_validita < %s 
+                            and data_fine_validita >= %s
+                        ) and id_asta in (
+                            select id_asta from elem.aste where id_via= %s
+                        )'''
+                        
+                        
+                        # se nota asta fosse nulla
+                        if vv[4]==None:
+                            query_aste='''{} and (ap.nota is null or trim(ap.nota) = '') '''.format(query_aste)
+                        else:
+                            #query_aste='''{} and trim(ap.nota) like %s'''.format(query_aste) 
+                            query_aste='''{} and similarity(trim(ap.nota), trim(%s))>=1'''.format(query_aste) 
+                            
+                            
+                        try:
+                            # se nota asta fosse nulla
+                            if vv[4]==None:
+                                curr.execute(query_aste, (vv[2], vv[1], vv[2], vv[2], vv[3]))
+                            else:
+                                curr.execute(query_aste, (vv[2], vv[1], vv[2], vv[2], vv[3], vv[4]))
+                            lista_aste=curr.fetchall()
+                        except Exception as e:
+                            logger.error('NON TROVO LE ASTE SUL SIT')
+                            logger.error(query_aste)
+                            logger.error('Codice percorso = {}'.format(vv[1]))
+                            logger.error('Data rif = {}'.format(vv[2]))
+                            logger.error('Id Via = {}'.format(vv[3]))
+                            logger.error('Nota = {}'.format(vv[4]))
+                            logger.error(e)
+                            error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
+                            exit()
+                        for aa in lista_aste:
+                            #logger.debug(aa[0])       
+                            
+                            if aa[2]==33:
+                                logger.debug('CONSUNTIVAZIONI BOTTICELLA')
+                                # lavaggio con botticella devo cercare le componenti per quell'asta percorso
+                                select_componenti='''select id_elemento from (   
+                                                select id_asta_percorso, id_elemento from elem.elementi_aste_percorso eap 
+                                                union 
+                                                select id_asta_percorso, id_elemento from history.elementi_aste_percorso eap 
+                                            ) as eap where id_asta_percorso::int = %s'''
+                                try:
+                                    curr1.execute(select_componenti, (int(aa[3]),))
+                                    componenti=curr1.fetchall()
+                                except Exception as e:
+                                    logger.error(int(aa[3]))
+                                    logger.error(select_componenti)
+                                    logger.error(e)
+                                    error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
+                                    exit()
+                                for cc in componenti:
+                                    cod_percorso.append(vv[1])
+                                    data_percorso.append(vv[2].strftime("%Y%m%d"))
+                                    id_turno.append(aa[1])
+                                    id_componente.append(cc[0])
+                                    id_tratto.append(None)
+                                    flag_esecuzione.append(vv[5])
+                                    causale.append(vv[7])
+                                    nota_causale.append(vv[8])
+                                    sorgente_dati.append(vv[9])
+                                    data_ora.append(vv[10].strftime("%Y%m%d%H%M"))
+                                    lat.append(None)
+                                    long.append(None)
+                                    ripasso.append(None)
+                                    qual.append(vv[12])
+                                    mail_arr.append(vv[13])                                 
+                            else:
+                                cod_percorso.append(vv[1])
+                                data_percorso.append(vv[2].strftime("%Y%m%d"))
+                                id_turno.append(aa[1])
+                                id_componente.append(None)
+                                id_tratto.append(aa[0])
+                                flag_esecuzione.append(vv[5])
+                                causale.append(vv[7])
+                                nota_causale.append(vv[8])
+                                sorgente_dati.append(vv[9])
+                                data_ora.append(vv[10].strftime("%Y%m%d%H%M"))
+                                lat.append(None)
+                                long.append(None)
+                                ripasso.append(aa[4])
+                                qual.append(vv[12])
+                                mail_arr.append(vv[13])   
+                    
             elif len(letture['schede_lavoro']) > 0 : 
                 id_scheda=letture['schede_lavoro'][0]['id_scheda_lav']
                 try:
@@ -632,7 +798,7 @@ def main():
            
     
     # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
     logger.info("chiudo le connessioni in maniera definitiva")
     
     currc.close()

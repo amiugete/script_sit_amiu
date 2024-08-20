@@ -130,7 +130,7 @@ fph.id
 from etl.frequenze_percorsi_history fph 
 join elem.percorsi p on p.id_percorso = fph.id_percorso 
 join etl.frequenze_ok fo on fo.cod_frequenza = fph.frequenza_new 
-where fph.uo = 'f'; '''
+where fph.uo = 'f' and id_categoria_uso=3; '''
 
     testo_mail=''
     
@@ -150,7 +150,11 @@ where fph.uo = 'f'; '''
         query_uo='''SELECT aspu.ID_SER_PER_UO, 
         aspu.ID_UO, 
         au.DESC_UO,
-        as2.DESC_SQUADRA 
+        as2.DESC_SQUADRA, 
+        case 
+            when aspu.DTA_ATTIVAZIONE < SYSDATE then 1
+            else 0
+        end  CHECK_ATTIVAZIONE 
         FROM ANAGR_SER_PER_UO aspu 
         JOIN ANAGR_UO au ON au.ID_UO = aspu.ID_UO 
         JOIN ANAGR_SQUADRE as2 ON as2.ID_SQUADRA = aspu.ID_SQUADRA
@@ -170,25 +174,44 @@ where fph.uo = 'f'; '''
             logger.debug(int(pp[1]))
             logger.debug(vv[1])
             logger.debug(vv[2])
-            try:
-                risp=0
-                ret=cur0.callproc('UNIOPE.CAMBIO_FREQUENZA',
-                         [vv[0],int(pp[1]),vv[1], vv[2], risp])
-                logger.debug(ret)
-                testo_mail='''{0}<li>
-                Cod_percorso={1},
-                Nuova frequenza UO = {2},
-                UO = {3}
-                Squadra = {4}</li>'''.format(testo_mail,vv[0], vv[1], pp[2], pp[3])
-            except Exception as e:
-                check_error=3
-                #logger.error(query_o3)
-                #logger.error(vv[0],pp[1],vv[1], vv[2], risp)
-                logger.error(e)  
+            logger.debug(int(pp[4]))
+            if (int(pp[4]))==1:
+                try:
+                    risp=0
+                    ret=cur0.callproc('UNIOPE.CAMBIO_FREQUENZA',
+                            [vv[0],int(pp[1]),vv[1], vv[2], risp])
+                    logger.debug(ret)
+                    testo_mail='''{0}<li>
+                    Cod_percorso={1},
+                    Nuova frequenza UO = {2},
+                    UO = {3}
+                    Squadra = {4}</li>'''.format(testo_mail,vv[0], vv[1], pp[2], pp[3])
+                except Exception as e:
+                    check_error=3
+                    #logger.error(query_o3)
+                    #logger.error(vv[0],pp[1],vv[1], vv[2], risp)
+                    logger.error(e) 
+            elif (int(pp[4]))==0:
+                try:
+                    update_query='''UPDATE ANAGR_SER_PER_UO SET FREQUENZA_NEW = :c1 WHERE ID_SER_PER_UO = :c2'''
+                    cur0.execute(update_query, (vv[1],int(pp[0])))
+                    testo_mail='''{0}<li>
+                    Cod_percorso={1},
+                    Nuova frequenza UO = {2},
+                    UO = {3}
+                    Squadra = {4}</li>'''.format(testo_mail,vv[0], vv[1], pp[2], pp[3])
+                except Exception as e: 
+                    check_error=4
+                    logger.error(update_query)   
+                    logger.error(e) 
+            else:
+                logger.error('Non so perchè sia finito qui.. verificare!')        
             cur0.close() 
             
             # applico le modifiche sulla UO
             con.commit() 
+            
+            
         if check_error==0: 
             update_sit='''update etl.frequenze_percorsi_history fph set uo='t' where id=%s'''
             try:

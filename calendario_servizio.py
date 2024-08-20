@@ -5,7 +5,7 @@
 # Roberto Marzocchi
 
 '''
-Lo script crea un calendario del servizio per l'UT specificata sulla base dei dati presenti sulla UO
+Lo script crea un calendario del servizio per tuute le UT
 
 '''
 

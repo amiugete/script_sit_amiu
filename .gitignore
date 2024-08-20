@@ -10,6 +10,18 @@ EKOVISION/timbrature/*.csv
 EKOVISION/assenze/*.csv
 EKOVISION/pesi/*.csv
 EKOVISION/log/*.log
+EKOVISION/eko_output/*.json
+EKOVISION/eko_output2/*.json
+
+
+personale/*.pdf
+personale/output/*.pdf
+personale/log/*.log
+
+
+# tengo solo un esempio non tutta una serie di ul
+update_piazzole/template_update_*
+
 
 ecopunti/*.xlsx
 utenze/*.xlsx

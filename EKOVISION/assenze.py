@@ -239,8 +239,9 @@ from personale_ekovision.invio_assenze_ekovision iae'''
         CDCAUSAL AS COD_CAU_ASS, 
         ADCAUSAL AS DES_CAU_ASS
         FROM esipertbo.v_assenze_eko@sipedb
-        WHERE clinival > to_char(trunc((sysdate - interval '2' MONTH), 'MONTH'), 'YYYYMMDD')
-        OR clfinval > to_char(trunc((sysdate - interval '2' MONTH), 'MONTH'), 'YYYYMMDD')
+        WHERE 
+        clinival > to_char(trunc((sysdate - interval '2' MONTH), 'MONTH'), 'YYYYMMDD')
+        OR clfinval > to_char(trunc((sysdate - interval '2' MONTH), 'MONTH'), 'YYYYMMDD') 
         ORDER BY clinival, mtoraini'''
                 
     try:
@@ -314,17 +315,21 @@ from personale_ekovision.invio_assenze_ekovision iae'''
                 exit()
         else:
             for tp in  check_t_e: # tp sta per assenza su PostgreSQL
-                if tp[6]!=tt["COD_CAU_ASS"] or tp[7]!= tt["DES_CAU_ASS"] or tp[4]!=tt["DT_ASS_AL"] or tp[5]!=tt["ORE_ASS_AL"]: # allora faccio update
+                if tp[6].strip()!=tt["COD_CAU_ASS"].strip() or tp[7].strip()!= tt["DES_CAU_ASS"].strip() or int(tp[4])!=int(tt["DT_ASS_AL"]) or int(tp[5])!=int(tt["ORE_ASS_AL"]): # allora faccio update
                     query_update='''UPDATE personale_ekovision.imp_personale_assenze
-                    SET  cod_cau_ass=%s, des_cau_ass=%s, data_ultima_modifica=now()
+                    SET  cod_cau_ass=%s, des_cau_ass=%s, dt_ass_dal=%s, ore_ass_dal=%s, dt_ass_al=%s, ore_ass_al=%s, data_ultima_modifica=now()
                     WHERE id=%s ; '''
                     try:
-                        curr1.execute(query_update, (tt["COD_CAU_ASS"],tt["DES_CAU_ASS"],  tp[0]))     
+                        curr1.execute(query_update, (tt["COD_CAU_ASS"],tt["DES_CAU_ASS"],tt["DT_ASS_DAL"], tt["ORE_ASS_DAL"], tt["DT_ASS_AL"], tt["ORE_ASS_AL"], tp[0]))     
                     except Exception as e:
                         logger.error(query_insert)
                         logger.error('Codice persona = {}'.format(int(tt["COD_DIP"])))
                         logger.error('COD_CAU_ASS = {}'.format(tt["COD_CAU_ASS"]))
                         logger.error('DES_CAU_ASS = {}'.format(tt["DES_CAU_ASS"]))
+                        logger.error('DT_ASS_DAL = {}'.format(tt["DT_ASS_DAL"]))
+                        logger.error('ORE_ASS_DAL = {}'.format(tt["ORE_ASS_DAL"]))
+                        logger.error('DT_ASS_AL = {}'.format(tt["DT_ASS_AL"]))
+                        logger.error('ORE_ASS_AL = {}'.format(tt["ORE_ASS_AL"]))
                         logger.error(e)
                         error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
                         exit()
@@ -346,8 +351,9 @@ from personale_ekovision.invio_assenze_ekovision iae'''
     check_assenza_dwh = '''SELECT id, cod_dip, dt_ass_dal, ora_s, dt_ass_al, ora_e,
         cod_cau_ass, des_cau_ass, flg_deleted, flg_ass_contr
         FROM personale_ekovision.imp_personale_assenze
-        where dt_ass_dal > to_char((now() - INTERVAL '2' MONTH),'YYYYMMDD')::int
-          or  dt_ass_al  > to_char((now() - INTERVAL '2' MONTH),'YYYYMMDD')::int  '''
+        where dt_ass_dal > to_char((now() - INTERVAL '3' MONTH),'YYYYMMDD')::int
+          or  dt_ass_al  > to_char((now() - INTERVAL '3' MONTH),'YYYYMMDD')::int 
+          or data_ultima_modifica > (now() - INTERVAL '6' HOUR)'''
     
     try:
         curr.execute(check_assenza_dwh)     

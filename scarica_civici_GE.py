@@ -149,7 +149,7 @@ order by 1'''.format(epsg)
             
             #url_dw='''{0}&request=GetFeature&typeNames={1}&cql_filter=NOME_MUNICIPIO+ILIKE+'{2}'&outputFormat=json'''.format(endpoint,layer,uu[1])
             #print(url_dw)
-            print('m {} di {}'.format(uu[0], len(lista_municipi)))
+            logging.info('m {} di {}'.format(uu[0], len(lista_municipi)))
             nomefile='{0}/civici/{1}.geojson'.format(path,uu[1].replace(' ', '_'))
             #testfile = urllib.URLopener()
             #testfile.retrieve(url_dw, nomefile)

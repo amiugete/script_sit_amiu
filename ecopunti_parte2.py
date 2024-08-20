@@ -48,7 +48,7 @@ filename = inspect.getframeinfo(inspect.currentframe()).filename
 path     = os.path.dirname(os.path.abspath(filename))
 
 
-giorno_file=datetime.datetime.today().strftime('%Y%m%d')
+giorno_file=datetime.datetime.today().strftime('%Y%m%d%H%M')
 
 
 logfile='{}/log/{}_ecopunti_parte2.log'.format(path, giorno_file)
@@ -226,20 +226,6 @@ def main(argv):
 
 
 
-
-
-    # Array con i civici neri e rossi
-    i=0
-    while i< len(cod_civico):
-        if i == 0:
-            civ= ''' ('{}' '''.format(cod_civico[i])
-        else:
-             civ= '''{} , '{}' '''.format(civ, cod_civico[i])
-        i+=1
-    civ= '''{})'''.format(civ)
-
-
-
     # connessione Oracle
     #cx_Oracle.init_oracle_client(lib_dir=r"C:\oracle\instantclient_19_10")
     logging.info('Connessione a DB Oracle')
@@ -248,6 +234,60 @@ def main(argv):
     logging.debug(parametri_con)
     con = cx_Oracle.connect(parametri_con)
     logging.info("Versione ORACLE: {}".format(con.version))
+
+    print(len(cod_civico))
+    #exit()
+    # Array con i civici neri e rossi
+    
+    
+    
+    # creo una tabelle temporanea
+    
+    check_if_exist='''select count(*)
+from all_objects
+where object_type in ('TABLE','VIEW')
+and object_name = 'CIV_TMP' '''
+    cur = con.cursor()
+    cc=cur.execute(check_if_exist)
+    
+    for c in cc:
+        check=c[0]
+    
+    print(check)
+    cur.close()
+
+    if check==1:
+        truncate='''TRUNCATE TABLE STRADE.CIV_TMP'''
+        cur = con.cursor()
+        cur.execute(truncate)
+        con.commit()
+        cur.close()
+    else:
+        create_table='''CREATE TABLE STRADE.CIV_TMP (
+        COD_CIVICO VARCHAR2(11) NULL
+        )'''
+        cur = con.cursor()
+        cur.execute(create_table)
+        con.commit()
+        cur.close()
+    
+    
+    cur = con.cursor()
+    i=0
+    while i< len(cod_civico):
+        insert_query='''insert into STRADE.CIV_TMP cod_civico values(:cc)'''
+        cur.execute(insert_query, (cod_civico[i],) )
+        if i == 0:
+            civ= ''' ('{}' '''.format(cod_civico[i])
+        else:
+             civ= '''{} , '{}' '''.format(civ, cod_civico[i])
+        i+=1
+    civ= '''{})'''.format(civ)
+    con.commit()
+    cur.close()
+
+
+
 
 
 
@@ -323,13 +363,23 @@ def main(argv):
     logging.info('Utenze domestiche su strade')
 
     cur = con.cursor()
-    query=''' SELECT ID_UTENTE, PROGR_UTENZA, COGNOME, NOME, COD_VIA, DESCR_VIA,
+    """query=''' SELECT ID_UTENTE, PROGR_UTENZA, COGNOME, NOME, COD_VIA, DESCR_VIA,
         CIVICO, LETTERA_CIVICO, COLORE, SCALA, INTERNO, LETTERA_INTERNO, CAP, 
         UNITA_URBANISTICA, QUARTIERE, CIRCOSCRIZIONE, ZONA, ABITAZIONE_DI_RESIDENZA, NUM_OCCUPANTI, DESCR_CATEGORIA, DESCR_UTILIZZO, COD_INTERNO
         FROM STRADE.UTENZE_TIA_DOMESTICHE
         WHERE COD_CIVICO in {}
         '''.format(civ)
+    lista_domestiche = cur.execute(query)"""
+    
+    
 
+    #exit()
+    query=''' SELECT ID_UTENTE, PROGR_UTENZA, COGNOME, NOME, COD_VIA, DESCR_VIA,
+        CIVICO, LETTERA_CIVICO, COLORE, SCALA, INTERNO, LETTERA_INTERNO, CAP, 
+        UNITA_URBANISTICA, QUARTIERE, CIRCOSCRIZIONE, ZONA, ABITAZIONE_DI_RESIDENZA, NUM_OCCUPANTI, DESCR_CATEGORIA, DESCR_UTILIZZO, COD_INTERNO
+        FROM STRADE.UTENZE_TIA_DOMESTICHE
+        WHERE COD_CIVICO in (SELECT COD_CIVICO FROM STRADE.CIV_TMP )
+        '''
     lista_domestiche = cur.execute(query)
 
     i=1
@@ -383,13 +433,19 @@ def main(argv):
 
 
 
+
+
     cur3 = con.cursor()
-    query=''' SELECT DISTINCT COD_VIA, DESCR_VIA,
+    """query=''' SELECT DISTINCT COD_VIA, DESCR_VIA,
         CIVICO, SUB_CIVICO, COLORE 
         FROM STRADE.UTENZE_TIA_DOMESTICHE
         WHERE COD_CIVICO in {} ORDER BY DESCR_VIA
-        '''.format(civ)
-
+        '''.format(civ)"""
+    query=''' SELECT DISTINCT COD_VIA, DESCR_VIA,
+        CIVICO, LETTERA_CIVICO, COLORE 
+        FROM STRADE.UTENZE_TIA_DOMESTICHE
+        WHERE COD_CIVICO in (SELECT COD_CIVICO FROM STRADE.CIV_TMP) ORDER BY DESCR_VIA
+        '''
     #logging.debug(query)
     lista_civdomestiche = cur3.execute(query)
 
@@ -441,13 +497,22 @@ def main(argv):
 
 
 
-    query='''SELECT ID_UTENTE, PROGR_UTENZA, NOMINATIVO, CFISC_PARIVA, COD_VIA, DESCR_VIA,
+
+
+
+    """query='''SELECT ID_UTENTE, PROGR_UTENZA, NOMINATIVO, CFISC_PARIVA, COD_VIA, DESCR_VIA,
 CIVICO, COLORE, SCALA, INTERNO, LETTERA_INTERNO, CAP, 
 UNITA_URBANISTICA, QUARTIERE, CIRCOSCRIZIONE,  SUPERFICIE, DESCR_CATEGORIA, DESCR_UTILIZZO, COD_INTERNO
 FROM STRADE.UTENZE_TIA_NON_DOMESTICHE
 WHERE COD_CIVICO in {}
-        '''.format(civ)
-
+        '''.format(civ)"""
+    
+    
+    query='''SELECT ID_UTENTE, PROGR_UTENZA, NOMINATIVO, CFISC_PARIVA, COD_VIA, DESCR_VIA,
+CIVICO, COLORE, SCALA, INTERNO, LETTERA_INTERNO, CAP, 
+UNITA_URBANISTICA, QUARTIERE, CIRCOSCRIZIONE,  SUPERFICIE, DESCR_CATEGORIA, DESCR_UTILIZZO, COD_INTERNO
+FROM STRADE.UTENZE_TIA_NON_DOMESTICHE
+WHERE COD_CIVICO in (SELECT COD_CIVICO FROM STRADE.CIV_TMP )'''
     lista_nondomestiche = cur2.execute(query)
 
     i=1
@@ -501,11 +566,17 @@ WHERE COD_CIVICO in {}
 
 
     cur4 = con.cursor()
-    query=''' SELECT DISTINCT COD_VIA, DESCR_VIA,
+    """query=''' SELECT DISTINCT COD_VIA, DESCR_VIA,
         CIVICO, LETTERA_CIVICO, COLORE 
         FROM STRADE.UTENZE_TIA_NON_DOMESTICHE
         WHERE COD_CIVICO in {} ORDER BY DESCR_VIA
-        '''.format(civ)
+        '''.format(civ)"""
+    
+    
+    query=''' SELECT DISTINCT COD_VIA, DESCR_VIA,
+        CIVICO, LETTERA_CIVICO, COLORE 
+        FROM STRADE.UTENZE_TIA_NON_DOMESTICHE
+        WHERE COD_CIVICO in (SELECT COD_CIVICO FROM STRADE.CIV_TMP) ORDER BY DESCR_VIA''' 
 
     #logging.debug(query)
     lista_civnondomestiche = cur4.execute(query)

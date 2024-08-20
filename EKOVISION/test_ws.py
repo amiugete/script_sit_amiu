@@ -152,14 +152,14 @@ def main():
     
     
     
-
-    
+    # 0213236202 scheda aperta con 2 persone
+    # 0213236102 scheda eseguita con 2 persone 
 
     # qua provo il WS
     params={'obj':'schede_lavoro',
         'act' : 'r',
-        'sch_lav_data': '20240102',
-        'cod_modello_srv': '0101363201',
+        'sch_lav_data': '20240611',
+        'cod_modello_srv': '0213236102',
         'flg_includi_eseguite': 1,
         'flg_includi_chiuse': 1
         }
@@ -200,7 +200,7 @@ def main():
                     'ruid': '0000004',
                     'json': json.dumps(giason)
                     }
-            
+            exit()
             response2 = requests.post(eko_url, params=params2, data=data, headers=headers)
             letture2 = response2.json()
             logger.info(letture2)

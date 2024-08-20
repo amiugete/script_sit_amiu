@@ -1,0 +1,141 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+# AMIU copyleft 2023
+# Roberto Marzocchi
+
+'''
+Lo script si occupa della consuntivazione spazzamento:
+
+
+
+'''
+
+#from msilib import type_short
+import os, sys, re  # ,shutil,glob
+
+#import getopt  # per gestire gli input
+
+#import pymssql
+
+from datetime import date, datetime, timedelta
+
+import requests
+from requests.exceptions import HTTPError
+
+import json
+
+
+import xlsxwriter
+
+import psycopg2
+
+import cx_Oracle
+
+currentdir = os.path.dirname(os.path.realpath(__file__))
+parentdir = os.path.dirname(currentdir)
+sys.path.append(parentdir)
+from credenziali import *
+
+
+
+# per mandare file a EKOVISION
+import pysftp
+
+
+#import requests
+
+import logging
+
+path=os.path.dirname(sys.argv[0]) 
+nome=os.path.basename(__file__).replace('.py','')
+#tmpfolder=tempfile.gettempdir() # get the current temporary directory
+logfile='{0}/log/{1}.log'.format(path,nome)
+errorfile='{0}/log/error_{1}.log'.format(path,nome)
+#if os.path.exists(logfile):
+#    os.remove(logfile)
+
+
+
+
+
+
+
+# Create a custom logger
+logging.basicConfig(
+    level=logging.DEBUG,
+    handlers=[
+    ]
+)
+
+logger = logging.getLogger()
+
+# Create handlers
+c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
+f_handler = logging.StreamHandler()
+#f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+
+
+c_handler.setLevel(logging.ERROR)
+f_handler.setLevel(logging.INFO)
+
+
+# Add handlers to the logger
+logger.addHandler(c_handler)
+logger.addHandler(f_handler)
+
+
+cc_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
+
+c_handler.setFormatter(cc_format)
+f_handler.setFormatter(cc_format)
+
+
+# libreria per invio mail
+import email, smtplib, ssl
+import mimetypes
+from email.mime.multipart import MIMEMultipart
+from email import encoders
+from email.message import Message
+from email.mime.audio import MIMEAudio
+from email.mime.base import MIMEBase
+from email.mime.image import MIMEImage
+from email.mime.text import MIMEText
+from invio_messaggio import *
+
+# libreria per scrivere file csv
+import csv
+
+
+
+    
+from descrizione_percorso import *      
+
+def main():
+    
+    logger.info('Il PID corrente è {0}'.format(os.getpid()))
+  
+
+    
+    
+        
+    # Mi connetto a SIT (PostgreSQL) per poi recuperare le mail
+    nome_db=db
+    logger.info('Connessione al db {}'.format(nome_db))
+    conn = psycopg2.connect(dbname=nome_db,
+                        port=port,
+                        user=user,
+                        password=pwd,
+                        host=host)
+    curr= conn.cursor()
+    cod_percorso= '0507001501'
+    data='20240704'
+    
+    
+    
+    
+    logger.info(descrizione_percorso(cod_percorso, data, curr, logger))
+    
+
+if __name__ == "__main__":
+    main()   

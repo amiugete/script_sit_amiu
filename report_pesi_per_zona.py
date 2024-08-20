@@ -180,10 +180,10 @@ def main():
     
     # QUERY per estrarre i dati (R.Piana)
     # DA SISTEMARE LE DATE
-    query0= ''' select zona_titolare AS zona, desc_ut_esecutrice AS UT_ESECUTRICE, desc_ut_titolare AS ut_titolare,
+    """query0= ''' select zona_titolare AS zona, desc_ut_esecutrice AS UT_ESECUTRICE, desc_ut_titolare AS ut_titolare,
 id_percorso AS codice, descrizione_percorso AS percorso, descrizione_servizio AS servizio, cer,   
 tipo_rifiuto, turno, descr_orario AS orario,
-data_conferimento, ora_conferimento, tipo_mezzo mezzo, sportello, targa, portata, autista, tipo_record AS prov_registrazione,
+data_conferimento, ora_conferimento, tipo_mezzo as tipo_mezzo_prev, sportello, targa, portata, autista, tipo_record AS prov_registrazione,
 destinazione, peso, 
 case
 when portata > 0 
@@ -192,6 +192,22 @@ else NULL
 end
 PERC_PORTATA
 from dettaglio_pesi_percorsi'''
+
+"""
+    query0= '''select zona_titolare AS zona, desc_ut_esecutrice AS UT_ESECUTRICE, desc_ut_titolare AS ut_titolare,
+    id_percorso AS codice, descrizione_percorso AS percorso, descrizione_servizio AS servizio, cer,   
+    tipo_rifiuto, turno, descr_orario AS orario,
+    data_conferimento, ora_conferimento, tipo_mezzo as tipo_mezzo_prev, 
+    a.descrizione_tipologia_mezzo AS tipo_mezzo_usato, p.sportello, p.targa, p.portata, autista, tipo_record AS prov_registrazione,
+    destinazione, peso, 
+    case
+    when p.portata > 0 
+    then  concat(to_char(round(peso*100/p.portata)),' %') 
+    else NULL
+    end
+    PERC_PORTATA
+    from dettaglio_pesi_percorsi p
+    LEFT JOIN v_auto_ekovision@info a ON trim(a.sportello) = trim(p.SPORTELLO)'''
 
     query_date='''where to_char(data_conferimento, 'yyyymmdd')||ora_conferimento between to_char(sysdate - :gg , 'yyyymmdd')||'04:00:00'
 and to_char(sysdate - (:gg-7), 'yyyymmdd')||'03:59:59' '''
