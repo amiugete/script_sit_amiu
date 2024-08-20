@@ -17,6 +17,7 @@ EKOVISION/eko_output2/*.json
 personale/*.pdf
 personale/output/*.pdf
 personale/log/*.log
+personale/file_processati.csv
 
 
 # tengo solo un esempio non tutta una serie di ul
