@@ -304,13 +304,13 @@ where cod_frequenza not in (select cod_frequenza from etl.frequenze_ok_1)'''
     # Create a secure SSL context
     context = ssl.create_default_context()
 
-    subject = "FREQUENZA DA AGGIUNGERE A CODICE DI UO"
-    body = '''Mail generata automaticamente dal codice python frequenze.py che gira su amiugis\n\n\n
-    Frequenze da aggiungere:\n'''
+    subject = "URGENTE - Frequenza da aggiungere su UO ed EKOVISION"
+    body = '''Mail generata automaticamente dal codice python frequenze.py che gira su amiugis ogni 5 minuti verificando le frequenze di SIT <br><br>
+    <b>Le frequenze sono da aggiungere tempestivamente per evitare che vadano in errore gli script notturni con le variazioni sui percorsi:</b><br>'''
     #sender_email = user_mail
     receiver_email='assterritorio@amiu.genova.it'
     debug_email='roberto.marzocchi@amiu.genova.it'
-    cc_mail='calvello@amiu.genova.it'
+    cc_mail='calvello@amiu.genova.it; pianar@amiu.genova.it; '
 
     # Create a multipart message and set headers
     message = MIMEMultipart()
@@ -335,21 +335,33 @@ where cod_frequenza not in (select cod_frequenza from etl.frequenze_ok_1)'''
 
     check=0
     for fff in frequenze_nuove:
-        body = """Aggiungere ricorrenza a EKOVISION:\n
-                1) Servizi --> Anagrafiche --> Configurazione ricorrenze\n
-                2) Aggiungere la ricorrenza usando come codice esterno quello di SIT ({1}) e poi specificare nei dettagli i giorni 
-                che creano quella frequenza. Va fatta manualmente per ogni giorno che compone quella frequenza 
-                (o ricorrenza come la chiama EKOVISION)\n\n
-                Modifiche alla UO (fino a quando necessarie - ref. Calvello e/o Marzocchi):\n
-                {0} cod_frequenza (SIT)= {1} freq_binaria (UO) = {2}\n
-                va modificato il file sul server webamiu\n
-                D$\\Inetpub\\wwwroot\\Uoweb\\Consuntivazione09\\App_Code\\Frequenze.cs \n""".format(body, fff[0], fff[4])
+        body = """{0}<br>
+        <h2> Nuova frequenza: {1} / {3} ({4} gg a settimana)</h2>
+<h3>Aggiungere ricorrenza {1} a EKOVISION (rif. Marzocchi o Magioncalda) </h3>
+<ol>
+<li> Servizi --> Anagrafiche --> Configurazione ricorrenze</li>
+<li> Aggiungere la ricorrenza usando come codice esterno quello di SIT ({1}) e poi specificare nei dettagli i giorni 
+che creano quella frequenza. <br> <b>Va fatta manualmente per ogni giorno che compone quella frequenza 
+                (o ricorrenza come la chiama EKOVISION)</b></li>
+</ol>
+<hr>
+<h3>Modifiche alla UO (fino a quando necessarie - Marzocchi o Calvello):</h3>
+
+va modificato il file sul server webamiu<br>
+D$\\Inetpub\\wwwroot\\Uoweb\\Consuntivazione09\\App_Code\\Frequenze.cs <br>
+aggiungendo la seguente riga:<br>
+
+<i>cod_frequenza (SIT)= {1} freq_binaria (UO) = {2}</i>
+
+<br><br><hr><br> Assistenza Territorio <br><br>
+Per info su accesso al server <b>amiugis</b> visualizza la WIKI: 
+http://amiuintranet.amiu.genova.it/content/accesso-server-amiugis""".format(body, fff[0], fff[4], fff[2], fff[5])
         check=1
 
 
     if check>0:
         # Add body to email
-        message.attach(MIMEText(body, "plain"))
+        message.attach(MIMEText(body, "html"))
 
         text = message.as_string()
 

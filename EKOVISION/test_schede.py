@@ -184,8 +184,11 @@ def main():
     params={'obj':'schede_lavoro',
         'act' : 'r',
         'sch_lav_data': data_check,
-        'cod_modello_srv': cp
+        'cod_modello_srv': cp, 
+        'flg_includi_eseguite': 1,
+        'flg_includi_chiuse': 1
         }
+
     response = requests.post(eko_url, params=params, data=data_json, headers=headers)
     #response.json()
     #logger.debug(response.status_code)
@@ -208,9 +211,16 @@ def main():
         logger.info(letture)
         if len(letture['schede_lavoro']) > 0 : 
             id_scheda=letture['schede_lavoro'][0]['id_scheda_lav']
+            ora_inizio_lav=letture['schede_lavoro'][0]['ora_inizio_lav']
+            ora_inizio_lav_2=letture['schede_lavoro'][0]['ora_inizio_lav_2']
+            ora_fine_lav=letture['schede_lavoro'][0]['ora_fine_lav']
+            ora_fine_lav_2=letture['schede_lavoro'][0]['ora_fine_lav_2']
             logger.info('Id_scheda:{}'.format(id_scheda))
-               
     
+    body_mail='''E' arrivata una consuntivazione da totem per il percorso {} in data {}.
+    <br>Non esistendo la scheda per il giorno in questione è stata creata in automatico.
+    La nuova scheda ha ID {}'''.format(cp, data_check, id_scheda)           
+    creazione_scheda_mail(body_mail,'roberto.marzocchi@amiu.genova.it; vobbo@libero.it', os.path.basename(__file__), logger)
 
     curr.close()
     error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)

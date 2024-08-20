@@ -132,12 +132,12 @@ def update_asta_piazzola(piazzola, asta_old, asta_new, ambiente):
                 logging.error(e)
             
             insert= '''insert into elem.aste_percorso (id_asta, num_seq, x_cod_percorso, lato_servizio, percent_trattamento, tipo, frequenza, 
-            carico_scarico, id_percorso, metri_trasf, tempo_trasf, senso_perc, lung_trattamento, nota) SELECT %s, min(num_seq), x_cod_percorso,
+            carico_scarico, id_percorso, metri_trasf, tempo_trasf, senso_perc, lung_trattamento, nota, data_inserimento) SELECT %s, min(num_seq), x_cod_percorso,
             lato_servizio, percent_trattamento, tipo, frequenza, 
-            carico_scarico, id_percorso, metri_trasf, tempo_trasf, senso_perc, lung_trattamento, nota
+            carico_scarico, id_percorso, metri_trasf, tempo_trasf, senso_perc, lung_trattamento, nota, data_inserimento::date
             FROM elem.aste_percorso where id_percorso = %s and id_asta=%s group by x_cod_percorso,
             lato_servizio, percent_trattamento, tipo, frequenza, 
-            carico_scarico, id_percorso, metri_trasf, tempo_trasf, senso_perc, lung_trattamento, nota;'''
+            carico_scarico, id_percorso, metri_trasf, tempo_trasf, senso_perc, lung_trattamento, nota, data_inserimento::date'''
 
             try:
                 curr3.execute(insert,(asta_new, id_percorso, asta_old,))
@@ -259,9 +259,9 @@ def main():
     logging.info('''Dominio ={0}, Utente={1}'''.format(domain, user))
     ############################################
     #INPUT (da rendere dinamici per  fare WS)
-    piazzola = 41811
-    asta_old = 1229340003
-    asta_new = 1214880003
+    piazzola = 42232
+    asta_old = 3170377981
+    asta_new = 3170378137
     ambiente = 'sit' # sit_test, #sit_prog
     #############################################
     update_asta_piazzola(piazzola, asta_old, asta_new, ambiente)

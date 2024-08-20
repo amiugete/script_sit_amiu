@@ -70,8 +70,8 @@ logging.basicConfig(format='%(asctime)s\t%(levelname)s\t%(message)s',
 
 path=os.path.dirname(sys.argv[0]) 
 #tmpfolder=tempfile.gettempdir() # get the current temporary directory
-logfile='{}/log/variazioni_importazioni.log'.format(path)
-errorfile='{}/log/error_variazioni_importazioni.log'.format(path)
+logfile='{}/log/test_tappe.log'.format(path)
+errorfile='{}/log/error_test_tappe.log'.format(path)
 #if os.path.exists(logfile):
 #    os.remove(logfile)
 
@@ -176,6 +176,7 @@ def main():
 
     curr = conn.cursor()
     #conn.autocommit = True
+
 
 
     id_p= 155762

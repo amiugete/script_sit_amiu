@@ -120,7 +120,10 @@ def tappa_prevista(day,frequenza_binaria):
     # mensile (da finire)
     elif frequenza_binaria[0]=='M':
         # calcolo la settimana (week_number) e il giorno della settimana (day of week --> dow)
-        week_number = (day.day) // 7 + 1
+        if (day.day % 7)==0:
+            week_number = ((day.day) // 7)
+        else:     
+            week_number = ((day.day) // 7) + 1
         dow=day.weekday()+1
         string='{0}{1}'.format(week_number,dow)
         # verifico se il giorno sia previsto o meno
@@ -227,7 +230,7 @@ def main():
             #logger.debug(tappa_prevista(day, aa[4]))
             if (tappa_prevista(day, aa[4])==1 # frequenza percorso
                 and tappa_prevista(day, aa[3])==-1 # frequenza asta
-                and aa[6] < day # data attivazione
+                and aa[6] <= day # data attivazione
                 and (aa[7] is None or aa[7] > day) # data dismissione
                 ):
                 cod_percorso.append(aa[0])
@@ -262,7 +265,7 @@ def main():
             join elem.servizi s on s.id_servizio = p.id_servizio 
             left join etl.frequenze_ok fo3 on fo3.cod_frequenza = (p.frequenza-eap.frequenza::int)
             where p.id_categoria_uso in (3,6) and ap.frequenza is not null 
-            and eap.frequenza::int <> p.frequenza --and s.riempimento =0 
+            and eap.frequenza::int <> p.frequenza and s.riempimento > 0 
             order by p.cod_percorso, ap.num_seq '''
                 
         try:
@@ -282,7 +285,7 @@ def main():
             #logger.debug(tappa_prevista(day, aa[4]))
             if (tappa_prevista(day, aa[4])==1 
                 and tappa_prevista(day, aa[3])==-1
-                and aa[7] < day # data attivazione
+                and aa[7] <= day # data attivazione
                 and (aa[8] is None or aa[8] > day) # data dismissione
                 ):
                 cod_percorso.append(aa[0])

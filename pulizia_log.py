@@ -100,7 +100,10 @@ consuntivazioni='{}/EKOVISION/consuntivazioni'.format(path)
 timbrature='{}/EKOVISION/timbrature'.format(path)
 assenze='{}/EKOVISION/assenze'.format(path)
 
-cartelle_da_pulire=[logpath, variazioni, idea, ecopunti, utenze, consuntivazioni, preconsuntivazioni, timbrature, assenze]
+json_ekovision='{}/EKOVISION/eko_output'.format(path)
+
+
+cartelle_da_pulire=[logpath, variazioni, idea, ecopunti, utenze, consuntivazioni, preconsuntivazioni, timbrature, assenze, json_ekovision]
 
 
 c=0

@@ -236,9 +236,9 @@ def main():
     for pp in percorsi:
         percorso_uo='''SELECT ID_PERCORSO, ID_TURNO 
         FROM ANAGR_SER_PER_UO aspu 
-        WHERE ID_PERCORSO IN (:cod_perc) AND (DTA_DISATTIVAZIONE > SYSDATE OR 
+        WHERE ID_PERCORSO IN (:cod_perc) AND (DTA_DISATTIVAZIONE > SYSDATE AND 
         (aspu.DTA_DISATTIVAZIONE=(SELECT max(DTA_DISATTIVAZIONE) FROM ANAGR_SER_PER_UO WHERE ID_PERCORSO=aspu.ID_PERCORSO AND ID_UO=aspu.ID_UO) 
-        AND
+        OR
         ID_PERCORSO IN (SELECT ID_PERCORSO FROM CONS_PERCORSI_STAGIONALI )))
         GROUP BY ID_PERCORSO, ID_TURNO'''
         try:
@@ -263,7 +263,7 @@ def main():
     
     
     curr1.close()
-    #conn.commit()
+    conn.commit()
     curr.close()
     cur.close()
 

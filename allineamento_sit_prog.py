@@ -83,7 +83,7 @@ f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.ERROR)
-f_handler.setLevel(logging.INFO)
+f_handler.setLevel(logging.DEBUG)
 
 
 # Add handlers to the logger
@@ -303,7 +303,7 @@ def main():
             update_id='''UPDATE elem.elementi 
             SET id_elemento=(select least(0,min(id_elemento))-1 from elem.elementi e )
             where id_elemento=%s'''
-            curr_p1.execute(update_id, (e[0]))
+            curr_p1.execute(update_id, (int(e[0]),))
             ########################################################################################
             # da testare sempre prima senza fare i commit per verificare che sia tutto OK
             conn_p.commit()
@@ -418,26 +418,26 @@ def main():
         
     
 
-        selezione_geom_aste='''SELECT id, idelem, mi_style, mi_prinx, geoloc, osm_id
+        selezione_geom_aste='''SELECT id, idelem, geoloc, osm_id
         FROM geo.grafostradale WHERE id = %s;
         '''
     
 
 
-
+        logger.debug('Id_asta = {}'.format(int(aa[0])))
         try:
-            curr1.execute(selezione_geom_aste,(aa[0],))
+            curr1.execute(selezione_geom_aste,(int(aa[0]),))
             id_ag=curr1.fetchall()
         except Exception as e:
             logger.error(e)
 
 
         insert_geo='''INSERT INTO geo.grafostradale
-        (id, idelem, mi_style, mi_prinx, geoloc, osm_id)
-        VALUES(%s, %s, %s, %s, %s, %s);
+        (id, idelem, geoloc, osm_id)
+        VALUES(%s, %s, %s, %s);
         '''
         for ag in id_ag:
-            curr_p1.execute(insert_geo, (ag[0],ag[1],ag[2],ag[3],ag[4],ag[5]))
+            curr_p1.execute(insert_geo, (ag[0],ag[1],ag[2],ag[3]))
 
        
        ########################################################################################
@@ -525,12 +525,19 @@ def main():
         #args_str = ','.join(curr_p1.mogrify(("(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", x) for x in pp)
         #print(args_str)
         #31
-        curr_p.execute(query_insert, (pp[0], pp[1],pp[2],pp[3],pp[4],pp[5],pp[6], pp[7],pp[8],pp[9],pp[10], pp[11],pp[12],pp[13],pp[14],pp[15],pp[16], pp[17],pp[18],pp[19],pp[20],pp[21],pp[22],pp[23],pp[24],pp[25],pp[26],pp[27],pp[28],pp[29],pp[30]))
-        
+        try:
+            curr_p.execute(query_insert, (pp[0], pp[1],pp[2],pp[3],pp[4],pp[5],pp[6], pp[7],pp[8],pp[9],pp[10], pp[11],pp[12],pp[13],pp[14],pp[15],pp[16], pp[17],pp[18],pp[19],pp[20],pp[21],pp[22],pp[23],pp[24],pp[25],pp[26],pp[27],pp[28],pp[29],pp[30]))
+        except Exception as e:
+            logger.error(e)
+            logger.error(query_insert)
+            logger.error('Piazzola. {}'.format(pp[0]))
+            logger.error('Id asta. {}'.format(pp[6]))
+            error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+            exit()
     
 
 
-        selezione_geom_piazzole='''SELECT id, mi_style, mi_prinx, geoloc, coord_lat, coord_long
+        selezione_geom_piazzole='''SELECT id, geoloc, coord_lat, coord_long
             FROM geo.piazzola where id = %s;
         '''
     
@@ -547,10 +554,10 @@ def main():
 
         for pg in id_pg:
             insert_geo='''INSERT INTO geo.piazzola
-            (id, mi_style, mi_prinx, geoloc, coord_lat, coord_long)
-            VALUES(%s,%s,%s,%s,%s,%s);
+            (id, geoloc, coord_lat, coord_long)
+            VALUES(%s,%s,%s,%s);
             '''
-            curr_p1.execute(insert_geo, (pg[0],pg[1],pg[2],pg[3],pg[4],pg[5]))
+            curr_p1.execute(insert_geo, (pg[0],pg[1],pg[2],pg[3]))
 
         curr1.close()
         curr1 = conn.cursor()
@@ -558,10 +565,10 @@ def main():
         curr_p1.close()
         curr_p1 = conn_p.cursor()
 
-        seleziono_elementi='''SELECT id_elemento, tipo_elemento, id_piazzola, difficolta, id_asta, old_idelem, 
-        id_cliente, posizione, dimensione, privato, peso_reale, peso_stimato,
-        numero_civico_old, riferimento, coord_lat, coord_long, id_utenza, nome_attivita,
-        modificato_da, data_ultima_modifica, percent_riempimento, x_id_elemento_privato, freq_stimata, numero_civico,
+        seleziono_elementi='''SELECT id_elemento, tipo_elemento, id_piazzola, /*x_difficolta,*/ id_asta, /*x_old_idelem, 
+        x_id_cliente,*/ posizione, dimensione, privato, peso_reale, peso_stimato,
+        /*x_numero_civico_old,*/ riferimento, /*x_coord_lat, x_coord_long,*/ id_utenza, nome_attivita,
+        modificato_da, data_ultima_modifica, percent_riempimento, /*x_id_elemento_privato,*/ freq_stimata, numero_civico,
         lettera_civico, colore_civico, note
         FROM elem.elementi WHERE id_piazzola =%s;
         '''
@@ -573,22 +580,25 @@ def main():
             id_e=curr1.fetchall()
         except Exception as e:
             logger.error(e)
+            logger.error(seleziono_elementi)
+            logger.error('ID Piazzola {}'.format(pp[0]))
+            error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+            exit()
 
 
         insert_elementi='''INSERT INTO elem.elementi
-            (id_elemento,tipo_elemento, id_piazzola, difficolta, id_asta, old_idelem,
-            id_cliente, posizione, dimensione, privato, peso_reale, peso_stimato,
-            numero_civico_old, riferimento, coord_lat, coord_long, id_utenza, nome_attivita,
-            modificato_da, data_ultima_modifica, percent_riempimento, x_id_elemento_privato, freq_stimata, numero_civico,
+            (id_elemento,tipo_elemento, id_piazzola, /*difficolta, */ id_asta, /*old_idelem,
+            id_cliente,*/ posizione, dimensione, privato, peso_reale, peso_stimato,
+            /*numero_civico_old,*/ riferimento, /*coord_lat, coord_long, */id_utenza, nome_attivita,
+            modificato_da, data_ultima_modifica, percent_riempimento, /*x_id_elemento_privato,*/ freq_stimata, numero_civico,
             lettera_civico, colore_civico, note)
             VALUES(%s,%s,%s,%s,%s,%s,
             %s,%s,%s,%s,%s,%s,
             %s,%s,%s,%s,%s,%s,
-            %s,%s,%s,%s,%s,%s,
-            %s,%s,%s);'''
+            %s,%s);'''
 
         for ee in id_e:
-            curr_p1.execute(insert_elementi,(ee[0],ee[1],ee[2],ee[3],ee[4],ee[5],ee[6],ee[7],ee[8],ee[9],ee[10],ee[11],ee[12],ee[13],ee[14],ee[15],ee[16],ee[17],ee[18],ee[19],ee[20],ee[21],ee[22],ee[23],ee[24],ee[25],ee[26]))
+            curr_p1.execute(insert_elementi,(ee[0],ee[1],ee[2],ee[3],ee[4],ee[5],ee[6],ee[7],ee[8],ee[9],ee[10],ee[11],ee[12],ee[13],ee[14],ee[15],ee[16],ee[17],ee[18],ee[19]))
             c_e+=1
             #27
 
@@ -613,13 +623,12 @@ def main():
     ''' Parto dagli elementi di SIT '''
 
 
-    select_elementi_sit='''SELECT 
-    id_elemento, tipo_elemento, id_piazzola, difficolta, id_asta, old_idelem,
-    id_cliente, posizione, dimensione, privato, peso_reale, peso_stimato,
-    numero_civico_old, riferimento, coord_lat, coord_long, id_utenza, nome_attivita,
-    modificato_da, data_ultima_modifica, percent_riempimento, x_id_elemento_privato, freq_stimata, numero_civico,
-    lettera_civico, colore_civico, note
-    FROM elem.elementi;'''
+    select_elementi_sit='''SELECT id_elemento, tipo_elemento, id_piazzola, /*x_difficolta,*/ id_asta, /*x_old_idelem, 
+        x_id_cliente,*/ posizione, dimensione, privato, peso_reale, peso_stimato,
+        /*x_numero_civico_old,*/ riferimento, /*x_coord_lat, x_coord_long,*/ id_utenza, nome_attivita,
+        modificato_da, data_ultima_modifica, percent_riempimento, /*x_id_elemento_privato,*/ freq_stimata, numero_civico,
+        lettera_civico, colore_civico, note
+        FROM elem.elementi;'''
 
     #27
 
@@ -652,8 +661,18 @@ def main():
             except Exception as e:
                 logger.error(e)
             # se non ci sono bilaterali nella stessa piazzola
+            insert_elementi='''INSERT INTO elem.elementi
+            (id_elemento,tipo_elemento, id_piazzola, /*difficolta, */ id_asta, /*old_idelem,
+            id_cliente,*/ posizione, dimensione, privato, peso_reale, peso_stimato,
+            /*numero_civico_old,*/ riferimento, /*coord_lat, coord_long, */id_utenza, nome_attivita,
+            modificato_da, data_ultima_modifica, percent_riempimento, /*x_id_elemento_privato,*/ freq_stimata, numero_civico,
+            lettera_civico, colore_civico, note)
+            VALUES(%s,%s,%s,%s,%s,%s,
+            %s,%s,%s,%s,%s,%s,
+            %s,%s,%s,%s,%s,%s,
+            %s,%s);'''
             if len(id_e_bil)<1:
-                curr_p2.execute(insert_elementi,(ee[0],ee[1],ee[2],ee[3],ee[4],ee[5],ee[6],ee[7],ee[8],ee[9],ee[10],ee[11],ee[12],ee[13],ee[14],ee[15],ee[16],ee[17],ee[18],ee[19],ee[20],ee[21],ee[22],ee[23],ee[24],ee[25],ee[26]))
+                curr_p2.execute(insert_elementi,(ee[0],ee[1],ee[2],ee[3],ee[4],ee[5],ee[6],ee[7],ee[8],ee[9],ee[10],ee[11],ee[12],ee[13],ee[14],ee[15],ee[16],ee[17],ee[18],ee[19]))
                 c+=1
 
     ########################################################################################
@@ -741,31 +760,72 @@ def main():
     curr_p.close()
     curr_p1.close()
 
+    conn.close()
+    conn_p.close()
+
+
+    logger.info('Ri-Connessione al db SIT con autocommit')
+    conn = psycopg2.connect(dbname=db,
+                        port=port,
+                        user=user,
+                        password=pwd,
+                        host=host)
+
+    curr = conn.cursor()
+    conn.autocommit = True
+
+
+    logger.info('Ri-Connessione al db SIT PROG con autcommit')
+    conn_p = psycopg2.connect(dbname=db_prog,
+                        port=port,
+                        user=user,
+                        password=pwd,
+                        host=host)
+
+    curr_p = conn_p.cursor()
+    conn_p.autocommit = True
+
+
+    vacuum_sql1='''vacuum analyze elem.elementi'''
+    vacuum_sql2='''vacuum analyze geo.piazzola'''
+
+    try:
+        curr.execute(vacuum_sql1)
+    except Exception as e:
+        logger.error('curr')
+        logger.error(vacuum_sql1)
+        logger.error(e)
+
+
+    curr.close()
+    
+    
+    try:
+        curr_p.execute(vacuum_sql1)
+    except Exception as e:
+        logger.error('currp')
+        logger.error(vacuum_sql1)
+        logger.error(e)
+    conn_p.commit()
+    curr_p.close()
+
 
 
     curr = conn.cursor()
     curr_p = conn_p.cursor()
 
-    vacuum_sql='''vacuum analyze elem.elementi;
-        vacuum analyze elem.elementi;
-        vacuum analyze geo.piazzola;'''
 
     try:
-        curr.execute(vacuum_sql)
-        curr_p.execute(vacuum_sql)
+        curr.execute(vacuum_sql2)
+        curr_p.execute(vacuum_sql2)
     except Exception as e:
-        logger.error(vacuum_sql)
+        logger.error(vacuum_sql2)
         logger.error(e)
 
-    ########################################################################################
-    # da testare sempre prima senza fare i commit per verificare che sia tutto OK
-    conn.commit()
-    conn_p.commit()
-    ########################################################################################
 
     curr.close()
     curr_p.close()
-
+    
 
     ''' Cerco elementi vetro nelle piazzole bilaterali (già fatto)'''
 
@@ -777,7 +837,7 @@ def main():
     # cerco se ci sono stati errori
     count=len(open(errorfile).readlines(  ))
     if  count >0:
-        sent_log_by_mail(_allineamento_sit_prog, nomelogfile)
+        error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
 
 
 

@@ -151,7 +151,10 @@ def cfr_tappe(tappe_sit, tappe_uo, logger):
                 check=1   
             #id_el 6
             if tappe_sit[k][6]!=tappe_uo[k][6]:
-                check=1   
+                check=1 
+            # ripasso
+            if tappe_sit[k][8]!=tappe_uo[k][8]:
+                check=1  
             # nota via  7
             if (tappe_uo[k][7] is None and tappe_sit[k][7] is None) or ( (not tappe_uo[k][7] or re.search("^\s*$", tappe_uo[k][7])) and (not tappe_sit[k][7] or re.search("^\s*$", tappe_sit[k][7])) ):
                 check1=0
@@ -219,6 +222,11 @@ def main():
     fp = datetime.datetime(oggi.year, 6, 24)
     festa_patronale=datetime.date(fp.year, fp.month, fp.day)
     holiday_list_pulita.append(festa_patronale)
+    
+    # aggiungo giorno in cui non sono passate le variazioni
+    fp = datetime.datetime(oggi.year, 2, 19)
+    giorno_variazioni_saltate=datetime.date(fp.year, fp.month, fp.day)
+    holiday_list_pulita.append(giorno_variazioni_saltate)
     
     if num_giorno==0:
         num=3
@@ -358,7 +366,7 @@ def main():
         on u3.id_ut = pu3.id_ut 
         where pu3.responsabile = 'S'
         and p3.id_categoria_uso in (3)
-        and (p3.data_dismissione is null or p3.data_dismissione > current_date )
+        and (p3.data_dismissione is null or p3.data_dismissione > current_date::date )
         and p3.data_attivazione <= current_date::date
         order by ut, servizio
         '''.format(num)
@@ -388,10 +396,45 @@ def main():
         servizio.append(vv[2])
         ut.append(vv[3])
         
-        
+        ########################################################################################################
+        # cerco se il percorso esiste per gestire la nuova tabella anagrafe_percorsi.date_modifica_itinerari
         curr1 = conn.cursor()
+        sel_date = '''select * from anagrafe_percorsi.date_modifica_itinerari where cod_percorso = %s'''  
+        try:
+            curr1.execute(sel_date, (vv[0],))
+            lista_date=curr1.fetchall()
+        except Exception as e:
+            logger.error(e)
         
+        
+        if len(lista_date)==0:
+            # insert
+            curr2 = conn.cursor()
+            insert_q='''insert into anagrafe_percorsi.date_modifica_itinerari (cod_percorso, data_ultima_modifica)
+            values (%s, to_date(%s, 'YYYYMMDD'))'''
+            curr2.execute(insert_q, (vv[0],giorno_file))
+            conn.commit()
+            curr2.close()
+        else:
+            #UPDATE
+            for ld in lista_date:
+                logger.debug(ld[0])
+                logger.debug(ld[1])
+            curr2 = conn.cursor()
+            insert_q='''UPDATE anagrafe_percorsi.date_modifica_itinerari 
+            set data_ultima_modifica= to_date(%s, 'YYYYMMDD')
+            where cod_percorso = %s'''
+            curr2.execute(insert_q, (giorno_file, vv[0]))
+            conn.commit()
+            curr2.close()
+            
+        curr1.close() 
+        
+        
+        
+        ########################################################################################################
         # CAMBIO DATA ATTIVAZIONE SU SIT
+        curr1 = conn.cursor()       
         insert_query='''
             update elem.percorsi set data_attivazione = now()::date
             where data_attivazione < now() and 
@@ -636,7 +679,7 @@ def main():
                 
                 sel_sit='''select vt.num_seq, id_via::int, coalesce(numero_civico,' ') as numero_civico , 
                 coalesce(riferimento,' ') as riferimento, fo.freq_binaria as frequenza,vt.tipo_elemento, vt.id_elemento::int,
-                coalesce(riferimento, ' ') as nota_asta
+                coalesce(riferimento, ' ') as nota_asta,  coalesce (ripasso, 0) as ripasso
                 from etl.v_tappe vt 
                 join etl.frequenze_ok fo on fo.cod_frequenza = vt.frequenza_elemento::int 
                 where id_percorso = %s  
@@ -655,8 +698,8 @@ def main():
                 cur1 = con.cursor()
                 sel_uo='''SELECT VTP.CRONOLOGIA NUM_SEQ,VTP.ID_VIA, NVL(VTP.NUM_CIVICO,' ') as  NUMERO_CIVICO,
                 NVL(VTP.RIFERIMENTO, ' ') as RIFERIMENTO,
-                VTP.FREQELEM,VTP.TIPO_ELEMENTO, TO_NUMBER(VTP.ID_ELEMENTO) AS ID_ELEM_INT,
-                 NVL(VTP.NOTA_VIA, ' ') as NOTA_VIA
+                VTP.FREQELEM, VTP.TIPO_ELEMENTO, TO_NUMBER(VTP.ID_ELEMENTO) AS ID_ELEM_INT,
+                 NVL(VTP.NOTA_VIA, ' ') as NOTA_VIA, COALESCE(TO_NUMBER(RIPASSO),0) AS RIPASSO
                 FROM V_TAPPE_ELEMENTI_PERCORSI VTP
                 inner join (select MAX(CPVT.DATA_PREVISTA) data_prevista, CPVT.ID_PERCORSO
                  from CONS_PERCORSI_VIE_TAPPE CPVT
@@ -694,7 +737,7 @@ def main():
                     logger.info( 'Su UO non ci sono ancora tappe. Ora le importo')
                 elif len(tappe_uo) > 0 and cfr_tappe(tappe_sit, tappe_uo, logger)==0 :
                     logger.info('Percorso {} già importato con data antecedente. Non ci sono state modifiche sostanziali.'.format(vv[0]))
-                    stato_importazione.append('Percorso già importato con data  antecedente. Non ci sono state modifiche sostanziali.')
+                    stato_importazione.append('Percorso già importato con data antecedente. Non ci sono state modifiche sostanziali.')
                     to_import=0
                 
                 if to_import==1:
@@ -707,21 +750,30 @@ def main():
                     (ORDER BY vt.num_seq, case when numero_civico='' then null else numero_civico end nulls last, riferimento)+%s),
                             riferimento,
                             0 as qta_tot_spazzamento, fo.freq_binaria as frequenza, 
-                            case 
+                            /*case 
                             when COALESCE (vt.ripasso, 0) > 0 then 1
                             else  COALESCE (vt.ripasso, 0)
-                            end ripasso,
+                            end ripasso,*/
+                            COALESCE (vt.ripasso, 0) as ripasso,
                             id_piazzola, id_asta,  lung_trattamento, 
                             vt.cod_percorso, vt.id_via, vt.num_seq as cronologia, 
                             now() as dta_import, (now()::date)::timestamp as data_prevista, numero_civico, tipo_elemento
-                            ,nota_asta 
+                            ,nota_asta, 
+                            case 
+                                when id_piazzola is null then id_elemento 
+                                else null
+                            end as id_elemento_no_piazzola
                             from etl.v_tappe vt 
                             join etl.frequenze_ok fo on fo.cod_frequenza = vt.frequenza_elemento::int 
                             where id_percorso = %s 
                             group by vt.num_seq, riferimento,
                             id_piazzola, id_asta, fo.freq_binaria, 
                             ripasso, lung_trattamento, 
-                            vt.cod_percorso, vt.id_via, vt.num_seq, vt.numero_civico, tipo_elemento, nota_asta
+                            vt.cod_percorso, vt.id_via, vt.num_seq, vt.numero_civico, tipo_elemento, nota_asta,
+                            case 
+                                when id_piazzola is null then id_elemento 
+                                else null
+                            end
                             order by num_seq, case when numero_civico='' then null else numero_civico end nulls last, riferimento  '''
                     
                     
@@ -778,8 +830,9 @@ def main():
                             #macro_tappe.append(tappa[2])
                         except Exception as e:
                             check_error=1
-                            logger.error(tappa)
+                            #logger.error(tappa)
                             logger.error(query_insert1)
+                            logger.error('1:{}, 2:{}, 3:{}, 4:{}, 5:{}, 6:{}'.format(tappa[8], tappa[9], tappa[0], tappa[10], tappa[11], tappa[12]))
                             logger.error(e)
                             check_error=1                                            
 
@@ -799,23 +852,46 @@ def main():
                             :t1, :t2, :t3, :t4, :t5, :t6, NULL)'''
 
                         
-
-                        query_sit2='''select fo.freq_binaria as frequenza, case 
-                            when COALESCE (vt.ripasso, 0) > 0 then 1
-                            else  COALESCE (vt.ripasso, 0)
-                            end ripasso, numero_civico, riferimento, 
-                        id_elemento, id_piazzola, tipo_elemento, num_seq
-                        from etl.v_tappe vt 
-                        join etl.frequenze_ok fo on fo.cod_frequenza = vt.frequenza_elemento::int 
-                        where id_percorso = %s and id_piazzola=%s and tipo_elemento = %s and num_seq= %s
-                        order by num_seq, case when numero_civico='' then null else numero_civico end nulls last, id_elemento'''
-                        
-                        try:
-                            curr2.execute(query_sit2, (vv[4], tappa[5], tappa[14], tappa[10]))
-                            sit2=curr2.fetchall()
-                        except Exception as e:
-                            logger.error(query_sit2, vv[4], tappa[5], tappa[14], tappa[10] )
-                            logger.error(e)
+                        if tappa[5] is None:
+                            query_sit2='''select fo.freq_binaria as frequenza, 
+                            /*case 
+                                when COALESCE (vt.ripasso, 0) > 0 then 1
+                                else  COALESCE (vt.ripasso, 0)
+                                end ripasso, */
+                            COALESCE (vt.ripasso, 0) as ripasso,
+                            numero_civico, riferimento, 
+                            id_elemento, id_piazzola, tipo_elemento, num_seq
+                            from etl.v_tappe vt 
+                            join etl.frequenze_ok fo on fo.cod_frequenza = vt.frequenza_elemento::int 
+                            where id_percorso = %s and tipo_elemento = %s and id_elemento=%s
+                            order by num_seq, case when numero_civico='' then null else numero_civico end nulls last, id_elemento'''
+                            
+                            try:
+                                curr2.execute(query_sit2, (vv[4], tappa[14], tappa[16]))
+                                sit2=curr2.fetchall()
+                            except Exception as e:
+                                logger.error(query_sit2, vv[4], tappa[14], tappa[10] )
+                                logger.error(e)
+                        else:
+                            query_sit2='''select fo.freq_binaria as frequenza, 
+                            /*case 
+                                when COALESCE (vt.ripasso, 0) > 0 then 1
+                                else  COALESCE (vt.ripasso, 0)
+                                end ripasso, */
+                            COALESCE (vt.ripasso, 0) as ripasso,
+                            numero_civico, riferimento, 
+                            id_elemento, id_piazzola, tipo_elemento, num_seq
+                            from etl.v_tappe vt 
+                            join etl.frequenze_ok fo on fo.cod_frequenza = vt.frequenza_elemento::int 
+                            where id_percorso = %s and id_piazzola=%s and tipo_elemento = %s and num_seq= %s
+                            order by num_seq, case when numero_civico='' then null else numero_civico end nulls last, id_elemento'''
+                            
+                            try:
+                                curr2.execute(query_sit2, (vv[4], tappa[5], tappa[14], tappa[10]))
+                                sit2=curr2.fetchall()
+                            except Exception as e:
+                                logger.error(query_sit2, vv[4], tappa[5], tappa[14], tappa[10] )
+                                logger.error(e)
                         
                         
                         for elementi in sit2:
@@ -906,7 +982,7 @@ def main():
                 curr1 = conn.cursor()
                 sel_sit='''select vt.num_seq, id_via::int, coalesce(numero_civico,' ') as numero_civico , 
                 coalesce(riferimento,' ') as riferimento, fo.freq_binaria as frequenza,vt.tipo_elemento, vt.id_elemento::int,
-                coalesce(vt.nota_asta, ' ') as nota_asta
+                coalesce(vt.nota_asta, ' ') as nota_asta, coalesce(vt.ripasso, 0) as ripasso
                 from etl.v_tappe vt 
                 join etl.frequenze_ok fo on fo.cod_frequenza = vt.frequenza_asta::int 
                 where id_percorso = %s  
@@ -922,14 +998,14 @@ def main():
                 
                 
                 cur1 = con.cursor()
-                sel_uo='''SELECT VTP.CRONOLOGIA NUM_SEQ,VTP.ID_VIA, NVL(VTP.NUM_CIVICO,' ') as  NUMERO_CIVICO,
+                sel_uo='''SELECT VTP.CRONOLOGIA NUM_SEQ, VTP.ID_VIA, NVL(VTP.NUM_CIVICO,' ') as  NUMERO_CIVICO,
                 NVL(VTP.RIFERIMENTO, ' ') as RIFERIMENTO,
-                VTP.FREQELEM,VTP.TIPO_ELEMENTO, TO_NUMBER(VTP.ID_ELEMENTO) AS ID_ELEM_INT,
+                VTP.FREQELEM, VTP.TIPO_ELEMENTO, TO_NUMBER(VTP.ID_ELEMENTO) AS ID_ELEM_INT,
                 CASE 
 	                 WHEN VTP.NOTA_VIA IS NULL AND VTP.RIFERIMENTO IS NOT NULL THEN VTP.RIFERIMENTO
                  	 ELSE NVL(VTP.NOTA_VIA, ' ')
                  END
-                  as NOTA_VIA
+                  as NOTA_VIA, COALESCE(TO_NUMBER(RIPASSO),0) AS RIPASSO
                 FROM V_TAPPE_ELEMENTI_PERCORSI VTP
                 inner join (select MAX(CPVT.DATA_PREVISTA) data_prevista, CPVT.ID_PERCORSO
                  from CONS_PERCORSI_VIE_TAPPE CPVT
@@ -1086,10 +1162,10 @@ def main():
                         # c'è stato un errore nella funzione per replicare la consuntivazione
                         stato_importazione.append('ERRORE - La consuntivazione non è stata replicata correttamenete')
                     else:
-                        stato_importazione.append('OK Percorso di tipo {} importato correttamente')
+                        stato_importazione.append('OK Percorso di tipo {} importato correttamente'.format(tipo_percorso))
                     cur.close()
                 else: 
-                    stato_importazione.append('OK Percorso di tipo {} importato correttamente')
+                    stato_importazione.append('OK Percorso di tipo {} importato correttamente'.format(tipo_percorso))
                     
         #exit()
         con.commit()
@@ -1166,26 +1242,31 @@ min(data_inizio) as data_inizio,
 case 
 	when max(data_fine) = '20991231' then null 
 	else max(data_fine)
-end data_fine, ripasso
+end data_fine, 
+/*ripasso*/
+case 
+	when max(data_fine) = '20991231' then ripasso 
+	else 0
+end ripasso
 from (
 	  SELECT codice_modello_servizio, ordine, objecy_type, 
   codice, quantita, lato_servizio, percent_trattamento,frequenza,
-  ripasso, numero_passaggi, replace(coalesce(nota,''),'DA PIAZZOLA','') as nota,
+  ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
   codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine
-	 FROM anagrafe_percorsi.v_percorsi_elementi_tratti where data_inizio!=coalesce(data_fine, '20991231')
+	 FROM anagrafe_percorsi.v_percorsi_elementi_tratti where data_inizio < coalesce(data_fine, '20991231')
 	 union 
 	   SELECT codice_modello_servizio, ordine, objecy_type, 
   codice, quantita, lato_servizio, percent_trattamento,frequenza,
-  ripasso, numero_passaggi, replace(coalesce(nota,''),'DA PIAZZOLA','') as nota,
-  codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231')
-	 FROM anagrafe_percorsi.v_percorsi_elementi_tratti_ovs where data_inizio!=coalesce(data_fine, '20991231')
+  ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
+  codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine
+	 FROM anagrafe_percorsi.v_percorsi_elementi_tratti_ovs where data_inizio < coalesce(data_fine, '20991231')
  ) tab 
  where codice_modello_servizio = ANY (%s) 
  group by codice_modello_servizio,  objecy_type, 
   codice, quantita, lato_servizio, percent_trattamento,
   ripasso, numero_passaggi, nota,
   codice_qualita, codice_tipo_servizio
-  order by codice_modello_servizio, data_fine, ordine,  ripasso'''
+  order by codice_modello_servizio, data_fine asc, ordine,  ripasso'''
     
     
     #test=curr.mogrify(query_variazioni_ekovision,(cod_percorso_ok,))
@@ -1366,8 +1447,9 @@ from (
     logger.info(invio)
     
     
-
     
+     
+        
     ##################################################################################################
     ####                                SISTEMO LE SEQUENZE 
     ##################################################################################################
@@ -1497,6 +1579,23 @@ from (
 
     cur2.close()
     
+    
+    ##################################################################################################
+    ####                                UPDATE mv_percorsi_elementi_tratti_dismessi
+    ##################################################################################################
+
+    curr.close()
+    logger.info('Ora FACCIO REFRESH MATERIALIZED VIEW anagrafe_percorsi.mv_percorsi_elementi_tratti_dismessi')
+    curr = conn.cursor()
+
+    r_sql= '''REFRESH MATERIALIZED VIEW anagrafe_percorsi.mv_percorsi_elementi_tratti_dismessi'''
+    try:
+        curr.execute(r_sql)
+    except Exception as e:
+        logger.error(e)
+        check_ekovision=101 # problema query
+    
+    conn.commit()   
     
     ##################################################################################################
     #                               CHIUDO LE CONNESSIONI

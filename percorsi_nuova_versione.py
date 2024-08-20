@@ -92,8 +92,8 @@ logger = logging.getLogger()
 
 # Create handlers
 c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-f_handler = logging.StreamHandler()
-#f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+#f_handler = logging.StreamHandler()
+f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.ERROR)
@@ -150,9 +150,9 @@ def main():
         from elem.percorsi p
         join util.sys_history sh on sh.id_percorso = p.id_percorso and sh.type ilike 'PERCORSO' and sh."action" ilike 'insert' 
         left join util.sys_users su on sh.id_user = su.id_user 
-        where cod_percorso like (select to_char((now()+ INTERVAL '1 DAY'),'%_DDMMYYYY'))
+        where cod_percorso like (select to_char((now()+ INTERVAL '1' DAY),'%_DDMMYYYY'))
         and id_categoria_uso = 2
-        order by 1;'''
+        order by 1'''
     
     
     try:
@@ -233,7 +233,7 @@ def main():
                 and versione = (select max(versione) from elem.percorsi where cod_percorso =%s)),
                 cod_percorso = %s
                 where pp.cod_percorso = %s
-                and pp.id_categoria_uso = 2;'''
+                and pp.id_categoria_uso = 2'''
             
             try:
                 curr1.execute(query_update, (pn[2],pn[2],pn[2],pn[2],pn[2],pn[2],pn[2],pn[2],pn[2],pn[2],pn[3]))
@@ -254,7 +254,7 @@ def main():
             descrizione='Nuova versione percorso codice {0}'.format(pn[2])
             insert_history='''INSERT INTO util.sys_history
 ("type", "action", description, datetime, id_user, id_percorso)
-VALUES('PERCORSO', 'UPDATE', %s, CURRENT_TIMESTAMP, %s, %s);'''
+VALUES('PERCORSO', 'UPDATE', %s, CURRENT_TIMESTAMP, %s, %s)'''
 
             try:
                 curr1.execute(insert_history, (descrizione,pn[0],pn[1]))
@@ -266,14 +266,14 @@ VALUES('PERCORSO', 'UPDATE', %s, CURRENT_TIMESTAMP, %s, %s);'''
         
         
         curr1.close()
-        conn.commit()   
+        #conn.commit()   
 
         # delete percorsi sospesi
         curr1 = conn.cursor()
         if check_error==0:
             delete_sospesi='''DELETE etl.percorsi_sospesi WHERE id_percorso=%s'''
             try:
-                curr1.execute(delete_sospesi, (pn[1]))
+                curr1.execute(delete_sospesi, (int(pn[1]),))
                 #lista_variazioni=curr.fetchall()
             except Exception as e:
                 check_error+=1

@@ -74,8 +74,8 @@ logging.basicConfig(format='%(asctime)s\t%(levelname)s\t%(message)s',
 
 path=os.path.dirname(sys.argv[0]) 
 #tmpfolder=tempfile.gettempdir() # get the current temporary directory
-logfile='{}/log/variazioni_importazioni.log'.format(path)
-errorfile='{}/log/error_variazioni_importazioni.log'.format(path)
+logfile='{}/log/variazioni_importazioni_test_ekovision.log'.format(path)
+errorfile='{}/log/error_variazioni_importazioni_test_ekovision.log'.format(path)
 #if os.path.exists(logfile):
 #    os.remove(logfile)
 
@@ -96,8 +96,8 @@ logger = logging.getLogger()
 
 # Create handlers
 c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-#f_handler = logging.StreamHandler()
-f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+f_handler = logging.StreamHandler()
+#f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.ERROR)
@@ -306,6 +306,7 @@ def main():
         and (p.data_dismissione is null or p.data_dismissione > current_date )
         and p.data_attivazione <= current_date::date
         UNION 
+        /*PERCORSI CHE SI ATTIVANO QUEL GIORNO (stagionali e non solo)*/
         select p2.cod_percorso , p2.descrizione, s2.descrizione as servizio, u2.descrizione  as ut, 
         p2.id_percorso
         from elem.percorsi p2 
@@ -363,129 +364,62 @@ def main():
 
            
     for vv in lista_variazioni:
-        logger.debug(vv[0])
+        #logger.debug(vv[0])
         cod_percorso.append(vv[0])
         descrizione.append(vv[1])
         servizio.append(vv[2])
         ut.append(vv[3])
         
+        
+        
+        
+        
+        # cerco se il percorso esiste per gestire la nuova tabella anagrafe_percorsi.date_modifica_itinerari
+        curr1 = conn.cursor()
+        sel_date = '''select * from anagrafe_percorsi.date_modifica_itinerari where cod_percorso = %s'''  
+        try:
+            curr1.execute(sel_date, (vv[0],))
+            lista_date=curr1.fetchall()
+        except Exception as e:
+            logger.error(e)
+        
+        
+        if len(lista_date)==0:
+            # insert
+            curr2 = conn.cursor()
+            insert_q='''insert into anagrafe_percorsi.date_modifica_itinerari (cod_percorso, data_ultima_modifica)
+            values (%s, to_date(%s, 'YYYYMMDD')'''
+            curr2.execute(insert_q, (vv[0],giorno_file))
+            conn.commit()
+            curr2.close()
+        else:
+            #UPDATE
+            for ld in lista_date:
+                logger.debug(ld[0])
+                logger.debug(ld[1])
+            curr2 = conn.cursor()
+            insert_q='''UPDATE anagrafe_percorsi.date_modifica_itinerari 
+            set data_ultima_modifica= to_date(%s, 'YYYYMMDD')
+            where cod_percorso = %s'''
+            curr2.execute(insert_q, (giorno_file, vv[0]))
+            conn.commit()
+            curr2.close()
+            
+                
+        
+        
+        
+        
+        
+        curr1.close()  
+    #exit()
        
-       
-    print(cod_percorso)
-    cod_percorso_reimp=['0101004101',
-'0101039401',
-'0101359602',
-'0101360502',
-'0101360602',
-'0101360802',
-'0101361502',
-'0101361602',
-'0101361702',
-'0101367201',
-'0101371203',
-'0101380401',
-'0101382903',
-'0103003604',
-'0103004104',
-'0103004304',
-'0103004504',
-'0103004904',
-'0103005204',
-'0103005304',
-'0103005904',
-'0103006404',
-'0111003501',
-'0111003501',
-'0111003903',
-'0111003903',
-'0111004009',
-'0111004101',
-'0111004101',
-'0111004401',
-'0111004401',
-'0111007302',
-'0111007403',
-'0111007602',
-'0201012703',
-'0201238802',
-'0202008203',
-'0203005001',
-'0203005101',
-'0203008501',
-'0203008602',
-'0203008701',
-'0203008802',
-'0212000301',
-'0212000401',
-'0212000501',
-'0212000601',
-'0213238902',
-'0213244502',
-'0213244502',
-'0303005101',
-'0500114301',
-'0500122501',
-'0500123201',
-'0500123801',
-'0500124001',
-'0501004001',
-'0502006702',
-'0502007003',
-'0503000101',
-'0503000201',
-'0503000301',
-'0503000401',
-'0503000501',
-'0503000601',
-'0503000701',
-'0503000801',
-'0503000901',
-'0503001001',
-'0503001101',
-'0503001201',
-'0503001401',
-'0503001501',
-'0503001601',
-'0503001701',
-'0503001801',
-'0503001901',
-'0507109701',
-'0507113602',
-'0507114401',
-'0507114901',
-'0507116202',
-'0507116303',
-'0507123503',
-'0507125301',
-'0507127902',
-'0507130902',
-'0508048202',
-'0508061901',
-'0502AD4102',
-'0501RE4001',
-'0101362101',
-'0101354701',
-'0101371002',
-'0508042201',
-'0507110601',
-'0101040603',
-'0507129401',
-'0101032702',
-'0500116601',
-'0500108602',
-'0111003501',
-'0111003401',
-'0111003301',
-'0508OM7202',
-'0501OM3602',
-'0500114202',
-'0500105503',
-'0500114102',
-'0500105403',
-'0101350401',
-'0101350501',
-'0101350601'    
+    #print(cod_percorso)
+    cod_percorso_reimp=[ '0201238701'
     ]
+    
+    logger.info('Itinerari da esportare :{}'.format(cod_percorso_reimp))
+    
     
     curr.close()
     logger.info('Ora invio le variazioni ad EKOVISION')
@@ -515,32 +449,38 @@ min(data_inizio) as data_inizio,
 case 
 	when max(data_fine) = '20991231' then null 
 	else max(data_fine)
-end data_fine, ripasso
+end data_fine, 
+/*ripasso*/
+case 
+	when max(data_fine) = '20991231' then ripasso 
+	else 0
+end ripasso
 from (
 	  SELECT codice_modello_servizio, ordine, objecy_type, 
   codice, quantita, lato_servizio, percent_trattamento,frequenza,
-  ripasso, numero_passaggi, replace(coalesce(nota,''),'DA PIAZZOLA','') as nota,
+  ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
   codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine
-	 FROM anagrafe_percorsi.v_percorsi_elementi_tratti where data_inizio!=coalesce(data_fine, '20991231')
+	 FROM anagrafe_percorsi.v_percorsi_elementi_tratti where data_inizio < coalesce(data_fine, '20991231')
 	 union 
 	   SELECT codice_modello_servizio, ordine, objecy_type, 
   codice, quantita, lato_servizio, percent_trattamento,frequenza,
-  ripasso, numero_passaggi, replace(coalesce(nota,''),'DA PIAZZOLA','') as nota,
-  codice_qualita, codice_tipo_servizio, data_inizio, data_fine
-	 FROM anagrafe_percorsi.v_percorsi_elementi_tratti_ovs where data_inizio!=coalesce(data_fine, '20991231')
+  ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
+  codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine
+	 FROM anagrafe_percorsi.v_percorsi_elementi_tratti_ovs where data_inizio < coalesce(data_fine, '20991231')
  ) tab 
  where codice_modello_servizio = ANY (%s) 
  group by codice_modello_servizio,  objecy_type, 
   codice, quantita, lato_servizio, percent_trattamento,
   ripasso, numero_passaggi, nota,
   codice_qualita, codice_tipo_servizio
-  order by codice_modello_servizio, data_fine, ordine,  ripasso'''
+  order by codice_modello_servizio, data_fine asc, ordine,  ripasso'''
     
     #test=curr.mogrify(query_variazioni_ekovision,(cod_percorso_ok,))
     #print(test)
     #exit()
     try:
-        curr.execute(query_variazioni_ekovision,(cod_percorso_reimp,))
+        curr.execute(query_variazioni_ekovision,(cod_percorso,))
+        #curr.execute(query_variazioni_ekovision,(cod_percorso_reimp,))
         dettaglio_percorsi_ekovision=curr.fetchall()
     except Exception as e:
         logger.error(e)

@@ -122,7 +122,7 @@ def main():
     start_week = date.today() - timedelta(days=datetime.today().weekday())
     logging.debug('Il primo giorno della settimana è {} '.format(start_week))
     
-    
+    #exit()
     # Mi connetto a SIT (PostgreSQL) per poi recuperare le mail
     nome_db=db
     logger.info('Connessione al db {}'.format(nome_db))
@@ -155,13 +155,15 @@ def main():
 
 
     
-    
-    query="""select a.cod_percorso, vspe.data_fine_validita::date
+    #print(start_week)
+    #exit()
+    query="""select a.cod_percorso, ((vspe.data_fine_validita)::date + interval '1' day)::date as data_fine_validita 
 from (select cod_percorso, max(versione) as mv 
 	from anagrafe_percorsi.v_servizi_per_ekovision vspe 
 	group by cod_percorso) a
 join anagrafe_percorsi.v_servizi_per_ekovision vspe on vspe.cod_percorso= a.cod_percorso and a.mv= vspe.versione
-where data_fine_validita < now()::date and (data_fine_validita + interval '1' day) >= %s"""
+where data_fine_validita < (now()::date + interval '7' day) /*Controllo anche i percorsi in disattivazione*/
+and (data_fine_validita + interval '1' day) >= %s"""
     testo_mail=''
     
     try:
@@ -196,7 +198,9 @@ where data_fine_validita < now()::date and (data_fine_validita + interval '1' da
             params={'obj':'schede_lavoro',
                 'act' : 'r',
                 'sch_lav_data': day,
-                'cod_modello_srv': vv[0]
+                'cod_modello_srv': vv[0], 
+                'flg_includi_eseguite': 1,
+                'flg_includi_chiuse': 0
                 }
             response = requests.post(eko_url, params=params, data=data_json, headers=headers)
             #response.json()

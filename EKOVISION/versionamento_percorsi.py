@@ -72,8 +72,8 @@ logger = logging.getLogger()
 
 # Create handlers
 c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-f_handler = logging.StreamHandler()
-#f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+#f_handler = logging.StreamHandler()
+f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.ERROR)
@@ -124,9 +124,9 @@ def main():
     oggi=datetime.today()
     oggi=oggi.replace(hour=0, minute=0, second=0, microsecond=0)
     oggi=date(oggi.year, oggi.month, oggi.day)
-    logging.debug('Oggi {}'.format(oggi))
-    
-    
+    logger.debug('Oggi {}'.format(oggi))
+    num_giorno=datetime.today().weekday()
+    logger.debug('Giorno della settimana{}'.format(num_giorno))
     if oggi.month == 12 and oggi.day==1 and oggi.year==2024:
         creazione_versioni=1
         logger.info('Oggi è il {} devo creare una nuova versione fino al 31/12/2099'.format(oggi))
@@ -281,8 +281,7 @@ def main():
         curr.execute(query_date_correggere2)
         lista_percorsi_correggere2=curr.fetchall()
     except Exception as e:
-        logger.error(query_percorsi)
-        check_error=1
+        logger.error(query_date_correggere2)
         logger.error(e)
 
     c2_id_percorso_sit=[]
@@ -336,11 +335,66 @@ def main():
             
         i+=1
      
+    # step 3 
+    #STEP 2 correggo un secondo caso.. (percorsi dismessi su SIT e non sulla UO)
+    query_date_correggere3='''select dpsu.id_percorso_sit, dpsu.cod_percorso, 
+ dpsu.data_inizio_validita, dpsu.data_fine_validita 
+ from anagrafe_percorsi.date_percorsi_sit_uo dpsu
+ join (
+    select cod_percorso, data_inizio_validita 
+    from anagrafe_percorsi.date_percorsi_sit_uo dpsu2
+    group by cod_percorso, data_inizio_validita -- = '0508051203'
+    having count(data_fine_validita)>1
+ ) anomal on anomal.cod_percorso=dpsu.cod_percorso and anomal.data_inizio_validita = dpsu.data_inizio_validita
+    order by 2,4
+    '''
     
+    try:
+        curr.execute(query_date_correggere3)
+        lista_percorsi_correggere3=curr.fetchall()
+    except Exception as e:
+        logger.error(query_date_correggere3)
+        check_error=1
+        logger.error(e)
+
+
+    #c3_id_percorso_sit = []
+    c3_cod_percorso = []
+    c3_data_inizio_validita =[]
+    c3_data_fine_validita=[]
+    
+    
+    for pp in lista_percorsi_correggere3:
+        #c3_id_percorso_sit.append(pp[0])
+        c3_cod_percorso.append(pp[1])
+        #versioni_uo.append(pp[2])
+        c3_data_inizio_validita.append(pp[2])
+        c3_data_fine_validita.append(pp[3])
+    
+    i=0
+    while i<(len(c3_cod_percorso)-1):
+        #logger.debug(i)
+        #logger.debug(c3_cod_percorso[i])
+        if c3_cod_percorso[i].strip()==c3_cod_percorso[i+1].strip() and  c3_data_inizio_validita[i]==c3_data_inizio_validita[i+1] and c3_data_fine_validita[i]!=c3_data_fine_validita[i+1]:
+            logger.debug('OK')
+            #logger.debug(i)
+            #logger.debug(c3_cod_percorso[i])
+            update_query3='''UPDATE anagrafe_percorsi.date_percorsi_sit_uo 
+                set data_inizio_validita=%s where 
+                cod_percorso=%s and data_fine_validita=%s'''
+            try:
+                curr.execute(update_query3, (c3_data_fine_validita[i], c3_cod_percorso[i+1], c3_data_fine_validita[i+1]))
+            except Exception as e:
+                logger.error(update_query3)
+                logger.error(e)
+        i+=1
+    conn.commit()
+   
     
     
     
     curr.close()
+    #exit()
     curr = conn.cursor()
     
     codici=[]
@@ -444,19 +498,33 @@ order by cod_percorso, data_fine_validita '''
     '''
     """
     
-    # solo incrementale
-    query_select='''SELECT cod_percorso as id_percorso, descrizione, id_turno, durata, 
-    id_tipo, freq_testata as id_frequenza, cod_sede as id_presa_servizio,
-    id_sede_operativa, id_gruppo_coordinamento, 
-    tipo_ripartizione, codice_cer, codici_cer_compatibili,
-    data_inizio_validita, data_fine_validita, versione
-    FROM anagrafe_percorsi.v_servizi_per_ekovision
-    where cod_percorso in (
-    select distinct cod_percorso from anagrafe_percorsi.elenco_percorsi ep  
-    where data_inizio_validita >= now()::date or data_fine_validita = now()::date
-    )   
-    order by cod_percorso,versione'''
-       
+    if num_giorno==6:
+        # nella notte tra sabato e domenica trasmetto tutte le versioni (anche quelle vecchie) dei codici percorsi attivi o in attivazione o disattivati nell'ultimo mese
+        query_select='''SELECT cod_percorso as id_percorso, descrizione, id_turno, durata, 
+        id_tipo, freq_testata as id_frequenza, cod_sede as id_presa_servizio,
+        id_sede_operativa, id_gruppo_coordinamento, 
+        tipo_ripartizione, codice_cer, codici_cer_compatibili,
+        data_inizio_validita, data_fine_validita, versione
+        FROM anagrafe_percorsi.v_servizi_per_ekovision
+        where cod_percorso in (
+        select distinct cod_percorso from anagrafe_percorsi.elenco_percorsi ep  
+        where data_fine_validita >= now()::date or data_ultima_modifica >= now()::date - interval '1' day
+        )  or data_fine_validita >= now()::date - interval '1' month
+        order by cod_percorso,versione'''
+    else:
+        # solo incrementale
+        query_select='''SELECT cod_percorso as id_percorso, descrizione, id_turno, durata, 
+        id_tipo, freq_testata as id_frequenza, cod_sede as id_presa_servizio,
+        id_sede_operativa, id_gruppo_coordinamento, 
+        tipo_ripartizione, codice_cer, codici_cer_compatibili,
+        data_inizio_validita, data_fine_validita, versione
+        FROM anagrafe_percorsi.v_servizi_per_ekovision
+        where cod_percorso in (
+        select distinct cod_percorso from anagrafe_percorsi.elenco_percorsi ep  
+        where data_inizio_validita >= now()::date or data_fine_validita = now()::date
+        or data_ultima_modifica >= now()::date - interval '1' day
+        )   
+        order by cod_percorso,versione'''
       
     try:
         curr.execute(query_select)
