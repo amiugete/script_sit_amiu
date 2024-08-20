@@ -3,3 +3,4 @@
 python -m pip install -r requirements.txt
 :: lancio lo script
 python cedolini_mensili.py
+pause
