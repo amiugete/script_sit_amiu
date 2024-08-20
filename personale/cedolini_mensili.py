@@ -33,31 +33,28 @@ from pypdf import PdfReader, PdfWriter
 
 
 
+import logging
+
+
+#cerco la directory corrente
 currentdir = os.path.dirname(os.path.realpath(__file__))
 parentdir = os.path.dirname(currentdir)
 sys.path.append(parentdir)
 
-
-import logging
-
-#path=os.path.dirname(sys.argv[0]) 
-
-# per scaricare file da EKOVISION
-
-
-
-
 filename = inspect.getframeinfo(inspect.currentframe()).filename
-#path = os.path.dirname(os.path.abspath(filename))
-path1 = os.path.dirname(os.path.dirname(os.path.abspath(filename)))
-path=os.path.dirname(sys.argv[0]) 
-path1 = os.path.dirname(os.path.dirname(os.path.abspath(filename)))
+
+#inizializzo la variabile path
+path=currentdir
+
+# nome dello script python
 nome=os.path.basename(__file__).replace('.py','')
-#tmpfolder=tempfile.gettempdir() # get the current temporary directory
+
+
+
+# inizializzo i nomi dei file di log (per capire cosa stia succedendo)
 logfile='{0}/log/{1}.log'.format(path,nome)
 errorfile='{0}/log/error_{1}.log'.format(path,nome)
-#if os.path.exists(logfile):
-#    os.remove(logfile)
+
 
 
 
@@ -95,13 +92,13 @@ f_handler.setFormatter(cc_format)
 
 
 
-# funzione per dividere un file PDF da pagina X a pagina Y (copiata da https://www.geeksforgeeks.org/working-with-pdf-files-in-python/)
+
 
 
 
 def main():
     
-    
+    # PARAMETRI INIZIALI 
     CF_AZIENDA='03818890109'
     file_processati='file_processati.csv'
     
