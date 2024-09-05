@@ -183,11 +183,11 @@ def main():
         
             if lastid>0:
                 #################################################################
-                logger.info("Mi connetto al WS {0} per leggere i messaggi della spazzatrice con SN {1} a partire da startIndex {2}". format(url_schmidt, sn[0], start_index))
+                logger.info("Mi connetto al WS {0} per leggere 1000 messaggi della spazzatrice con SN {1} a partire da startIndex {2}". format(url_schmidt, sn[0], start_index))
                 api_url='{0}SerialNumbers/{1}/Messages'.format(url_schmidt, sn[0])
                 from requests.auth import HTTPBasicAuth
                 auth=HTTPBasicAuth(user_schmidt, pwd_schmidt)
-                response = requests.get(api_url, auth=auth, headers={'accept': 'text/json'}, params={'startIndex': start_index})
+                response = requests.get(api_url, auth=auth, headers={'accept': 'text/json'}, params={'startIndex': start_index, 'endIndex': start_index + 1000})
                 logger.info("Status code: {0}".format(response.status_code))
                 try:      
                     response.raise_for_status()

@@ -236,11 +236,19 @@ def main():
     for pp in percorsi:
         percorso_uo='''SELECT ID_PERCORSO, ID_TURNO 
         FROM ANAGR_SER_PER_UO aspu 
-        WHERE ID_PERCORSO IN (:cod_perc) AND (DTA_DISATTIVAZIONE > SYSDATE AND 
+        WHERE ID_PERCORSO IN (:cod_perc) 
+        AND (DTA_DISATTIVAZIONE > SYSDATE) AND 
         (aspu.DTA_DISATTIVAZIONE=(SELECT max(DTA_DISATTIVAZIONE) FROM ANAGR_SER_PER_UO WHERE ID_PERCORSO=aspu.ID_PERCORSO AND ID_UO=aspu.ID_UO) 
         OR
-        ID_PERCORSO IN (SELECT ID_PERCORSO FROM CONS_PERCORSI_STAGIONALI )))
+        ((ID_PERCORSO IN (SELECT ID_PERCORSO FROM CONS_PERCORSI_STAGIONALI)) AND
+        ((SELECT ID_SER_PER_UO FROM ANAGR_SER_PER_UO WHERE ID_PERCORSO = aspu.ID_PERCORSO 
+        AND SYSDATE BETWEEN DTA_ATTIVAZIONE AND DTA_DISATTIVAZIONE ) IS null  )
+        )
+        )
         GROUP BY ID_PERCORSO, ID_TURNO'''
+        
+       
+        
         try:
             cur.execute(percorso_uo, [pp[0]])
             percorsi_uo=cur.fetchall()

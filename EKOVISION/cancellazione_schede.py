@@ -11,6 +11,7 @@ Lo script interroga le schede di lavoro e fornisce un elenco di quelle da cancel
 
 #from msilib import type_short
 import os, sys, re  # ,shutil,glob
+import inspect, os.path
 
 #import getopt  # per gestire gli input
 
@@ -43,7 +44,9 @@ import json
 
 import logging
 
+filename = inspect.getframeinfo(inspect.currentframe()).filename
 path=os.path.dirname(sys.argv[0]) 
+path1 = os.path.dirname(os.path.dirname(os.path.abspath(filename)))
 #tmpfolder=tempfile.gettempdir() # get the current temporary directory
 logfile='{}/log/cancellazione_schede.log'.format(path)
 errorfile='{}/log/error_cancellazione_schede.log'.format(path)
@@ -71,7 +74,7 @@ f_handler = logging.StreamHandler()
 
 
 c_handler.setLevel(logging.ERROR)
-f_handler.setLevel(logging.DEBUG)
+f_handler.setLevel(logging.INFO)
 
 
 # Add handlers to the logger
@@ -131,99 +134,156 @@ def tappa_prevista(day,frequenza_binaria):
 def main():
       
 
-    cp='0211000101'
+    #cp='0206001401'
 
+    ccpp=['0102007702']
 
-    #
+  
     
-    
-    # Get today's date
-    #presentday = datetime.now() # or presentday = datetime.today()
-    oggi=datetime.today()
-    oggi=oggi.replace(hour=0, minute=0, second=0, microsecond=0)
-    oggi=date(oggi.year, oggi.month, oggi.day)
-    logging.debug('Oggi {}'.format(oggi))
-    
-    
-    #num_giorno=datetime.today().weekday()
-    #giorno=datetime.today().strftime('%A')
-    giorno_file=datetime.today().strftime('%Y%m%d')
-    #oggi1=datetime.today().strftime('%d/%m/%Y')
-    
-    
-    # Mi connetto a SIT (PostgreSQL) per poi recuperare le mail
-    nome_db=db
-    logger.info('Connessione al db {}'.format(nome_db))
-    conn = psycopg2.connect(dbname=nome_db,
-                        port=port,
-                        user=user,
-                        password=pwd,
-                        host=host)
-
-
-    curr = conn.cursor()
-
-    
-    # prima di tutto faccio un controllo sulle schede di lavoro per verificare se sono state generate anche per i nuovi percorsi
-
-    # PARAMETRI GENERALI WS
-    
-    
-    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-
-    data_json={'user': eko_user, 
-        'password': eko_pass,
-        'o2asp' :  eko_o2asp
-        }
+    schede_cancellare=''
+    for cp in ccpp:
+        logger.info('Controllo il percorso {}'.format(cp))
+        # Get today's date
+        #presentday = datetime.now() # or presentday = datetime.today()
+        oggi=datetime.today()
+        oggi=oggi.replace(hour=0, minute=0, second=0, microsecond=0)
+        oggi=date(oggi.year, oggi.month, oggi.day)
+        logging.debug('Oggi {}'.format(oggi))
         
-    
-    
-   
         
-    schede_cancellare=''      
-    gg=-50
-    while gg <= 14-datetime.today().weekday():
-        day_check=oggi + timedelta(gg)
-        day= day_check.strftime('%Y%m%d')
-        #logger.debug(day)
-        # se il percorso è previsto in quel giorno controllo che ci sia la scheda di lavoro corrispondente
+        #num_giorno=datetime.today().weekday()
+        #giorno=datetime.today().strftime('%A')
+        giorno_file=datetime.today().strftime('%Y%m%d')
+        #oggi1=datetime.today().strftime('%d/%m/%Y')
         
-        params={'obj':'schede_lavoro',
-            'act' : 'r',
-            'sch_lav_data': day,
-            'cod_modello_srv': cp
+        
+        # Mi connetto a SIT (PostgreSQL) per poi recuperare le mail
+        nome_db=db
+        logger.info('Connessione al db {}'.format(nome_db))
+        conn = psycopg2.connect(dbname=nome_db,
+                            port=port,
+                            user=user,
+                            password=pwd,
+                            host=host)
+
+
+        curr = conn.cursor()
+
+        
+        # prima di tutto faccio un controllo sulle schede di lavoro per verificare se sono state generate anche per i nuovi percorsi
+
+        # PARAMETRI GENERALI WS
+        
+        
+        headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+
+        data_json={'user': eko_user, 
+            'password': eko_pass,
+            'o2asp' :  eko_o2asp
             }
-        response = requests.post(eko_url, params=params, data=data_json, headers=headers)
-        #response.json()
-        #logger.debug(response.status_code)
-        try:      
-            response.raise_for_status()
-            check=0
-            # access JSOn content
-            #jsonResponse = response.json()
-            #print("Entire JSON response")
-            #print(jsonResponse)
-        except HTTPError as http_err:
-            logger.error(f'HTTP error occurred: {http_err}')
-            check=1
-        except Exception as err:
-            logger.error(f'Other error occurred: {err}')
-            logger.error(response.json())
-            check=1
-        if check<1:
-            letture = response.json()
-            #logger.info(letture)
-            if len(letture['schede_lavoro']) > 0 : 
-                id_scheda=letture['schede_lavoro'][0]['id_scheda_lav']
-                logger.info('Id_scheda:{}'.format(id_scheda))
-                
-                if schede_cancellare=='':
-                    schede_cancellare='{}'.format(id_scheda)
-                else:
-                    schede_cancellare='{},{}'.format(schede_cancellare,id_scheda)
-        gg+=1
+            
+        
+        
     
-    print(schede_cancellare)
+            
+              
+        gg=1
+        while gg <= 14-datetime.today().weekday():
+            day_check=oggi + timedelta(gg)
+            day= day_check.strftime('%Y%m%d')
+            #logger.debug(day)
+            # se il percorso è previsto in quel giorno controllo che ci sia la scheda di lavoro corrispondente
+            
+            params={'obj':'schede_lavoro',
+                'act' : 'r',
+                'sch_lav_data': day,
+                'cod_modello_srv': cp
+                }
+            response = requests.post(eko_url, params=params, data=data_json, headers=headers)
+            #response.json()
+            #logger.debug(response.status_code)
+            try:      
+                response.raise_for_status()
+                check=0
+                # access JSOn content
+                #jsonResponse = response.json()
+                #print("Entire JSON response")
+                #print(jsonResponse)
+            except HTTPError as http_err:
+                logger.error(f'HTTP error occurred: {http_err}')
+                check=1
+            except Exception as err:
+                logger.error(f'Other error occurred: {err}')
+                logger.error(response.json())
+                check=1
+            if check<1:
+                letture = response.json()
+                #logger.info(letture)
+                if len(letture['schede_lavoro']) > 0 : 
+                    id_scheda=letture['schede_lavoro'][0]['id_scheda_lav']
+                    logger.info('Id_scheda:{}'.format(id_scheda))
+                    
+                    if schede_cancellare=='':
+                        schede_cancellare='{}'.format(id_scheda)
+                    else:
+                        schede_cancellare='{},{}'.format(schede_cancellare,id_scheda)
+            gg+=1
+        
+        print(schede_cancellare)
+    
+    # provo a mandare la mail
+    try:
+        if schede_cancellare!='':
+            # Create a secure SSL context
+            context = ssl.create_default_context()
+
+
+
+        # messaggio='Test invio messaggio'
+
+
+            subject = "ELIMINAZIONE SCHEDE LAVORO - Percorsi frequenza variata"
+            
+            ##sender_email = user_mail
+            receiver_email='assterritorio@amiu.genova.it'
+            debug_email='roberto.marzocchi@amiu.genova.it'
+
+            # Create a multipart message and set headers
+            message = MIMEMultipart()
+            message["From"] = sender_email
+            message["To"] = debug_email
+            message["Subject"] = subject
+            #message["Bcc"] = debug_email  # Recommended for mass emails
+            message.preamble = "Cambio frequenze"
+
+
+            body='''
+            Elenco schede da cancellare: <br>
+            {0}
+            <br><br>
+            AMIU Assistenza Territorio<br>
+            <img src="cid:image1" alt="Logo" width=197>
+            <br>'''.format(schede_cancellare)
+                                
+            # Add body to email
+            message.attach(MIMEText(body, "html"))
+
+
+            #aggiungo logo 
+            logoname='{}/img/logo_amiu.jpg'.format(path1)
+            immagine(message,logoname)
+            
+            
+
+            
+            
+            text = message.as_string()
+
+            logger.info("Richiamo la funzione per inviare mail")
+            invio=invio_messaggio(message)
+            logger.info(invio)
+    except Exception as e:
+        logger.error(e) # se non fossi riuscito a mandare la mail
     curr.close()
     error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
     
