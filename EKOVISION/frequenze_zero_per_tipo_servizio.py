@@ -180,7 +180,7 @@ def main():
     
     
     # QUERY ORIGINALE
-    
+    """
     query='''SELECT
         ID_PERCORSO,
         :c1 AS freq_new,
@@ -192,24 +192,24 @@ def main():
         AND  DTA_DISATTIVAZIONE > sysdate 
         AND FREQUENZA_NEW NOT IN (:c3)
         '''
-            
+    """        
     
     #QUERY PERSONALIZZATA
-    """query='''SELECT
+    query='''SELECT
         ID_PERCORSO,
         :c1 AS freq_new,
         TO_char(trunc(SYSDATE)+1, 'DD/MM/YYYY') AS data_uo,
         FREQUENZA_NEW, DTA_ATTIVAZIONE, DTA_DISATTIVAZIONE 
-        FROM ANAGR_SER_PER_UO aspu WHERE aspu.ID_UO = 17
-        and aspu.id_percorso in ('1001111103')'''
-    """
+        FROM ANAGR_SER_PER_UO aspu 
+        WHERE aspu.id_percorso in ('0203002401')'''
+    
     testo_mail=''
     
     try:
         # query originale
-        cur.execute(query, (new_freq, id_servizio, new_freq))
+        #cur.execute(query, (new_freq, id_servizio, new_freq))
         #QUERY PERSONALIZZATA
-        #cur.execute(query, (new_freq,))
+        cur.execute(query, (new_freq,))
         lista_variazioni=cur.fetchall()
     except Exception as e:
         check_error=1

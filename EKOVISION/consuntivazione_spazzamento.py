@@ -181,8 +181,8 @@ def main():
 	t.id_via,
 	trim(t.nota_via) as nota_via,
 	case 
-		when e.punteggio::int = 100 then 1
-		when e.punteggio::int = 0 then 0 
+		when e.punteggio::int = 100 or ct.id = 100 then 1
+		when e.punteggio::int = 0 and ct.id <> 100 then 0 
 		when e.punteggio::int > 0 and e.punteggio::int < 100 then 1
 	end flag_esecuzione, 
 	e.causale as descr_causale,
@@ -357,7 +357,10 @@ def main():
                         id_turno.append(aa[1])
                         id_componente.append(None)
                         id_tratto.append(aa[0])
-                        flag_esecuzione.append(vv[5])
+                        if vv[7]==100:
+                            flag_esecuzione.append(1)
+                        else:
+                            flag_esecuzione.append(vv[5])
                         causale.append(vv[7])
                         nota_causale.append(vv[8])
                         sorgente_dati.append(vv[9])

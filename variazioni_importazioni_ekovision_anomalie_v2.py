@@ -80,7 +80,7 @@ errorfile='{}/log/error_check_anomalie_importazioni.log'.format(path)
 #    os.remove(logfile)
 
 
-f = open("{}/analisi_anomalie_20240613.csv".format(path), "w")
+f = open("{}/analisi_anomalie_20240828.csv".format(path), "w")
 
 
 
@@ -284,7 +284,7 @@ def main():
     SELECT cod_percorso as codice_modello_servizio,
     cod_oggetto_amiu as codice, pos, 
     data_inizio, data_fine    
-    FROM marzocchir.temp_anomalie_date_ekovision;
+    FROM marzocchir.temp_anomalie_date_ekovision2;
         '''
     
 

@@ -176,8 +176,8 @@ def main():
     p.descrizione,
     coalesce((select su.email from util.sys_history sh 
     join util.sys_users su on su.id_user= sh.id_user where 
-    sh.id_percorso= p.id_percorso and e.id_piazzola = sh.id_piazzola 
-    and sh.id_user!=179 
+    (sh.id_percorso= p.id_percorso or e.id_piazzola = sh.id_piazzola)
+    and sh.id_user not in (0,179) 
     order by datetime desc limit 1), 'assterritorio@amiu.genova.it')
     from elem.elementi_aste_percorso eap
     join elem.elementi e on e.id_elemento = eap.id_elemento 
@@ -233,7 +233,8 @@ def main():
         conn.commit()
     
         body_mail='''ATTENZIONE<br>Poco fa, sul percorso <ul> <li><b>Codice</b>: {}</li> <li><b>Descrizione</b>: {}</li></ul>
-        L'utente <i><b>{}</b></i> ha inserito 2 volte la piazzola <b>{}</b>. Il secondo inserimento è automaticamente considerato un ripasso. 
+        L'utente <i><b>{}</b></i> dovrebbe aver inserito 2 volte la piazzola <b>{}</b> (potrebbe essere la chiusura di un intervento aperto in precedenza). 
+        Il secondo inserimento è automaticamente considerato un ripasso. 
         
         Se così non fosse è sufficiente rimuovere il secondo inserimento su
         <a href="https://amiupostgres.amiu.genova.it/SIT/#!/percorsi/percorso-details/?idPercorso={}"> SIT </a>

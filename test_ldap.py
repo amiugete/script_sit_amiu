@@ -9,7 +9,7 @@
 import sys,ldap,ldap.asyncsearch
 from credenziali import *
 
-user1='capisquadraPIDU'
+user1='Marzocchi'
 try:
 
 
