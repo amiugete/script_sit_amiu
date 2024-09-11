@@ -152,7 +152,7 @@ def main():
         
         
 
-        i=1
+        i=1 # impostando 1 salto la prima pagina, se non volessi saltarla dovrei mettere 0 
         while i<len(reader.pages):
             # creating a page object 
             page = reader.pages[i] 
