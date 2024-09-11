@@ -117,7 +117,8 @@ import fnmatch
 
 def main():
     
-    
+    logger.info('Il PID corrente è {0}'.format(os.getpid()))
+        
     # Get today's date
     #presentday = datetime.now() # or presentday = datetime.today()
     oggi=datetime.today()
@@ -1147,15 +1148,18 @@ def main():
                                                         if int(data[i]['cons_works'][t]['flg_exec'].strip())==1: #and int(data[i]['cons_works'][t]['cod_std_qualita'])==100:
                                                             causale=100
                                                         else:
-                                                            try:
-                                                                causale=int(data[i]['cons_works'][t]['cod_giustificativo_ext'].strip())
-                                                            except Exception as e:
-                                                                logger.warning(e)
-                                                                logger.warning('Scheda {} - Posizione: {} Manca la causale quindi lo do per fatto'.format(
-                                                                    int(data[i]['id_scheda']),
-                                                                    int(data[i]['cons_works'][t]['pos'])
-                                                                ))
-                                                                causale=100
+                                                            if causale_non_es != None:
+                                                                causale=causale_non_es
+                                                            else:
+                                                                try:
+                                                                    causale=int(data[i]['cons_works'][t]['cod_giustificativo_ext'].strip())
+                                                                except Exception as e:
+                                                                    logger.warning(e)
+                                                                    logger.warning('Scheda {} - Posizione: {} Manca la causale quindi lo do per fatto'.format(
+                                                                        int(data[i]['id_scheda']),
+                                                                        int(data[i]['cons_works'][t]['pos'])
+                                                                    ))
+                                                                    causale=100
                                                                 
                                                                 
                                                         nota_consuntivazione=''
@@ -1692,40 +1696,46 @@ def main():
                                                             elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
                                                                 causale=110
                                                         else:
-                                                            try:
-                                                                causale=int(data[i]['cons_works'][t-1]['cod_giustificativo_ext'].strip())
-                                                                count_fatti=0
-                                                            except Exception as e:
-                                                                logger.warning(e)
-                                                                logger.warning('Scheda {} - Posizione: {} Manca la causale quindi lo do per fatto'.format(
-                                                                    int(data[i]['id_scheda']),
-                                                                    int(data[i]['cons_works'][t]['pos'])
-                                                                ))
-                                                                if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC':
-                                                                    causale=100
-                                                                elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
-                                                                    causale=110
-                                                                count_fatti=1
+                                                            if causale_non_es != None:
+                                                                causale=causale_non_es
+                                                            else:
+                                                                try:
+                                                                    causale=int(data[i]['cons_works'][t-1]['cod_giustificativo_ext'].strip())
+                                                                    count_fatti=0
+                                                                except Exception as e:
+                                                                    logger.warning(e)
+                                                                    logger.warning('Scheda {} - Posizione: {} Manca la causale quindi lo do per fatto'.format(
+                                                                        int(data[i]['id_scheda']),
+                                                                        int(data[i]['cons_works'][t]['pos'])
+                                                                    ))
+                                                                    if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC':
+                                                                        causale=100
+                                                                    elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
+                                                                        causale=110
+                                                                    count_fatti=1
                                                     elif id_tappa == elenco_tappe[-1] and tipo_elemento == elenco_tipi[-1]:
                                                         # stessa tappa di prima 
                                                         count_elementi+=1
                                                         if int(data[i]['cons_works'][t]['flg_exec'].strip())==1:
                                                             count_fatti+=1
                                                         else:
-                                                            try:
-                                                                causale=int(data[i]['cons_works'][t-1]['cod_giustificativo_ext'].strip())
-                                                            except Exception as e:
-                                                                logger.warning(e)
-                                                                logger.warning('Scheda {} - Posizione: {} Manca la causale quindi lo do per fatto'.format(
-                                                                    int(data[i]['id_scheda']),
-                                                                    int(data[i]['cons_works'][t]['pos'])
-                                                                ))
-                                                                if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC':
-                                                                    causale=100
-                                                                elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
-                                                                    causale=110
-                                                                count_fatti+=1
-                                                        if (count_elementi-count_fatti)==0 and (causale==100 or causale==101):
+                                                            if causale_non_es != None:
+                                                                causale=causale_non_es
+                                                            else:
+                                                                try:
+                                                                    causale=int(data[i]['cons_works'][t-1]['cod_giustificativo_ext'].strip())
+                                                                except Exception as e:
+                                                                    logger.warning(e)
+                                                                    logger.warning('Scheda {} - Posizione: {} Manca la causale quindi lo do per fatto'.format(
+                                                                        int(data[i]['id_scheda']),
+                                                                        int(data[i]['cons_works'][t]['pos'])
+                                                                    ))
+                                                                    if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC':
+                                                                        causale=100
+                                                                    elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
+                                                                        causale=110
+                                                                    count_fatti+=1
+                                                        if (count_elementi-count_fatti)==0 and (causale==100 or causale==110):
                                                             causale=causale  
                                                         ##########################################
                                                         # questa parte sarà da cambiare
@@ -1741,24 +1751,26 @@ def main():
                                                             if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC':
                                                                 causale=100
                                                             elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
-                                                                casuale=101
+                                                                casuale=110
                                                         else:
-                                                            
-                                                            try:
-                                                                causale=int(data[i]['cons_works'][t-1]['cod_giustificativo_ext'].strip())
-                                                                count_fatti=0
-                                                            except Exception as e:
-                                                                logger.warning(e)
-                                                                logger.warning('Scheda {} - Posizione: {} Manca la causale quindi lo do per fatto'.format(
-                                                                    int(data[i]['id_scheda']),
-                                                                    int(data[i]['cons_works'][t]['pos'])
-                                                                ))
-                                                                if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC':
-                                                                    causale=100
-                                                                elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
-                                                                    causale=110
-                                                                count_fatti=1
-                                                                #causale=int(data[i]['cons_works'][t-1]['cod_giustificativo_ext'].strip())
+                                                            if causale_non_es != None:
+                                                                causale=causale_non_es
+                                                            else:
+                                                                try:
+                                                                    causale=int(data[i]['cons_works'][t-1]['cod_giustificativo_ext'].strip())
+                                                                    count_fatti=0
+                                                                except Exception as e:
+                                                                    logger.warning(e)
+                                                                    logger.warning('Scheda {} - Posizione: {} Manca la causale quindi lo do per fatto'.format(
+                                                                        int(data[i]['id_scheda']),
+                                                                        int(data[i]['cons_works'][t]['pos'])
+                                                                    ))
+                                                                    if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC':
+                                                                        causale=100
+                                                                    elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
+                                                                        causale=110
+                                                                    count_fatti=1
+                                                                    #causale=int(data[i]['cons_works'][t-1]['cod_giustificativo_ext'].strip())
                                                         ##########################################
                                                         # questa parte sarà da cambiare
                                                         nota_consuntivazione=''
