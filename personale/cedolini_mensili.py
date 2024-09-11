@@ -246,7 +246,7 @@ def main():
                 #inizializzo la scrittura del file
                 writer = PdfWriter()
                 #creo nuovo file
-                outputpdf='{0}/output/cedolini/{1}-{2}-{3}-{4}--BLD--{5}.pdf'.format(path,CF_AZIENDA, CF, anno,mese, matricola)
+                outputpdf='{0}/output/cedolini/{1}-{2}-{3}-{4}--LUL1--{5}.pdf'.format(path,CF_AZIENDA, CF, anno,mese, matricola)
             else:
                 # non creo nuovo file
                 logger.warning('sono alla pagina {0}. Due pagine per stesso dipendente CF: {1}, Matr:{2}'.format(i, CF, matricola))
