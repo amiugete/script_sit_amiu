@@ -104,13 +104,24 @@ def main():
     
     
     
-    
+    mesi_italiano=['GENNAIO', 
+                   'FEBBRAIO',
+                   'MARZO',
+                   'APRILE',
+                   'MAGGIO',
+                   'GIUGNO',
+                   'LUGLIO',
+                   'AGOSTO',
+                   'SETTEMBRE',
+                   'OTTOBRE',
+                   'NOVEMBRE',
+                   'DICEMBRE']
     
     
     
     filenames = []
     
-    for filename in os.listdir('{0}/input/cartellini'.format(path)):
+    for filename in os.listdir('{0}/input/cedolini'.format(path)):
         if filename.lower().endswith('.pdf'):
             filenames.append(os.path.join(filename))
             
@@ -129,7 +140,7 @@ def main():
         logger.info('Processo il file PDF dal nome {0}, che ho trovato in questa cartella'.format(filenames[k]))
         
         # creating a pdf reader object 
-        reader = PdfReader('{0}/input/cartellini/{1}'.format(path, filenames[k])) 
+        reader = PdfReader('{0}/input/cedolini/{1}'.format(path, filenames[k])) 
         
         # printing number of pages in pdf file 
         logger.info('Il file PDF ha {0} pagine di cui scarto la prima'.format(len(reader.pages)))
@@ -150,24 +161,83 @@ def main():
             # Split the text into lines 
             lines = text.splitlines() 
             
-            #logger.debug(len(lines)) 
-            # Iterate through each line 
+            # solo per il debug cerco di capire a quali righe leggo le informazioni corrette
+            '''
+            logger.debug(len(lines)) 
+            k=0
+            while k<len(lines):
+                logger.debug('{}, {}'.format(k,lines[k]))
+                k+=1         
+            '''
             
-            if len(lines)> 4:
-                presenze=lines[2]
-                persona=lines[3]
-                mese_anno=presenze.split('PRESENZE DEL MESE')[1].strip().split('SEDE')[0]
-                anno=int(mese_anno.split('/')[1])
-                mese=int(mese_anno.split('/')[0])
+                    
+            logger.debug(i)
+            if len(lines)> 54:
                 
                 #logger.debug(mese)
                 matricola_old=matricola
                 CF_old=CF
                 
-                matricola= int(persona.split()[1].strip())
-                #logger.debug(matricola)
-                CF= persona.split()[len(persona.split())-1].strip()
-                #logger.debug(CF)
+                
+                
+                matricola=lines[0].split()[1].replace(',', '')
+                nome=lines[0].split()[2]
+                n=3
+                while n < len(lines[0].split()):
+                    nome='{0} {1}'.format(nome,lines[0].split()[n])
+                    n+=1
+                
+                
+                CF=lines[54].replace(nome.upper(),'')[:16]
+                
+                '''
+                per cercare il periodo posso avere 2 casi 
+                
+                caso 1) lo trovo nella riga - 3 con il conto corrente
+                caso 2) dove il cedolino è su 2 pagine nella prima pagina delle 2 lo trovo nella riga -2
+                
+                
+                '''
+                
+                logger.debug(lines[(len(lines)-3)].strip())
+                logger.debug(lines[(len(lines)-2)].strip())
+                
+                check_periodo=0
+
+                # CASO 1 (vedi sopra)
+                m=0
+                while m<len(mesi_italiano):
+                    if mesi_italiano[m] in lines[(len(lines)-3)].strip().split()[1] :
+                        mese=str(m+1).rjust(2,'0')
+                        check_periodo=1
+                        logger.debug('sono nel caso 1')
+                    m+=1
+                
+                
+                # CASO 2    
+                if check_periodo==0:
+                    logger.debug('sono nel caso 2')
+                    m=0
+                    while m<len(mesi_italiano):
+                        if mesi_italiano[m] in lines[(len(lines)-2)].strip().split()[0] :
+                            mese=str(m+1).rjust(2,'0')
+                            check_periodo=1
+                        m+=1
+                        # ANNO CASO 2
+                        anno= lines[(len(lines)-2)].strip().split()[1][:4]
+                # ANNO CASO 1
+                else:      
+                    anno = lines[(len(lines)-3)].strip().split()[2]
+                
+                
+                logger.debug(matricola)
+                logger.debug(nome)
+                logger.debug(CF)
+                logger.debug(mese)
+                logger.debug(anno)
+                
+            
+                
             #exit()
             
             
@@ -176,7 +246,7 @@ def main():
                 #inizializzo la scrittura del file
                 writer = PdfWriter()
                 #creo nuovo file
-                outputpdf='{0}/output/cartellini/{1}-{2}-{3}-{4}--BLD--{5}.pdf'.format(path,CF_AZIENDA, CF, anno,mese, matricola)
+                outputpdf='{0}/output/cedolini/{1}-{2}-{3}-{4}--BLD--{5}.pdf'.format(path,CF_AZIENDA, CF, anno,mese, matricola)
             else:
                 # non creo nuovo file
                 logger.warning('sono alla pagina {0}. Due pagine per stesso dipendente CF: {1}, Matr:{2}'.format(i, CF, matricola))

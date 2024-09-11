@@ -171,6 +171,7 @@ def fascia_turno(ora_inizio_lav, ora_fine_lav, ora_inizio_lav_2 ,ora_fine_lav_2)
 
 def main():
     
+    logger.info('Il PID corrente è {0}'.format(os.getpid()))
     
     # Get today's date
     #presentday = datetime.now() # or presentday = datetime.today()
