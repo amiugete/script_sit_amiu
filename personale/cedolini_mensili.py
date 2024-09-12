@@ -168,7 +168,10 @@ def main():
             while k<len(lines):
                 logger.debug('{}, {}'.format(k,lines[k]))
                 k+=1         
+            
+            exit()
             '''
+            
             
                     
             logger.debug(i)
@@ -188,7 +191,17 @@ def main():
                     n+=1
                 
                 
-                CF=lines[54].replace(nome.upper(),'')[:16]
+                '''
+                per cercare il CF posso avere 2 casi 
+                
+                caso 1) lo trovo nella riga 54 (se non c'è indirizzo AMIU nell'intestazione)
+                caso 2) lo trovo nella riga 55 (se c'è indirizzo AMIU nell'intestazione)
+                
+                
+                '''
+                
+                
+               
                 
                 '''
                 per cercare il periodo posso avere 2 casi 
@@ -198,6 +211,12 @@ def main():
                 
                 
                 '''
+               
+               
+                CF=lines[54].replace(nome.upper(),'')[:16]
+                if len(CF.strip())<16: #in questo caso dovrei essere nella caso 2
+                    logger.debug('''c'è indirizzo amiu nell'intestazione e il codice fiscale è alla riga 55''')
+                    CF=lines[55].replace(nome.upper(),'')[:16]
                 
                 logger.debug(lines[(len(lines)-3)].strip())
                 logger.debug(lines[(len(lines)-2)].strip())
