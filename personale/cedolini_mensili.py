@@ -200,8 +200,13 @@ def main():
                 
                 '''
                 
-                
                
+                CF=lines[54].replace(nome.upper(),'')[:16]
+                if len(CF.strip())<16: #in questo caso dovrei essere nella caso 2
+                    logger.debug('''c'è indirizzo amiu nell'intestazione e il codice fiscale è alla riga 55''')
+                    CF=lines[55].replace(nome.upper(),'')[:16]
+                
+                
                 
                 '''
                 per cercare il periodo posso avere 2 casi 
@@ -211,13 +216,6 @@ def main():
                 
                 
                 '''
-               
-               
-                CF=lines[54].replace(nome.upper(),'')[:16]
-                if len(CF.strip())<16: #in questo caso dovrei essere nella caso 2
-                    logger.debug('''c'è indirizzo amiu nell'intestazione e il codice fiscale è alla riga 55''')
-                    CF=lines[55].replace(nome.upper(),'')[:16]
-                
                 logger.debug(lines[(len(lines)-3)].strip())
                 logger.debug(lines[(len(lines)-2)].strip())
                 
