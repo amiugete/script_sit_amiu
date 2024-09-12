@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# AMIU copyleft 2021
+# AMIU copyleft 2024
 # Roberto Marzocchi
 
 '''
-Pulire file log
+Pulire file log e non solo (anche pdf)
 '''
 
 import os,sys, getopt
@@ -103,7 +103,13 @@ assenze='{}/EKOVISION/assenze'.format(path)
 json_ekovision='{}/EKOVISION/eko_output'.format(path)
 
 
-cartelle_da_pulire=[logpath, variazioni, idea, ecopunti, utenze, consuntivazioni, preconsuntivazioni, timbrature, assenze, json_ekovision]
+personale_ca_o='{}/personale/cartellini/output'.format(path)
+personale_ce_o='{}/personale/cedolini/output'.format(path)
+personale_cu_o='{}/personale/cu/output'.format(path)
+
+
+cartelle_da_pulire=[logpath, variazioni, idea, ecopunti, utenze, consuntivazioni, preconsuntivazioni, timbrature, assenze, json_ekovision,
+                    personale_ca_o, personale_ce_o, personale_cu_o]
 
 
 c=0
