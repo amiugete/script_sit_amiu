@@ -224,7 +224,7 @@ def main():
                 # CASO 1 (vedi sopra)
                 m=0
                 while m<len(mesi_italiano):
-                    if mesi_italiano[m] in lines[(len(lines)-3)].strip().split()[1] :
+                    if mesi_italiano[m] in lines[(len(lines)-3)].strip().split()[0] or mesi_italiano[m] in lines[(len(lines)-3)].strip().split()[1] :
                         mese=str(m+1).rjust(2,'0')
                         check_periodo=1
                         logger.debug('sono nel caso 1')
@@ -244,7 +244,10 @@ def main():
                         anno= lines[(len(lines)-2)].strip().split()[1][:4]
                 # ANNO CASO 1
                 else:      
-                    anno = lines[(len(lines)-3)].strip().split()[2]
+                    try:
+                        anno = int(lines[(len(lines)-3)].strip().split()[2])
+                    except:
+                        anno = int(lines[(len(lines)-3)].strip().split()[1][:4])
                 
                 
                 logger.debug(matricola)

@@ -441,6 +441,7 @@ def main():
                                                 except Exception as e:
                                                     check_cons=1
                                                     logger.warning('ID SCHEDA:{}'.format(data[i]['id_scheda']))
+                                                    logger.warning('Causale servizio non effettuato:{}'.format(data[i]['cod_caus_srv_non_eseg_ext']))
                                                     logger.warning('FLG Eseguito:{}'.format(data[i]['cons_works'][t]['flg_exec']))
                                                     logger.warning('PROBLEMA CAUSALE')
                                                     logger.warning(e)

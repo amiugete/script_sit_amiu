@@ -219,7 +219,7 @@ def main():
 
     for cc in lista_causali:
         if cc[0] == None:
-            logger.error('''La causale {} non è riconosciuta. Andare sull'HUB ggiungere un id nella tabella spazzamento.causali_testo'''.format(aa[1])) 
+            logger.error('''La causale {} non è riconosciuta. Andare sull'HUB ggiungere un id nella tabella spazzamento.causali_testo'''.format(cc[1])) 
             error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
             exit()
     

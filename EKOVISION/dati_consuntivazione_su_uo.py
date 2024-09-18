@@ -497,7 +497,7 @@ def main():
                                                 /*--1 AS ID_SERVIZIO, */
                                                 SYSDATE AS INS_DATE, 
                                                 NULL AS MOD_DATE,
-                                                'EKovision'
+                                                'Ekovision non eseguito'
                                                 FROM CONS_MACRO_TAPPA cmt 
                                                 JOIN CONS_MICRO_TAPPA cmt2 ON cmt2.ID_MACRO_TAPPA = cmt.ID_MACRO_TAPPA
                                                 /*--JOIN ASTE_INFO_DA_SIT aids ON aids.ID_ASTA = cmt.ID_ASTA*/
@@ -529,6 +529,11 @@ def main():
                                                                             data[i]['data_esecuzione_prevista'], 
                                                                             data[i]['codice_serv_pred']))
                                                     logger.error(e)  
+                                            # qua bisognerebbe mettere update
+                                            
+                                            
+                                            #TODO
+                                            
                                             
                                             
                                             
