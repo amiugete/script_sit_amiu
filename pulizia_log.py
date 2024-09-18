@@ -103,9 +103,9 @@ assenze='{}/EKOVISION/assenze'.format(path)
 json_ekovision='{}/EKOVISION/eko_output'.format(path)
 
 
-personale_ca_o='{}/personale/cartellini/output'.format(path)
-personale_ce_o='{}/personale/cedolini/output'.format(path)
-personale_cu_o='{}/personale/cu/output'.format(path)
+personale_ca_o='{}/personale/output/cartellini'.format(path)
+personale_ce_o='{}/personale/output/cedolini'.format(path)
+personale_cu_o='{}/personale/output/cu'.format(path)
 
 
 cartelle_da_pulire=[logpath, variazioni, idea, ecopunti, utenze, consuntivazioni, preconsuntivazioni, timbrature, assenze, json_ekovision,
