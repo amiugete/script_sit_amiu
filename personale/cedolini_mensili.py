@@ -224,6 +224,7 @@ def main():
                 # CASO 1 (vedi sopra)
                 m=0
                 while m<len(mesi_italiano):
+                    # se manca IBAN mese in posizione 0, se no in posizione 1 assieme a IBAN
                     if mesi_italiano[m] in lines[(len(lines)-3)].strip().split()[0] or mesi_italiano[m] in lines[(len(lines)-3)].strip().split()[1] :
                         mese=str(m+1).rjust(2,'0')
                         check_periodo=1
@@ -244,6 +245,7 @@ def main():
                         anno= lines[(len(lines)-2)].strip().split()[1][:4]
                 # ANNO CASO 1
                 else:      
+                    # se manca IBAN sono nella posizione 1 e non 2 
                     try:
                         anno = int(lines[(len(lines)-3)].strip().split()[2])
                     except:
