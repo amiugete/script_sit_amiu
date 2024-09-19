@@ -1,9 +1,9 @@
 PING 192.168.52.117 (192.168.52.117) 56(84) bytes of data.
-64 bytes from 192.168.52.117: icmp_seq=1 ttl=60 time=7.82 ms
-64 bytes from 192.168.52.117: icmp_seq=2 ttl=60 time=7.62 ms
-64 bytes from 192.168.52.117: icmp_seq=3 ttl=60 time=6.95 ms
-64 bytes from 192.168.52.117: icmp_seq=4 ttl=60 time=7.82 ms
+64 bytes from 192.168.52.117: icmp_seq=1 ttl=60 time=7.83 ms
+64 bytes from 192.168.52.117: icmp_seq=2 ttl=60 time=9.04 ms
+64 bytes from 192.168.52.117: icmp_seq=3 ttl=60 time=6.64 ms
+64 bytes from 192.168.52.117: icmp_seq=4 ttl=60 time=7.64 ms
 
 --- 192.168.52.117 ping statistics ---
 4 packets transmitted, 4 received, 0% packet loss, time 3005ms
-rtt min/avg/max/mdev = 6.949/7.551/7.819/0.357 ms
+rtt min/avg/max/mdev = 6.637/7.783/9.035/0.852 ms
