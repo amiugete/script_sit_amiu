@@ -100,7 +100,11 @@ f_handler.setFormatter(cc_format)
 
 
 def main():
-     #################################################################
+    
+    logger.info('Il PID corrente è {0}'.format(os.getpid()))
+    
+    
+    #################################################################
     logger.info('Connessione al db SIT')
     conn = psycopg2.connect(dbname=db,
                         port=port,

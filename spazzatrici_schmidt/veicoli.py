@@ -111,6 +111,22 @@ def main():
     #conn.autocommit = True
     #################################################################
 
+
+    query_update_0='''UPDATE spazz_schmidt.serialnumbers
+            set api_attive='f'
+            WHERE id is not null'''
+    
+    try:
+        curr.execute(query_update_0)
+    except Exception as e:
+        logger.error(e)
+    ########################################################################################
+    # da testare sempre prima senza fare i commit per verificare che sia tutto OK
+    conn.commit()
+    ########################################################################################
+    curr.close()
+    curr = conn.cursor() 
+
     #################################################################
     logger.info("Mi connetto al WS {}". format(url_schmidt))
     api_url='{}SerialNumbers'.format(url_schmidt)
@@ -155,7 +171,7 @@ def main():
         # se c'è già la entry faccio 
         if len(serialnumbers)>0: 
             query_update='''UPDATE spazz_schmidt.serialnumbers
-            set manuf_id=%s, equip_id=%s
+            set manuf_id=%s, equip_id=%s, api_attive='t'
             WHERE id=%s;'''
             try:
                 curr.execute(query_update, (letture[i]['manufId'], letture[i]['equipId'], letture[i]['id']))
@@ -163,8 +179,8 @@ def main():
                 logger.error(e)
         else:
             query_insert='''INSERT INTO spazz_schmidt.serialnumbers
-(manuf_id, equip_id, id)
-VALUES(%s, %s, %s);'''
+(manuf_id, equip_id, id, api_attive)
+VALUES(%s, %s, %s, 't');'''
             try:
                 curr.execute(query_insert, (letture[i]['manufId'], letture[i]['equipId'], letture[i]['id']))
             except Exception as e:
