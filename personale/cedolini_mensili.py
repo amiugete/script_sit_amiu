@@ -31,7 +31,7 @@ from pypdf import PdfReader, PdfWriter
 
 
 
-
+import csv
 
 import logging
 
@@ -122,21 +122,31 @@ def main():
     
     
     
+    filenames_check = []
+    
+    with open('{0}/{1}'.format(path,file_processati), mode ='r') as file:
+        csvFile = csv.reader(file,  delimiter=';')
+        for ll in csvFile:
+            filenames_check.append(ll[0])
+    
+    #logger.debug(filenames_check)
+    #exit()
+    
+    
     filenames = []
     
     for filename in os.listdir('{0}/input/cedolini'.format(path)):
-        if filename.lower().endswith('.pdf'):
+        if filename.lower().endswith('.pdf') and filename not in filenames_check:
             filenames.append(os.path.join(filename))
             
-    #filenames_check = []
-    #open and read the file after the appending:
-    #f = open(file_processati, "r")
-    #print(f.read())     
     
     logger.info('Ho trovato {0} files da processare:{1}'.format(len(filenames), filenames))
     #logger.debug(filenames)
     #logger.debug(filenames_check)
-    exit
+    
+    if len(filenames)==0:
+        logger.warning('Non ci sono file da processare. Controlla le cartelle di input e/o il file CSV con i file processati')
+    #exit()
     k=0
     while k < len(filenames):    
         
