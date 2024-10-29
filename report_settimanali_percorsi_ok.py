@@ -29,6 +29,19 @@ from mail_log import *
 import logging
 
 
+
+import email, smtplib, ssl
+import mimetypes
+from email.mime.multipart import MIMEMultipart
+from email import encoders
+from email.message import Message
+from email.mime.audio import MIMEAudio
+from email.mime.base import MIMEBase
+from email.mime.image import MIMEImage
+from email.mime.text import MIMEText
+from invio_messaggio import *
+
+
 #cerco la directory corrente
 currentdir = os.path.dirname(os.path.realpath(__file__))
 parentdir = os.path.dirname(currentdir)
@@ -67,8 +80,8 @@ logger = logging.getLogger()
 
 # Create handlers
 c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-f_handler = logging.StreamHandler()
-#f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+#f_handler = logging.StreamHandler()
+f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.ERROR)
@@ -136,12 +149,12 @@ def copy_format(book, fmt):
 
 
 
-def main(): 
+def main(arg1, arg2, arg3, arg4): 
     
     # leggo l'input
     try: 
         #codice='0203009803'
-        codice=sys.argv[1]
+        codice=arg1 #sys.argv[1]
         logger.info('Inizio creazione report per percorso {}'.format(codice))
     except Exception as e:
         logger.error(e)
@@ -150,13 +163,42 @@ def main():
     
     try: 
         #codice='0203009803'
-        sempl=sys.argv[2]
-        check_s=1
-        logger.info('Richiesta report semplificato')
+        if arg2=='sempl': #sys.argv[2]=='sempl':
+            check_s=1
+            logger.info('Richiesta report semplificato')
+        elif arg2=='compl': #sys.argv[2]=='compl':
+            check_s=0
+            logger.info('Report standard')
     except Exception as e:
-        check_s=0
-        logger.info('Report standard')
-        
+        logger.error(e)
+        sent_log_by_mail(filename,errorfile)
+        exit()
+    
+    try: 
+        #codice='0203009803'
+        if arg3=='no': #sys.argv[3]=='no':
+            check_m=0
+            logger.info('Non si richiede invio mail')
+        else:
+            indirizzo_mail_per_invio=arg3 #sys.argv[3]
+            check_m=1
+            logger.info('Si richiede invio mail a {}'.format(indirizzo_mail_per_invio))
+    except Exception as e:
+        logger.error(e)
+        sent_log_by_mail(filename,errorfile)
+        exit()
+    
+    
+    try: 
+        if arg4 is None or arg4==0:
+            logger.info ('Non è stato specificato il numero di giorni')
+            arg4=0
+        else :
+            logger.info('Si richiede di cercare le variazioni per {} giorni'.format(arg4))
+    except Exception as e:
+        logger.error(e)
+        sent_log_by_mail(filename,errorfile)
+        #exit()    
     
         
         
@@ -357,6 +399,8 @@ where p.cod_percorso= %s and p.id_categoria_uso in (3,6)
 
         w.merge_range('D4:H4', dd[9], merge_format) # frequenza
         w.merge_range('F1:L1', dd[2], merge_format_grande) # descrizione percorso
+        
+        descr_percorso=dd[2]
         
         
         
@@ -599,6 +643,122 @@ order by min(ap.num_seq) asc'''
     wb.Save()
     excel.Application.Quit()
     '''
+    
+    
+    # cerco se le variazioni sono di qualche utente o se sono di procedure id_user=0
+    
+    if  check_m==1 and arg4>0:
+        query_variazioni='''select su."name", 
+            to_char(sh.datetime, 'DD/MM/YYYY HH24:MI:SS') as data_ora, 
+            sh.description, 
+            sh.id_piazzola, sh.id_elemento 
+            from util.sys_history sh 
+            join util.sys_users su on sh.id_user=su.id_user
+            where sh.id_percorso
+            in (select max(id_percorso) from elem.percorsi p 
+            where cod_percorso = %s )
+            and datetime > (now()::date - interval '%s' day)
+            and sh.id_user != 0
+            order by datetime desc'''
+        
+        
+        try:
+            curr.execute(query_variazioni, (codice,arg4))
+            lista_variazioni=curr.fetchall()
+        except Exception as e:
+            logger.error(e)
+            sent_log_by_mail(filename,logfile)    
+        
+        
+        
+        variazioni=''
+        if len(lista_variazioni)> 0:
+            variazioni='<ul>'
+        for vv in lista_variazioni: 
+            variazioni ='{0}<li> Data e ora: {1} User SIT: {2} - Descrizione: {3}'.format(variazioni, vv[1], vv[0], vv[2])
+            if vv[3] is not None:
+                variazioni='{0} - Piazz {1}'.format(variazioni, vv[3])
+            if vv[4] is not None:
+                variazioni='{0} - Elem {1}'.format(variazioni, vv[4])
+            variazioni='{0}</li>'.format(variazioni)
+        if len(lista_variazioni)> 0:
+            variazioni='{0}</ul>'.format(variazioni)
+    
+    
+    if check_m==1 and variazioni !='':
+        # Create a secure SSL context
+        context = ssl.create_default_context()
+
+
+
+        # messaggio='Test invio messaggio'
+
+
+        subject = "Percorso {} variato".format(codice)
+            
+            
+        ##sender_email = user_mail
+        receiver_email='assterritorio@amiu.genova.it'
+        debug_email='roberto.marzocchi@amiu.genova.it'
+        
+        
+        body = """Il percorso {0} - {1} è variato. 
+        Di seguito le variazioni avvenute nei {3} giorni precedenti:
+        {4}       
+        <br>In allegato il nuovo report.
+        <br>In caso di incongruenze aggiornare il SIT o contattare i RUTT competenti.
+        <br><br>
+        AMIU Assistenza Territorio<br>
+        <img src="cid:image1" alt="Logo" width=197>
+        <br>{2}
+        """.format(codice, descr_percorso, mail_footer, arg4, variazioni)
+
+
+        # Create a multipart message and set headers
+        message = MIMEMultipart()
+        message["From"] = sender_email
+        message["To"] =  indirizzo_mail_per_invio
+        message["Cc"] = receiver_email
+        message["Subject"] = subject
+        #message["Bcc"] = debug_email  # Recommended for mass emails
+        message.preamble = "File con variazioni a percorso"
+
+
+            
+                            
+        # Add body to email
+        message.attach(MIMEText(body, "html"))
+
+
+        #aggiungo logo 
+        logoname='{}/img/logo_amiu.jpg'.format(path)
+        immagine(message,logoname)
+        
+        
+        # aggiunto allegato (usando la funzione importata)
+        allegato(message, file_report, '{}.xlsx'.format(nome_file))
+        # Add body to email
+        #message.attach(MIMEText(body, "plain"))
+        
+        
+        #text = message.as_string()
+
+        logger.info("Richiamo la funzione per inviare mail")
+        invio=invio_messaggio(message)
+        logger.info(invio)
+    
+    
+    if check_m==1 and variazioni =='':
+        logger.warning('Non mando mail perchè non ci sono variazioni sostanziali nei {0} giorni precedenti'.format(arg4))
+    
+    ##################################################################################################
+    #                               CHIUDO LE CONNESSIONI
+    ################################################################################################## 
+    logger.info("Chiudo definitivamente le connesioni al DB")
+    conn.close()
+
+    # check se c_handller contiene almeno una riga 
+    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])

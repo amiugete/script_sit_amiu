@@ -233,12 +233,12 @@ def main():
         conn.commit()
     
         body_mail='''ATTENZIONE<br>Poco fa, sul percorso <ul> <li><b>Codice</b>: {}</li> <li><b>Descrizione</b>: {}</li></ul>
-        L'utente <i><b>{}</b></i> dovrebbe aver inserito 2 volte la piazzola <b>{}</b> (potrebbe essere la chiusura di un intervento aperto in precedenza). 
+        L'utente <i><b>{}</b></i> dovrebbe aver inserito 2 volte la piazzola <b>{}</b> elemento <b>{}</b> (potrebbe essere la chiusura di un intervento aperto in precedenza). 
         Il secondo inserimento è automaticamente considerato un ripasso. 
         
         Se così non fosse è sufficiente rimuovere il secondo inserimento su
         <a href="https://amiupostgres.amiu.genova.it/SIT/#!/percorsi/percorso-details/?idPercorso={}"> SIT </a>
-        '''.format(ap[1], ap[9], ap[10].split('@')[0], ap[3],ap[0])
+        '''.format(ap[1], ap[9], ap[10].split('@')[0], ap[3], ap[4], ap[0])
         ripasso_mail(body_mail, ap[10], os.path.basename(__file__), logger)
         #ap[9]  #descrizione percorso
         #ap[10] #mail

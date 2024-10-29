@@ -268,11 +268,15 @@ and to_char(sysdate - (:gg-7), 'yyyymmdd')||'03:59:59' '''
     #exit()
     
     
-    q_m='''select za.cod_zona, concat(za.mail, ',', string_agg(distinct u.mail, ','))  from topo.ut u
+    """q_m='''select za.cod_zona, concat(za.mail, ',', string_agg(distinct u.mail, ','))  from topo.ut u
 	join topo.zone_amiu za on za.id_zona = u.id_zona
 	where cod_zona ilike %s
 	group by za.cod_zona, za.mail'''
-
+    """
+    
+    q_m= '''select za.cod_zona, za.mail
+	from topo.zone_amiu za
+    where cod_zona ilike %s'''
         
            
 
@@ -288,7 +292,7 @@ and to_char(sysdate - (:gg-7), 'yyyymmdd')||'03:59:59' '''
 
     # PER test
     
-    mail_cc='assterritorio@amiu.genova.it, Riccardo.Piana@amiu.genova.it, Fabio.Fruscione@amiu.genova.it'
+    mail_cc='assterritorio@amiu.genova.it, Riccardo.Piana@amiu.genova.it, Fabio.Fruscione@amiu.genova.it, roberto.longo@amiu.genova.it'
     
     #mail_cc='roberto.marzocchi@amiu.genova.it'
 
@@ -556,7 +560,7 @@ and to_char(sysdate - (:gg-7), 'yyyymmdd')||'03:59:59' '''
             logger.info('Messaggio inviato')
 
         else:
-            logger.error('Problema invio mail. Error:{}'.format(invio))
+            logger.error('Problema invio mail a {0}. Error:{1}'.format(receiver_email, invio))
 
 
 

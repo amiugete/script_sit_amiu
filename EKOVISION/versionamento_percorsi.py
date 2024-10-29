@@ -273,7 +273,7 @@ def main():
             from anagrafe_percorsi.date_percorsi_sit_uo dpsu1   
             group by cod_percorso, data_fine_validita, data_inizio_validita  
             having count(id_percorso_sit) > 1)
-            --and dpsu.cod_percorso = '0101039401'
+            /*and dpsu.cod_percorso = '0101039401'*/
         order by 2,1
     '''
     
@@ -334,7 +334,11 @@ def main():
                     
             
         i+=1
-     
+    
+    
+    curr.close()
+    curr = conn.cursor()
+    
     # step 3 
     #STEP 2 correggo un secondo caso.. (percorsi dismessi su SIT e non sulla UO)
     query_date_correggere3='''select dpsu.id_percorso_sit, dpsu.cod_percorso, 
@@ -343,7 +347,7 @@ def main():
  join (
     select cod_percorso, data_inizio_validita 
     from anagrafe_percorsi.date_percorsi_sit_uo dpsu2
-    group by cod_percorso, data_inizio_validita -- = '0508051203'
+    group by cod_percorso, data_inizio_validita
     having count(data_fine_validita)>1
  ) anomal on anomal.cod_percorso=dpsu.cod_percorso and anomal.data_inizio_validita = dpsu.data_inizio_validita
     order by 2,4

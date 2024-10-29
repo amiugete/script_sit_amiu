@@ -310,7 +310,7 @@ where cod_frequenza not in (select cod_frequenza from etl.frequenze_ok_1)'''
     #sender_email = user_mail
     receiver_email='assterritorio@amiu.genova.it'
     debug_email='roberto.marzocchi@amiu.genova.it'
-    cc_mail='calvello@amiu.genova.it; pianar@amiu.genova.it; '
+    cc_mail='calvello@amiu.genova.it, pianar@amiu.genova.it'
 
     # Create a multipart message and set headers
     message = MIMEMultipart()

@@ -168,6 +168,9 @@ def cfr_tappe(tappe_sit, tappe_uo, logger):
 
 
 def main():
+    
+    logger.info('Il PID corrente è {0}'.format(os.getpid()))
+    
     # carico i mezzi sul DB PostgreSQL
     logger.info('Connessione al db')
     conn = psycopg2.connect(dbname=db,
@@ -419,11 +422,15 @@ def main():
     ]
     
     
-    # tutti i percorsi
+    # tutti i percorsi a sistema
     
-    query_all='''select distinct cod_percorso from elem.percorsi 
-  where (data_dismissione is null or data_dismissione > to_date('20230720', 'YYYYMMDD'))
-  and percorsi.id_categoria_uso in (3,4,6)'''
+    query_all='''  select distinct p.cod_percorso from elem.percorsi p
+  left join anagrafe_percorsi.elenco_percorsi ep on ep.cod_percorso = p.cod_percorso 
+  where (p.data_dismissione is null or p.data_dismissione > to_date('20230720', 'YYYYMMDD'))
+  /*and p.id_categoria_uso in (3,4,6)*/
+  /*and p.cod_percorso != 'p_fitt_s_m'*/
+  and ep.cod_percorso is not null
+  /*order by 1 desc */'''
   
     try:
         curr.execute(query_all)
@@ -480,7 +487,8 @@ end data_fine, */
 data_inizio, 
 data_fine, 
 ripasso, 
-id_asta_percorso, id_elemento_asta_percorso
+concat(id_asta_percorso, '_', ee.id_piazzola) as id_asta_percorso,
+id_elemento_asta_percorso
 /*ripasso*/
 /*case 
 	when max(data_fine) = '20991231' then ripasso 
@@ -508,12 +516,16 @@ from (
   id_asta_percorso, id_elemento_asta_percorso
 	 FROM anagrafe_percorsi.mv_percorsi_elementi_tratti_dismessi where data_inizio < coalesce(data_fine, '20991231')
  ) tab
+ left join (select id_piazzola, id_elemento from elem.elementi
+ union 
+ select id_piazzola, id_elemento from history.elementi
+ ) ee on ee.id_elemento = tab.codice
  where codice_modello_servizio = ANY (%s) 
  /*group by codice_modello_servizio,  objecy_type, 
   codice, quantita, lato_servizio, percent_trattamento,
   ripasso, numero_passaggi, nota,
   codice_qualita, codice_tipo_servizio*/
-  order by codice_modello_servizio, data_fine asc, ordine, id_asta_percorso, id_elemento_asta_percorso'''
+  order by codice_modello_servizio, id_asta_percorso, id_elemento_asta_percorso'''
     
     #test=curr.mogrify(query_variazioni_ekovision,(cod_percorso_ok,))
     #print(test)

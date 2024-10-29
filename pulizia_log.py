@@ -108,9 +108,13 @@ personale_ce_o='{}/personale/output/cedolini'.format(path)
 personale_cu_o='{}/personale/output/cu'.format(path)
 
 
-cartelle_da_pulire=[logpath, variazioni, idea, ecopunti, utenze, consuntivazioni, preconsuntivazioni, timbrature, assenze, json_ekovision,
+cartelle_da_pulire=[logpath, variazioni, idea, ecopunti, utenze, 
+                    consuntivazioni, preconsuntivazioni, timbrature, assenze, json_ekovision,
                     personale_ca_o, personale_ce_o, personale_cu_o]
 
+giorni_pulizia = [ 14, 14, 7, 14, 14,
+          7, 7, 7, 7, 1,
+          1, 1, 1]
 
 c=0
 while c < len(cartelle_da_pulire):
@@ -118,7 +122,7 @@ while c < len(cartelle_da_pulire):
     for f in os.listdir(cartelle_da_pulire[c]):
         if f not in ('README.md'):
             f = os.path.join(cartelle_da_pulire[c], f)
-            if os.stat(f).st_mtime < now - 14 * 86400: 
+            if os.stat(f).st_mtime < now - giorni_pulizia[c] * 86400: 
                 if os.path.isfile(f):
                     #print(f)
                     os.remove(os.path.join(path, f))

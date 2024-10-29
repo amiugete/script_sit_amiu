@@ -19,7 +19,7 @@ personale/input/altro/*.pdf
 personale/input/cedolini/*.pdf
 personale/input/cartellini/*.pdf
 personale/input/cu/*.pdf
-personale/output/cedolini/*.pdf
+personale/output/cedolini/**
 personale/output/cartellini/*.pdf
 personale/output/cu/*.pdf
 personale/output/*.pdf
