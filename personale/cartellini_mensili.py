@@ -114,7 +114,7 @@ def main():
     
     a=0
     while a<len(AZIENDE):
-        for filename in os.listdir('{0}/input/cartellini{1}'.format(path, AZIENDE[a])):
+        for filename in os.listdir('{0}/input/cartellini/{1}'.format(path, AZIENDE[a])):
             if filename.lower().endswith('.pdf'):
                 filenames.append(os.path.join(filename))
                 cf_aziende_file.append(CFS_AZIENDE[a])
