@@ -1,6 +1,6 @@
 ### Archivio
 
-git archive --format=zip HEAD:personale/ > script_per_personale_1.0.zip
+git archive --format=zip HEAD:personale/ > archivi/script_per_personale_x.0.zip
 
 ### Installazione
 
