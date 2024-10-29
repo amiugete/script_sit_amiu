@@ -99,7 +99,8 @@ f_handler.setFormatter(cc_format)
 def main():
     
     # PARAMETRI INIZIALI 
-    CF_AZIENDA='03818890109'
+    CFS_AZIENDE=['03818890109', '01266290996']
+    AZIENDE=['AMIU', 'BONIFICHE']
     file_processati='file_processati.csv'
     
     
@@ -109,11 +110,17 @@ def main():
     
     
     filenames = []
+    cf_aziende_file=[]
     
-    for filename in os.listdir('{0}/input/cartellini'.format(path)):
-        if filename.lower().endswith('.pdf'):
-            filenames.append(os.path.join(filename))
-            
+    a=0
+    while a<len(AZIENDE):
+        for filename in os.listdir('{0}/input/cartellini{1}'.format(path, AZIENDE[a])):
+            if filename.lower().endswith('.pdf'):
+                filenames.append(os.path.join(filename))
+                cf_aziende_file.append(CFS_AZIENDE[a])
+        a+=1
+        
+        
     #filenames_check = []
     #open and read the file after the appending:
     #f = open(file_processati, "r")
@@ -183,7 +190,7 @@ def main():
                 path_mese='{0}/{1}'.format(path_anno, mese)
                 if not os.path.exists(path_mese):
                     os.makedirs(path_mese)
-                outputpdf='{0}/{1}-{2}-{3}-{4}--BLD--{5}.pdf'.format(path_mese,CF_AZIENDA, CF, anno,mese, matricola)
+                outputpdf='{0}/{1}-{2}-{3}-{4}--BLD--{5}.pdf'.format(path_mese, cf_aziende_file[k], CF, anno,mese, matricola)
             else:
                 # non creo nuovo file
                 logger.warning('sono alla pagina {0}. Due pagine per stesso dipendente CF: {1}, Matr:{2}'.format(i, CF, matricola))
