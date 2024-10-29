@@ -107,7 +107,8 @@ from invio_messaggio import *
 
 def main():
     
-    
+    logger.info('Il PID corrente è {0}'.format(os.getpid()))
+
     # Get today's date
     #presentday = datetime.now() # or presentday = datetime.today()
     oggi=datetime.today()
@@ -117,10 +118,10 @@ def main():
     
     num_giorno=datetime.today().weekday()
     giorno=datetime.today().strftime('%A')
-    logging.debug('Il giorno della settimana è {} o meglio {}'.format(num_giorno, giorno))
+    logging.info('Il giorno della settimana è {} o meglio {}'.format(num_giorno, giorno))
 
     start_week = date.today() - timedelta(days=datetime.today().weekday())
-    logging.debug('Il primo giorno della settimana è {} '.format(start_week))
+    logging.info('Il primo giorno della settimana è {} '.format(start_week))
     
     #exit()
     # Mi connetto a SIT (PostgreSQL) per poi recuperare le mail
@@ -181,7 +182,7 @@ and (data_fine_validita + interval '1' day) >= %s"""
         logger.debug(vv[0])
         
         logger.debug(oggi)
-        logger.debug(vv[1])
+        #logger.debug(vv[1])
         
         gg_indietro=oggi-vv[1]
         

@@ -412,7 +412,7 @@ def main():
                                     cur.close()
                                     cur = con.cursor()
                                     
-                                    if data[i]['cod_caus_srv_non_eseg_ext']!='':
+                                    if data[i]['cod_caus_srv_non_eseg_ext']!='' and len(data[i]['cons_works'])>0:
                                 
                                         # cerco se raccolta o spazzamento o altro e salvo il risultato nella variabile tipo_percorso
                                         
@@ -453,14 +453,13 @@ def main():
                                                 /*----------------------------------------------------------------
                                                 --data consuntivazione*/
                                                 AND DATA_PREVISTA <= to_date(:dataperc, 'YYYYMMDD')
-                                                AND (SELECT UNIOPE.ISDATEINFREQ(to_date(:dataperc, 'YYYYMMDD'), cmt.FREQUENZA) FROM dual)>0
+                                                /*AND (SELECT UNIOPE.ISDATEINFREQ(to_date(:dataperc, 'YYYYMMDD'), cmt.FREQUENZA) FROM dual)>0*/
                                                 )
                                                 AND DATA_CONS = to_date(:dataperc, 'YYYYMMDD')
                                                 )'''
                                                                                     
                                             try:
                                                 cur.execute(query_select, (data[i]['codice_serv_pred'],
-                                                                        data[i]['data_esecuzione_prevista'],
                                                                         data[i]['data_esecuzione_prevista'],
                                                                         data[i]['data_esecuzione_prevista']
                                                                         ))
@@ -513,27 +512,62 @@ def main():
                                                 /*----------------------------------------------------------------
                                                 --data consuntivazione */
                                                 AND DATA_PREVISTA <= to_date(:dataperc, 'YYYYMMDD'))
-                                                AND (SELECT UNIOPE.ISDATEINFREQ(to_date(:dataperc, 'YYYYMMDD'), cmt.FREQUENZA) FROM dual)>0
+                                                /*AND (SELECT UNIOPE.ISDATEINFREQ(to_date(:dataperc, 'YYYYMMDD'), cmt.FREQUENZA) FROM dual)>0 */
                                                 )
                                                 GROUP BY cmt.ID_MACRO_TAPPA, 
                                                 ce.tipo_elemento'''
                                                 try:
-                                                    cur.execute(query_insert, (data[i]['cod_caus_srv_non_eseg_ext'],
+                                                    '''cur.execute(query_insert, (int(data[i]['cod_caus_srv_non_eseg_ext']),
                                                                             data[i]['data_esecuzione_prevista'], 
                                                                             data[i]['codice_serv_pred'], 
                                                                             data[i]['data_esecuzione_prevista'],
+                                                                            data[i]['data_esecuzione_prevista']))'''
+                                                    cur.execute(query_insert, (int(data[i]['cod_caus_srv_non_eseg_ext']),
+                                                                            data[i]['data_esecuzione_prevista'], 
+                                                                            data[i]['codice_serv_pred'], 
                                                                             data[i]['data_esecuzione_prevista']))
+                                                    
                                                 except Exception as e:
                                                     logger.error(query_insert)
-                                                    logger.error('causale:{} data:{} percorso:{}'.format(data[i]['cod_caus_srv_non_eseg_ext'],
+                                                    logger.error('causale:{} data:{} percorso:{}'.format(int(data[i]['cod_caus_srv_non_eseg_ext']),
                                                                             data[i]['data_esecuzione_prevista'], 
                                                                             data[i]['codice_serv_pred']))
-                                                    logger.error(e)  
-                                            # qua bisognerebbe mettere update
+                                                    logger.error(e)                                          
                                             
-                                            
-                                            #TODO
-                                            
+                                            else:
+                                                update_query='''UPDATE CONSUNT_MACRO_TAPPA cmt 
+                                                SET 
+                                                QTA_ELEM_NON_VUOTATI = 0,
+                                                CAUSALE_ELEM= :causale
+                                                WHERE cmt.ID_MACRO_TAPPA IN 
+                                                (
+                                                SELECT ID_TAPPA  FROM CONS_PERCORSI_VIE_TAPPE cpvt 
+                                                JOIN CONS_MACRO_TAPPA cmt ON cmt.ID_MACRO_TAPPA=cpvt.ID_TAPPA
+                                                WHERE ID_PERCORSO IN (
+                                                    :cod_percorso
+                                                ) AND DATA_PREVISTA = 
+                                                (SELECT max(DATA_PREVISTA) FROM CONS_PERCORSI_VIE_TAPPE cpvt1 WHERE  cpvt1.id_percorso =cpvt.ID_PERCORSO  
+                                                /*----------------------------------------------------------------
+                                                --data consuntivazione*/
+                                                AND DATA_PREVISTA <= to_date(:dataperc, 'YYYYMMDD')
+                                                /*AND (SELECT UNIOPE.ISDATEINFREQ(to_date(:dataperc, 'YYYYMMDD'), cmt.FREQUENZA) FROM dual)>0*/
+                                                )
+                                                AND DATA_CONS = to_date(:dataperc, 'YYYYMMDD')
+                                                )'''
+                                                                                    
+                                                try:
+                                                    cur.execute(update_query, (int(data[i]['cod_caus_srv_non_eseg_ext']), 
+                                                                            data[i]['codice_serv_pred'],
+                                                                            data[i]['data_esecuzione_prevista'],
+                                                                            data[i]['data_esecuzione_prevista']
+                                                                            ))
+                                                except Exception as e:
+                                                    logger.error(update_query)
+                                                    logger.error('causale:{} data:{} percorso:{}'.format(
+                                                                            int(data[i]['cod_caus_srv_non_eseg_ext']),
+                                                                            data[i]['data_esecuzione_prevista'], 
+                                                                            data[i]['codice_serv_pred']))
+                                                    logger.error(e)
                                             
                                             
                                             
@@ -552,14 +586,13 @@ def main():
                                                 /*----------------------------------------------------------------
                                                 --data consuntivazione*/
                                                 AND DATA_PREVISTA <= to_date(:dataperc, 'YYYYMMDD')
-                                                AND (SELECT UNIOPE.ISDATEINFREQ(to_date(:dataperc, 'YYYYMMDD'), cmt.FREQUENZA) FROM dual)>0
+                                                /*AND (SELECT UNIOPE.ISDATEINFREQ(to_date(:dataperc, 'YYYYMMDD'), cmt.FREQUENZA) FROM dual)>0*/
                                                 )
                                                 AND DATA_CONS = to_date(:dataperc, 'YYYYMMDD')
                                                 )'''
                                                                                     
                                             try:
                                                 cur.execute(query_select, (data[i]['codice_serv_pred'],
-                                                                        data[i]['data_esecuzione_prevista'],
                                                                         data[i]['data_esecuzione_prevista'],
                                                                         data[i]['data_esecuzione_prevista']  ))
                                                 cp=cur.fetchall()
@@ -598,23 +631,54 @@ def main():
                                                 /*----------------------------------------------------------------
                                                 --data consuntivazione*/
                                                 AND DATA_PREVISTA <= to_date(:dataperc, 'YYYYMMDD'))
-                                                AND (SELECT UNIOPE.ISDATEINFREQ(to_date(:dataperc, 'YYYYMMDD'), cmt.FREQUENZA) FROM dual)>0
+                                                /*AND (SELECT UNIOPE.ISDATEINFREQ(to_date(:dataperc, 'YYYYMMDD'), cmt.FREQUENZA) FROM dual)>0*/
                                                 )
                                                 GROUP BY cs.ID_TAPPA'''
                                                 try:
-                                                    cur.execute(query_insert, (data[i]['cod_caus_srv_non_eseg_ext'],
+                                                    cur.execute(query_insert, (int(data[i]['cod_caus_srv_non_eseg_ext']),
                                                                             data[i]['data_esecuzione_prevista'], 
                                                                             data[i]['codice_serv_pred'], 
-                                                                            data[i]['data_esecuzione_prevista'],
                                                                             data[i]['data_esecuzione_prevista']))
                                                 except Exception as e:
                                                     logger.error(query_insert)
-                                                    logger.error('1:{}, 2:{}, 3{}, 4:{}, 5:{}'.format(data[i]['cod_caus_srv_non_eseg_ext'],
+                                                    logger.error('1:{}, 2:{}, 3{}, 4:{}, 5:{}'.format(int(data[i]['cod_caus_srv_non_eseg_ext']),
                                                                             data[i]['data_esecuzione_prevista'], 
                                                                             data[i]['codice_serv_pred'], 
                                                                             data[i]['data_esecuzione_prevista'],
                                                                             data[i]['data_esecuzione_prevista'])) 
                                                     logger.error(e)
+                                            
+                                            else:
+                                                update_query='''UPDATE UNIOPE.CONSUNT_SPAZZAMENTO cs  
+                                                SET QTA_SPAZZATA=0,
+                                                CAUSALE_SPAZZ =:causale
+                                                WHERE cs.ID_TAPPA IN 
+                                                (
+                                                SELECT ID_TAPPA  FROM CONS_PERCORSI_VIE_TAPPE cpvt 
+                                                JOIN CONS_MACRO_TAPPA cmt ON cmt.ID_MACRO_TAPPA=cpvt.ID_TAPPA
+                                                WHERE ID_PERCORSO IN (
+                                                    :cod_percorso
+                                                ) AND DATA_PREVISTA = 
+                                                (SELECT max(DATA_PREVISTA) FROM CONS_PERCORSI_VIE_TAPPE cpvt1 WHERE  cpvt1.id_percorso =cpvt.ID_PERCORSO  
+                                                /*----------------------------------------------------------------
+                                                --data consuntivazione*/
+                                                AND DATA_PREVISTA <= to_date(:dataperc, 'YYYYMMDD')
+                                                /*AND (SELECT UNIOPE.ISDATEINFREQ(to_date(:dataperc, 'YYYYMMDD'), cmt.FREQUENZA) FROM dual)>0*/
+                                                )
+                                                AND DATA_CONS = to_date(:dataperc, 'YYYYMMDD')
+                                                )'''
+                                                                                    
+                                                try:
+                                                    cur.execute(update_query, (int(data[i]['cod_caus_srv_non_eseg_ext']),
+                                                                            data[i]['codice_serv_pred'],
+                                                                            data[i]['data_esecuzione_prevista'],
+                                                                            data[i]['data_esecuzione_prevista']  ))
+                                                except Exception as e:
+                                                    logger.error(update_query)
+                                                    logger.error('causale:{} data:{} percorso:{}'.format(int(data[i]['cod_caus_srv_non_eseg_ext']),
+                                                                            data[i]['data_esecuzione_prevista'], 
+                                                                            data[i]['codice_serv_pred']))
+                                                    logger.error(e) 
                                                 
                                                     
                                         else:
@@ -637,10 +701,11 @@ def main():
                                     sportello=''
                                     s=0
                                     while s<len(data[i]['cons_ris_tecniche']):
-                                        # con la funzione strip e usando lo spazio come separatore fra sportelli 
-                                        # non dovrebbero servire condizioni che distinguano il primo sportello dagli altri
-                                        sportello='{} {}'.format(sportello, (data[i]['cons_ris_tecniche'][s]['cod_matricola_ristec']).lstrip('0')).strip() 
-                                        #logger.debug(sportello)
+                                        if data[i]['cons_ris_tecniche'][s]['id_giustificativo']=='0':
+                                            # con la funzione strip e usando lo spazio come separatore fra sportelli 
+                                            # non dovrebbero servire condizioni che distinguano il primo sportello dagli altri
+                                            sportello='{} {}'.format(sportello, (data[i]['cons_ris_tecniche'][s]['cod_matricola_ristec']).lstrip('0')).strip() 
+                                            #logger.debug(sportello)
                                         s+=1
                                     
                                     
@@ -927,1018 +992,1038 @@ def main():
                                     cur = con.cursor()
                                     
                                     
-                                    # consuntivazione 
-                                    t=0
-                                    check_tappe_non_trovate=0
-                                    check_tappe_multiple=0
-                                    elenco_codici_via=[] # re-inizializzo ogni volta
-                                    elenco_elementi=[] # re-inizializzo ogni volta
-                                    elenco_piazzole=[]  # da usare per calcolo elementi non vuotati 
-                                    elenco_tappe=[] # da usare per calcolo elementi non vuotati
-                                    elenco_tipi=[] # da usare per calcolo elementi non vuotati
-                                    elenco_num_elementi=[] 
-                                    elenco_causali=[]
-                                    #logger.debug('Ho inizializzato gli array. La lunghezza è {}'.format(len(elenco_tappe)))
-                                    ripasso=0
-                                    ripasso_sit=0
-                                    while t<len(data[i]['cons_works']):
-                                        #if int(data[i]['id_scheda'])==116601:
-                                        #    logger.debug(t)      
-                                        if data[i]['cons_works'][t]['tipo_srv_comp']=='SPAZZ':
-                                            #logger.debug('Consuntivazione spazzamento')
-                                            # SU SIT cerco info sul tratto
-                                            
+                                    
+                                    if len(data[i]['cons_works'])==0:
+                                        logger.warning('Il percorso {0} in data_pianif_iniziale {1} (id_scheda = {2}) non ha nessuna tappa'.format(
+                                            data[i]['codice_serv_pred'],
+                                            data[i]['data_pianif_iniziale'],
+                                            data[i]['id_scheda']))
+                                    elif (data[i]['cod_caus_srv_non_eseg_ext']!=''):
+                                        logger.info('Dati del percorso {0} in in data_pianif_iniziale {1} (id_scheda = {2}) già inseriti massivamente'.format(
+                                            data[i]['codice_serv_pred'],
+                                            data[i]['data_pianif_iniziale'],
+                                            data[i]['id_scheda']
+                                        ))
+                                    elif (len(data[i]['cons_works'])>0 and data[i]['cod_caus_srv_non_eseg_ext']==''):
+                                        # consuntivazione 
+                                        t=0
+                                        check_tappe_non_trovate=0
+                                        check_tappe_multiple=0
+                                        elenco_codici_via=[] # re-inizializzo ogni volta
+                                        elenco_elementi=[] # re-inizializzo ogni volta
+                                        elenco_piazzole=[]  # da usare per calcolo elementi non vuotati 
+                                        elenco_tappe=[] # da usare per calcolo elementi non vuotati
+                                        elenco_tipi=[] # da usare per calcolo elementi non vuotati
+                                        elenco_num_elementi=[] 
+                                        elenco_causali=[]
+                                        #logger.debug('Ho inizializzato gli array. La lunghezza è {}'.format(len(elenco_tappe)))
+                                        ripasso=0
+                                        ripasso_sit=0
+                                        while t<len(data[i]['cons_works']):
                                             #if int(data[i]['id_scheda'])==116601:
-                                            #    logger.debug(int(data[i]['cons_works'][t]['cod_tratto'].strip()))
-                                            #    logger.debug(int(data[i]['cons_works'][t]['pos']))
+                                            #    logger.debug(t)      
+                                            if data[i]['cons_works'][t]['tipo_srv_comp']=='SPAZZ':
+                                                #logger.debug('Consuntivazione spazzamento')
+                                                # SU SIT cerco info sul tratto
                                                 
-                                                                                        
-                                            if int(data[i]['cons_works'][t]['pos'])>0 and int(data[i]['cons_works'][t]['flg_non_previsto'])==0:
-                                                
-                                                if int(data[i]['cons_works'][t]['cod_tratto'].strip()) in elenco_codici_via:
-                                                    ripasso_sit=elenco_codici_via.count(int(data[i]['cons_works'][t]['cod_tratto'].strip()))
-                                                else:
-                                                    ripasso_sit=0
-                                                
-                                                elenco_codici_via.append(int(data[i]['cons_works'][t]['cod_tratto'].strip()))
-                                                
-                                                
-                                                # cerco i dati di quella tappa
-                                                # ho rimosso l'ordine che non dovrebbe servire anzi essere fuorviante
-                                                """select_sit_per_tappa='''select codice_modello_servizio, ordine,  a.id_via, at.nota, at.ripasso 
-                                            from 
-                                                (SELECT * FROM anagrafe_percorsi.v_percorsi_elementi_tratti vpet 
-                                                union 
-                                                SELECT * FROM anagrafe_percorsi.v_percorsi_elementi_tratti_ovs vpeto) at
-                                            join elem.aste a on a.id_asta = at.codice
-                                            where codice_tipo_servizio = %s and codice_modello_servizio =  %s
-                                            and codice = %s and ripasso = %s
-                                            and (%s between data_inizio and coalesce(data_fine,'20991231'))
-                                            and ordine=%s'''
-                                            #la query è la stessa i dati sono diversi nei 2 casi
-                                                try:
-                                                    curr.execute(select_sit_per_tappa, (data[i]['cons_works'][t]['tipo_srv_comp'], 
-                                                                                        data[i]['codice_serv_pred'],
-                                                                                        int(data[i]['cons_works'][t]['cod_tratto']),
-                                                                                        ripasso_sit,
-                                                                                        data[i]['data_pianif_iniziale'],
-                                                                                        int(data[i]['cons_works'][t]['pos'])
-                                                                                        ))
-                                                
-                                                """
-                                                
-                                                
-                                                select_sit_per_tappa='''select codice_modello_servizio, 
-                                                min(ordine) as ordine,  
-                                                a.id_via, at.nota, at.ripasso 
-                                            from 
-                                                (
-                                                SELECT codice_modello_servizio, ordine, objecy_type, 
-                                            codice, quantita, lato_servizio, percent_trattamento,frequenza,
-                                            ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
-                                            codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine
-                                                FROM anagrafe_percorsi.v_percorsi_elementi_tratti 
-                                                where data_inizio < coalesce(data_fine, '20991231')
-                                                and codice_modello_servizio =  %s
-                                                union 
-                                                SELECT codice_modello_servizio, ordine, objecy_type, 
-                                            codice, quantita, lato_servizio, percent_trattamento,frequenza,
-                                            ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
-                                            codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine
-                                                FROM anagrafe_percorsi.v_percorsi_elementi_tratti_ovs 
-                                                where data_inizio < coalesce(data_fine, '20991231')
-                                                and codice_modello_servizio =  %s
-                                                union 
-                                                SELECT codice_modello_servizio, ordine, objecy_type, 
-                                            codice, quantita, lato_servizio, percent_trattamento,frequenza,
-                                            ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
-                                            codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine
-                                                FROM anagrafe_percorsi.mv_percorsi_elementi_tratti_dismessi 
-                                                where data_inizio < coalesce(data_fine, '20991231')
-                                                and codice_modello_servizio =  %s
-                                            ) at
-                                            join elem.aste a on a.id_asta = at.codice
-                                            where codice_tipo_servizio = %s
-                                            and codice = %s and ripasso = %s
-                                            and (%s between data_inizio and coalesce((data_fine::int-1)::varchar,'20991231'))
-                                            group by codice_modello_servizio, a.id_via, at.nota, at.ripasso'''
-                                            #la query è la stessa i dati sono diversi nei 2 casi
-                                                try:
-                                                    curr.execute(select_sit_per_tappa, (data[i]['codice_serv_pred'],
-                                                                                        data[i]['codice_serv_pred'],
-                                                                                        data[i]['codice_serv_pred'],
-                                                                                        data[i]['cons_works'][t]['tipo_srv_comp'], 
-                                                                                        int(data[i]['cons_works'][t]['cod_tratto'].strip()),
-                                                                                        ripasso_sit,
-                                                                                        data[i]['data_pianif_iniziale']
-                                                                                        ))
-                                                    tappe=curr.fetchall()
-                                                except Exception as e:
-                                                    logger.error(select_sit_per_tappa)
-                                                    logger.error('{} {} {} {} {} {} {}'.format(data[i]['codice_serv_pred'],
-                                                                                        data[i]['codice_serv_pred'],
-                                                                                        data[i]['codice_serv_pred'],
-                                                                                        data[i]['cons_works'][t]['tipo_srv_comp'], 
-                                                                                        int(data[i]['cons_works'][t]['cod_tratto'].strip()),
-                                                                                        ripasso_sit,
-                                                                                        data[i]['data_pianif_iniziale']
-                                                                                        ))
-                                                    logger.error(e)
-                                                
-                                                ct=0
-                                                for tt in tappe:
-                                                    ordine=tt[1]
-                                                    id_via=tt[2]
-                                                    nota_via=tt[3]
-                                                    #logger.debug('Ordine {} - Id_via {} - Nota {}'.format(tt[1],tt[2],tt[3]))
-                                                    if ct>=1:
-                                                        #check_tappe_multiple = 1
-                                                        logger.error('Trovata più di una tappa')
-                                                        logger.error(select_sit_per_tappa)
-                                                        logger.error('{} {} {} {} {}'.format(data[i]['cons_works'][t]['tipo_srv_comp'], 
-                                                                                        data[i]['codice_serv_pred'],
-                                                                                        int(data[i]['cons_works'][t]['cod_tratto'].strip()),
-                                                                                        data[i]['data_pianif_iniziale'],
-                                                                                        int(data[i]['cons_works'][t]['pos'])
-                                                                                        ))                                              
-                                                        #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
-                                                        #exit()                                       
-                                                    ct+=1
-                                                
-                                                if ct == 0:
-                                                    check_tappe_non_trovate=1
-                                                    logger.error('Tappa non trovata su SIT')
-                                                    logger.error(select_sit_per_tappa)
-                                                    logger.error('{} {} {} {} {}'.format(data[i]['cons_works'][t]['tipo_srv_comp'], 
-                                                                                        data[i]['codice_serv_pred'],
-                                                                                        int(data[i]['cons_works'][t]['cod_tratto'].strip()),
-                                                                                        ripasso_sit,
-                                                                                        data[i]['data_pianif_iniziale']
-                                                                                        ))
-                                                    #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
-                                                    #exit()    
-                                                
-                                                if nota_via is None:
-                                                    nota_via='ND'
-                                                
-                                                query_id_tappa='''SELECT DISTINCT ID_TAPPA, DTA_IMPORT, DATA_PREVISTA 
-                                                FROM CONS_PERCORSI_VIE_TAPPE cpvt 
-                                                JOIN CONS_MACRO_TAPPA cmt ON cmt.ID_MACRO_TAPPA = cpvt.ID_TAPPA
-                                                WHERE ID_PERCORSO = :t1
-                                                AND ID_VIA = :t2
-                                                AND ID_ASTA = :t3
-                                                AND (NVL(trim(to_char(NOTA_VIA)),'ND') LIKE :t4) AND (CRONOLOGIA=:t5) 
-                                                and  DATA_PREVISTA = (SELECT max(DATA_PREVISTA) FROM CONS_PERCORSI_VIE_TAPPE 
-                                                WHERE DATA_PREVISTA <= to_date(:t6, 'YYYYMMDD') AND to_char(DATA_PREVISTA, 'HH24') = '00' AND
-                                                ID_PERCORSO = :t7) 
-                                                ORDER BY 1'''
-                            
-
-                                                
-                                                try:
-                                                    cur.execute(query_id_tappa, (data[i]['codice_serv_pred'],
-                                                                                id_via,
-                                                                                int(data[i]['cons_works'][t]['cod_tratto'].strip()),
-                                                                                nota_via.strip(),
-                                                                                ordine, 
-                                                                                data[i]['data_pianif_iniziale'], 
-                                                                                data[i]['codice_serv_pred'])
-                                                                )
-                                                    #cur1.rowfactory = makeDictFactory(cur1)
-                                                    tappe_uo=cur.fetchall()
-                                                except Exception as e:
-                                                    logger.error(query_id_tappa)
-                                                    logger.error('1:{} 2:{} 3:{} 4:{} 5:{} 6:{} 7:{}'.format(data[i]['codice_serv_pred'],
-                                                                                id_via,
-                                                                                int(data[i]['cons_works'][t]['cod_tratto'].strip()),
-                                                                                nota_via.strip(),
-                                                                                ordine, 
-                                                                                data[i]['data_pianif_iniziale'], 
-                                                                                data[i]['codice_serv_pred']
-                                                    ))
-                                                    logger.error(e)
-                                                    exit()
-                                            
-                                                ct=0
-                                                for ttu in tappe_uo:
-                                                    #logger.debug(ttu[0])
-                                                    id_tappa=ttu[0]
-                                                    if ct>=1:
-                                                        check_tappe_multiple = 1
-                                                        logger.error('Trovata più di una tappa')
-                                                        logger.error(query_id_tappa)
-                                                        logger.error('{} {} {} {} {} {}'.format(data[i]['codice_serv_pred'],
-                                                                                id_via,
-                                                                                int(data[i]['cons_works'][t]['cod_tratto'].strip()),
-                                                                                nota_via, ordine,
-                                                                                data[i]['data_pianif_iniziale']))
-                                                        #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
-                                                        #exit()                                       
-                                                    ct+=1
-                                                    if ct == 0:
-                                                        check_tappe_non_trovate=1
-                                                        logger.warning('Tappa non trovata su UO')
-                                                        logger.warning(query_id_tappa)
-                                                        logger.warning('{} {} {} {} {} {}'.format(data[i]['codice_serv_pred'],
-                                                                                    id_via,
-                                                                                    int(data[i]['cons_works'][t]['cod_tratto'].strip()),
-                                                                                    nota_via, ordine,
-                                                                                    data[i]['data_pianif_iniziale']))
-                                                        #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
-                                                        #exit()
+                                                #if int(data[i]['id_scheda'])==116601:
+                                                #    logger.debug(int(data[i]['cons_works'][t]['cod_tratto'].strip()))
+                                                #    logger.debug(int(data[i]['cons_works'][t]['pos']))
                                                     
-                                                    else:     
-                                                        
-                                                        # da fare insert/update
-                                                        if int(data[i]['cons_works'][t]['flg_exec'].strip())==1: #and int(data[i]['cons_works'][t]['cod_std_qualita'])==100:
-                                                            causale=100
-                                                        else:
-                                                            if causale_non_es != None:
-                                                                causale=causale_non_es
-                                                            else:
-                                                                try:
-                                                                    causale=int(data[i]['cons_works'][t]['cod_giustificativo_ext'].strip())
-                                                                except Exception as e:
-                                                                    logger.warning(e)
-                                                                    logger.warning('Scheda {} - Posizione: {} Manca la causale quindi lo do per fatto'.format(
-                                                                        int(data[i]['id_scheda']),
-                                                                        int(data[i]['cons_works'][t]['pos'])
-                                                                    ))
-                                                                    causale=100
-                                                                
-                                                                
-                                                        nota_consuntivazione=''
-                                                        
-                                                        query_select=''' 
-                                                        SELECT * 
-                                                        FROM CONSUNT_SPAZZAMENTO cs 
-                                                        WHERE DATA_CONS = to_date(:c1, 'YYYYMMDD')
-                                                        and id_TAPPA= :c2
-                                                        '''
-                                                        
-                                                        
-                                                        try:
-                                                            cur.execute(query_select, (data[i]['data_esecuzione_prevista'], int(id_tappa)))
-                                                            #cur1.rowfactory = makeDictFactory(cur1)
-                                                            consuntivazioni_uo=cur.fetchall()
-                                                        except Exception as e:
-                                                            logger.error(query_select)
-                                                            #logger.error()
-                                                            logger.error(e)
-                                                        
-                                                        
-                                                        cur.close()
-                                                        cur = con.cursor()
-                                                        
-                                                        if len(consuntivazioni_uo)==0:
-                                                            #logger.debug('Insert tappa {}'.format(int(id_tappa)))
-                                                            query_insert='''INSERT INTO UNIOPE.CONSUNT_SPAZZAMENTO (
-                                                                    ID_PERCORSO, ID_VIA, QTA_SPAZZATA, 
-                                                                    CAUSALE_SPAZZ, NOTA, DATA_CONS,
-                                                                    ID_TAPPA,
-                                                                    ID_SERVIZIO, 
-                                                                    DATA_INS,
-                                                                    FIRMA, ORIGINE_DATO) VALUES
-                                                                    (:c1, :c2, :c3,
-                                                                    :c4, :c5, to_date(:c6, 'YYYYMMDD') ,
-                                                                    :c7,
-                                                                    (SELECT DISTINCT ID_SERVIZIO 
-                                                                    FROM ANAGR_SER_PER_UO aspu 
-                                                                    WHERE ID_PERCORSO = :c1
-                                                                    AND to_date(:c6, 'YYYYMMDD') BETWEEN DTA_ATTIVAZIONE AND DTA_DISATTIVAZIONE),
-                                                                    sysdate,
-                                                                    NULL, 'EKOVISION')'''
-                                                            try:
-                                                                cur.execute(query_insert, (data[i]['codice_serv_pred'],
-                                                                                            int(id_via),
-                                                                                            int(data[i]['cons_works'][t]['cod_std_qualita'].strip()),
-                                                                                            causale,
-                                                                                            nota_consuntivazione,
-                                                                                            data[i]['data_esecuzione_prevista'], 
-                                                                                            int(id_tappa)))
-                                                                #cur1.rowfactory = makeDictFactory(cur1)
-                                                            except Exception as e:
-                                                                logger.error(query_insert)
-                                                                logger.error('1:{} 2:{} 3:{} 4:{} 5:{} 6:{} 7:{}'.format(data[i]['codice_serv_pred'],
-                                                                                            id_via,
-                                                                                            int(data[i]['cons_works'][t]['cod_std_qualita'].strip()),
-                                                                                            causale,
-                                                                                            nota_consuntivazione,
-                                                                                            data[i]['data_esecuzione_prevista'], 
-                                                                                            int(id_tappa)))
-                                                                logger.error(e)
-                                                                #logger.error('Ci sono troppi conferimenti con ID {}'.format(data[i]['cons_conferimenti'][c]['id']))
-                                                                #logger.error('Data percorso progettata {}'.format(data[i]['data_pianif_iniziale']))
-                                                                #logger.error('Data percorso effettiva {}'.format(data[i]['data_esecuzione_prevista']))  
-                                                                #logger.error('Cod percorso {}'.format(data[i]['codice_serv_pred']))
-                                                                #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
-                                                                #exit()        
-                                                            
-                                                        elif len(consuntivazioni_uo)==1:
-                                                            query_update='''
-                                                                UPDATE UNIOPE.CONSUNT_SPAZZAMENTO 
-                                                                SET QTA_SPAZZATA=:c1, 
-                                                                CAUSALE_SPAZZ=:c2, 
-                                                                NOTA=:c3, 
-                                                                DATA_INS=sysdate
-                                                                WHERE DATA_CONS=to_date(:c4, 'YYYYMMDD') AND ID_TAPPA=:c5
-                                                        '''
-                                                            try:
-                                                                cur.execute(query_update, (int(data[i]['cons_works'][t]['cod_std_qualita'].strip()),
-                                                                                            causale,
-                                                                                            nota_consuntivazione,
-                                                                                            data[i]['data_esecuzione_prevista'], 
-                                                                                            id_tappa))
-                                                            except Exception as e:
-                                                                logger.error(query_insert)
-                                                                logger.error('{} {} {} {} {}'.format(int(data[i]['cons_works'][t]['cod_std_qualita'].strip()),
-                                                                                            causale,
-                                                                                            nota_consuntivazione,
-                                                                                            data[i]['data_esecuzione_prevista'], 
-                                                                                            id_tappa))
-                                                                logger.error(e) 
-                                                        else: 
-                                                            logger.error('Problema consuntivazioni doppie su UO')
-                                                            logger.error('Id tappa {}'.format(id_tappa))
-                                                            logger.error('Data percorso progettata {}'.format(data[i]['data_pianif_iniziale']))
-                                                            logger.error('Data percorso effettiva {}'.format(data[i]['data_esecuzione_prevista']))  
-                                                            logger.error('Cod percorso {}'.format(data[i]['codice_serv_pred']))
-                                                            error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
-                                                            exit()
-                                            
-                                            
-                                            
-                                        elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC' or data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
-                                            #logger.debug('Consuntivazione raccolta')
-                                            
-                                            #logger.debug(int(data[i]['cons_works'][t]['cod_componente']))
-                                            if int(data[i]['cons_works'][t]['pos'])>0 and int(data[i]['cons_works'][t]['flg_non_previsto'].strip())==0:
-                                                if int(data[i]['cons_works'][t]['cod_componente'].strip()) in elenco_elementi:
-                                                    ripasso_sit=elenco_elementi.count(int(data[i]['cons_works'][t]['cod_componente'].strip()))
-                                                else:
-                                                    ripasso_sit=0
-                                                elenco_elementi.append(int(data[i]['cons_works'][t]['cod_componente'].strip()))
-                                                
-                                                if id_servizio != 114: # se non è botticella
+                                                                                            
+                                                if int(data[i]['cons_works'][t]['pos'])>0 and int(data[i]['cons_works'][t]['flg_non_previsto'])==0:
+                                                    
+                                                    if int(data[i]['cons_works'][t]['cod_tratto'].strip()) in elenco_codici_via:
+                                                        ripasso_sit=elenco_codici_via.count(int(data[i]['cons_works'][t]['cod_tratto'].strip()))
+                                                    else:
+                                                        ripasso_sit=0
+                                                    
+                                                    elenco_codici_via.append(int(data[i]['cons_works'][t]['cod_tratto'].strip()))
+                                                    
+                                                    
+                                                    # cerco i dati di quella tappa
+                                                    # ho rimosso l'ordine che non dovrebbe servire anzi essere fuorviante
+                                                    """select_sit_per_tappa='''select codice_modello_servizio, ordine,  a.id_via, at.nota, at.ripasso 
+                                                from 
+                                                    (SELECT * FROM anagrafe_percorsi.v_percorsi_elementi_tratti vpet 
+                                                    union 
+                                                    SELECT * FROM anagrafe_percorsi.v_percorsi_elementi_tratti_ovs vpeto) at
+                                                join elem.aste a on a.id_asta = at.codice
+                                                where codice_tipo_servizio = %s and codice_modello_servizio =  %s
+                                                and codice = %s and ripasso = %s
+                                                and (%s between data_inizio and coalesce(data_fine,'20991231'))
+                                                and ordine=%s'''
+                                                #la query è la stessa i dati sono diversi nei 2 casi
+                                                    try:
+                                                        curr.execute(select_sit_per_tappa, (data[i]['cons_works'][t]['tipo_srv_comp'], 
+                                                                                            data[i]['codice_serv_pred'],
+                                                                                            int(data[i]['cons_works'][t]['cod_tratto']),
+                                                                                            ripasso_sit,
+                                                                                            data[i]['data_pianif_iniziale'],
+                                                                                            int(data[i]['cons_works'][t]['pos'])
+                                                                                            ))
+                                                    
+                                                    """
+                                                    
+                                                    
                                                     select_sit_per_tappa='''select codice_modello_servizio, 
-                                                    min(ordine)  as ordine, 
-                                                    vc.codice_punto_raccolta as id_piazzola , at.nota, at.ripasso, at.codice, 
-                                                     min(data_inizio) as data_inizio, 
-                                                    case 
-                                                        when max(data_fine) = '20991231' then null 
-                                                        else max(data_fine)
-                                                    end data_fine, 
-                                                    vc.tipo_servizio_componente
-                                                    from 
-                                                        (SELECT codice_modello_servizio, ordine, objecy_type, 
-                                                    codice, quantita, lato_servizio, percent_trattamento,frequenza,
-                                                    ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
-                                                    codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine
-                                                        FROM anagrafe_percorsi.v_percorsi_elementi_tratti 
-                                                        where data_inizio < coalesce(data_fine, '20991231')
-                                                        and codice_modello_servizio =  %s
-                                                        union 
-                                                        SELECT codice_modello_servizio, ordine, objecy_type, 
-                                                    codice, quantita, lato_servizio, percent_trattamento,frequenza,
-                                                    ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
-                                                    codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine
-                                                        FROM anagrafe_percorsi.v_percorsi_elementi_tratti_ovs 
-                                                        where data_inizio < coalesce(data_fine, '20991231')
-                                                        and codice_modello_servizio =  %s
-                                                        union 
-                                                        SELECT codice_modello_servizio, ordine, objecy_type, 
-                                                    codice, quantita, lato_servizio, percent_trattamento,frequenza,
-                                                    ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
-                                                    codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine
-                                                        FROM anagrafe_percorsi.mv_percorsi_elementi_tratti_dismessi 
-                                                        where data_inizio < coalesce(data_fine, '20991231')
-                                                        and codice_modello_servizio =  %s
-                                                        ) at
-                                                    left join etl.v_componenti vc on vc.cod_componente = at.codice
-                                                    where codice_tipo_servizio = %s 
-                                                    and codice = %s and ripasso=%s
-                                                    and (%s between data_inizio and coalesce((data_fine::int-1)::varchar,'20991231'))
-                                                    group by codice_modello_servizio,  
-                                                    vc.codice_punto_raccolta, at.nota, at.ripasso, at.codice, /*at.data_inizio, at.data_fine, */
-                                                    vc.tipo_servizio_componente
-                                                    '''
+                                                    min(ordine) as ordine,  
+                                                    a.id_via, at.nota, at.ripasso 
+                                                from 
+                                                    (
+                                                    SELECT codice_modello_servizio, ordine, objecy_type, 
+                                                codice, quantita, lato_servizio, percent_trattamento,frequenza,
+                                                ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
+                                                codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine
+                                                    FROM anagrafe_percorsi.v_percorsi_elementi_tratti 
+                                                    where data_inizio < coalesce(data_fine, '20991231')
+                                                    and codice_modello_servizio =  %s
+                                                    union 
+                                                    SELECT codice_modello_servizio, ordine, objecy_type, 
+                                                codice, quantita, lato_servizio, percent_trattamento,frequenza,
+                                                ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
+                                                codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine
+                                                    FROM anagrafe_percorsi.v_percorsi_elementi_tratti_ovs 
+                                                    where data_inizio < coalesce(data_fine, '20991231')
+                                                    and codice_modello_servizio =  %s
+                                                    union 
+                                                    SELECT codice_modello_servizio, ordine, objecy_type, 
+                                                codice, quantita, lato_servizio, percent_trattamento,frequenza,
+                                                ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
+                                                codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine
+                                                    FROM anagrafe_percorsi.mv_percorsi_elementi_tratti_dismessi 
+                                                    where data_inizio < coalesce(data_fine, '20991231')
+                                                    and codice_modello_servizio =  %s
+                                                ) at
+                                                join elem.aste a on a.id_asta = at.codice
+                                                where codice_tipo_servizio = %s
+                                                and codice = %s and ripasso = %s
+                                                and (%s between data_inizio and coalesce((data_fine::int-1)::varchar,'20991231'))
+                                                group by codice_modello_servizio, a.id_via, at.nota, at.ripasso'''
+                                                #la query è la stessa i dati sono diversi nei 2 casi
                                                     try:
                                                         curr.execute(select_sit_per_tappa, (data[i]['codice_serv_pred'],
                                                                                             data[i]['codice_serv_pred'],
                                                                                             data[i]['codice_serv_pred'],
                                                                                             data[i]['cons_works'][t]['tipo_srv_comp'], 
-                                                                                            int(data[i]['cons_works'][t]['cod_componente'].strip()),
+                                                                                            int(data[i]['cons_works'][t]['cod_tratto'].strip()),
                                                                                             ripasso_sit,
-                                                                                            data[i]['data_pianif_iniziale'])
-                                                                                            )
+                                                                                            data[i]['data_pianif_iniziale']
+                                                                                            ))
                                                         tappe=curr.fetchall()
                                                     except Exception as e:
                                                         logger.error(select_sit_per_tappa)
-                                                        logger.error('1:{} 1:{} 1:{} 2:{} 3:{} 4:{} 5:{}'.format(data[i]['codice_serv_pred'],
+                                                        logger.error('{} {} {} {} {} {} {}'.format(data[i]['codice_serv_pred'],
                                                                                             data[i]['codice_serv_pred'],
                                                                                             data[i]['codice_serv_pred'],
                                                                                             data[i]['cons_works'][t]['tipo_srv_comp'], 
-                                                                                            int(data[i]['cons_works'][t]['cod_componente'].strip()),
+                                                                                            int(data[i]['cons_works'][t]['cod_tratto'].strip()),
                                                                                             ripasso_sit,
-                                                                                            data[i]['data_pianif_iniziale']))
+                                                                                            data[i]['data_pianif_iniziale']
+                                                                                            ))
                                                         logger.error(e)
                                                     
-                                                    
-                                                    
-                                                    
-                                                    #counter=1
                                                     ct=0
                                                     for tt in tappe:
-                                                        #logger.debug(elenco_elementi.count(int(data[i]['cons_works'][t]['cod_componente'])))
-                                                        #if counter==elenco_elementi.count(int(data[i]['cons_works'][t]['cod_componente'])):
                                                         ordine=tt[1]
-                                                        id_piazzola=tt[2]
-                                                        #elenco_piazzole.append(tt[2])
-                                                        ripasso=tt[4]
-                                                        tipo_elemento = int(tt[8])
-                                                        #logger.debug('Ordine {} - Id_via {} - Ripasso {}'.format(ordine, id_piazzola, ripasso))
-                                                        if ct>=1 :
-                                                            check_tappe_multiple=1
+                                                        id_via=tt[2]
+                                                        nota_via=tt[3]
+                                                        #logger.debug('Ordine {} - Id_via {} - Nota {}'.format(tt[1],tt[2],tt[3]))
+                                                        if ct>=1:
+                                                            #check_tappe_multiple = 1
                                                             logger.error('Trovata più di una tappa')
                                                             logger.error(select_sit_per_tappa)
-                                                            logger.error('1:{} 2:{} 3:{} 4:{} 5:{}'.format(data[i]['cons_works'][t]['tipo_srv_comp'], 
+                                                            logger.error('{} {} {} {} {}'.format(data[i]['cons_works'][t]['tipo_srv_comp'], 
                                                                                             data[i]['codice_serv_pred'],
-                                                                                            int(data[i]['cons_works'][t]['cod_componente'].strip()),
-                                                                                            ripasso_sit,
-                                                                                            data[i]['data_pianif_iniziale']))
+                                                                                            int(data[i]['cons_works'][t]['cod_tratto'].strip()),
+                                                                                            data[i]['data_pianif_iniziale'],
+                                                                                            int(data[i]['cons_works'][t]['pos'])
+                                                                                            ))                                              
                                                             #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
-                                                            #exit()  
-                                                        ct+=1                                     
-                                                        
-                                                        #counter+=1
+                                                            #exit()                                       
+                                                        ct+=1
                                                     
+                                                    if ct == 0:
+                                                        check_tappe_non_trovate=1
+                                                        logger.error('Tappa non trovata su SIT')
+                                                        logger.error(select_sit_per_tappa)
+                                                        logger.error('{} {} {} {} {}'.format(data[i]['cons_works'][t]['tipo_srv_comp'], 
+                                                                                            data[i]['codice_serv_pred'],
+                                                                                            int(data[i]['cons_works'][t]['cod_tratto'].strip()),
+                                                                                            ripasso_sit,
+                                                                                            data[i]['data_pianif_iniziale']
+                                                                                            ))
+                                                        #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                        #exit()    
+                                                    
+                                                    if nota_via is None:
+                                                        nota_via='ND'
+                                                    
+                                                    query_id_tappa='''SELECT DISTINCT ID_TAPPA, DTA_IMPORT, DATA_PREVISTA 
+                                                    FROM CONS_PERCORSI_VIE_TAPPE cpvt 
+                                                    JOIN CONS_MACRO_TAPPA cmt ON cmt.ID_MACRO_TAPPA = cpvt.ID_TAPPA
+                                                    WHERE ID_PERCORSO = :t1
+                                                    AND ID_VIA = :t2
+                                                    AND ID_ASTA = :t3
+                                                    AND (NVL(trim(to_char(NOTA_VIA)),'ND') LIKE :t4) AND (CRONOLOGIA=:t5) 
+                                                    and  DATA_PREVISTA = (SELECT max(DATA_PREVISTA) FROM CONS_PERCORSI_VIE_TAPPE 
+                                                    WHERE DATA_PREVISTA <= to_date(:t6, 'YYYYMMDD') AND to_char(DATA_PREVISTA, 'HH24') = '00' AND
+                                                    ID_PERCORSO = :t7) 
+                                                    ORDER BY 1'''
+                                
+
+                                                    
+                                                    try:
+                                                        cur.execute(query_id_tappa, (data[i]['codice_serv_pred'],
+                                                                                    id_via,
+                                                                                    int(data[i]['cons_works'][t]['cod_tratto'].strip()),
+                                                                                    nota_via.strip(),
+                                                                                    ordine, 
+                                                                                    data[i]['data_pianif_iniziale'], 
+                                                                                    data[i]['codice_serv_pred'])
+                                                                    )
+                                                        #cur1.rowfactory = makeDictFactory(cur1)
+                                                        tappe_uo=cur.fetchall()
+                                                    except Exception as e:
+                                                        logger.error(query_id_tappa)
+                                                        logger.error('1:{} 2:{} 3:{} 4:{} 5:{} 6:{} 7:{}'.format(data[i]['codice_serv_pred'],
+                                                                                    id_via,
+                                                                                    int(data[i]['cons_works'][t]['cod_tratto'].strip()),
+                                                                                    nota_via.strip(),
+                                                                                    ordine, 
+                                                                                    data[i]['data_pianif_iniziale'], 
+                                                                                    data[i]['codice_serv_pred']
+                                                        ))
+                                                        logger.error(e)
+                                                        exit()
+                                                
+                                                    ct=0
+                                                    for ttu in tappe_uo:
+                                                        #logger.debug(ttu[0])
+                                                        id_tappa=ttu[0]
+                                                        if ct>=1:
+                                                            check_tappe_multiple = 1
+                                                            logger.error('Trovata più di una tappa')
+                                                            logger.error(query_id_tappa)
+                                                            logger.error('{} {} {} {} {} {}'.format(data[i]['codice_serv_pred'],
+                                                                                    id_via,
+                                                                                    int(data[i]['cons_works'][t]['cod_tratto'].strip()),
+                                                                                    nota_via, ordine,
+                                                                                    data[i]['data_pianif_iniziale']))
+                                                            #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                            #exit()                                       
+                                                        ct+=1
                                                         if ct == 0:
                                                             check_tappe_non_trovate=1
-                                                            logger.warning('Tappa non trovata su SIT')
-                                                            logger.warning(select_sit_per_tappa)
-                                                            logger.warning('1:{} 2:{} 3:{} 4:{} 5:{}'.format(data[i]['cons_works'][t]['tipo_srv_comp'], 
-                                                                                            data[i]['codice_serv_pred'],
-                                                                                            int(data[i]['cons_works'][t]['cod_componente'].strip()),
-                                                                                            ripasso_sit,
-                                                                                            data[i]['data_pianif_iniziale']))
+                                                            logger.warning('Tappa non trovata su UO')
+                                                            logger.warning(query_id_tappa)
+                                                            logger.warning('{} {} {} {} {} {}'.format(data[i]['codice_serv_pred'],
+                                                                                        id_via,
+                                                                                        int(data[i]['cons_works'][t]['cod_tratto'].strip()),
+                                                                                        nota_via, ordine,
+                                                                                        data[i]['data_pianif_iniziale']))
                                                             #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
-                                                            #exit() 
+                                                            #exit()
+                                                        
+                                                        else:     
+                                                            
+                                                            # da fare insert/update
+                                                            if int(data[i]['cons_works'][t]['flg_exec'].strip())==1: #and int(data[i]['cons_works'][t]['cod_std_qualita'])==100:
+                                                                causale=100
+                                                            else:
+                                                                if causale_non_es != None:
+                                                                    causale=causale_non_es
+                                                                else:
+                                                                    try:
+                                                                        causale=int(data[i]['cons_works'][t]['cod_giustificativo_ext'].strip())
+                                                                    except Exception as e:
+                                                                        logger.warning(e)
+                                                                        logger.warning('Scheda {} - Posizione: {} Manca la causale quindi lo do per fatto'.format(
+                                                                            int(data[i]['id_scheda']),
+                                                                            int(data[i]['cons_works'][t]['pos'])
+                                                                        ))
+                                                                        causale=100
+                                                                    
+                                                                    
+                                                            nota_consuntivazione=''
+                                                            
+                                                            query_select=''' 
+                                                            SELECT * 
+                                                            FROM CONSUNT_SPAZZAMENTO cs 
+                                                            WHERE DATA_CONS = to_date(:c1, 'YYYYMMDD')
+                                                            and id_TAPPA= :c2
+                                                            '''
+                                                            
+                                                            
+                                                            try:
+                                                                cur.execute(query_select, (data[i]['data_esecuzione_prevista'], int(id_tappa)))
+                                                                #cur1.rowfactory = makeDictFactory(cur1)
+                                                                consuntivazioni_uo=cur.fetchall()
+                                                            except Exception as e:
+                                                                logger.error(query_select)
+                                                                #logger.error()
+                                                                logger.error(e)
+                                                            
+                                                            
+                                                            cur.close()
+                                                            cur = con.cursor()
+                                                            
+                                                            if len(consuntivazioni_uo)==0:
+                                                                #logger.debug('Insert tappa {}'.format(int(id_tappa)))
+                                                                query_insert='''INSERT INTO UNIOPE.CONSUNT_SPAZZAMENTO (
+                                                                        ID_PERCORSO, ID_VIA, QTA_SPAZZATA, 
+                                                                        CAUSALE_SPAZZ, NOTA, DATA_CONS,
+                                                                        ID_TAPPA,
+                                                                        ID_SERVIZIO, 
+                                                                        DATA_INS,
+                                                                        FIRMA, ORIGINE_DATO) VALUES
+                                                                        (:c1, :c2, :c3,
+                                                                        :c4, :c5, to_date(:c6, 'YYYYMMDD') ,
+                                                                        :c7,
+                                                                        (SELECT DISTINCT ID_SERVIZIO 
+                                                                        FROM ANAGR_SER_PER_UO aspu 
+                                                                        WHERE ID_PERCORSO = :c1
+                                                                        AND to_date(:c6, 'YYYYMMDD') BETWEEN DTA_ATTIVAZIONE AND DTA_DISATTIVAZIONE),
+                                                                        sysdate,
+                                                                        NULL, 'EKOVISION')'''
+                                                                try:
+                                                                    cur.execute(query_insert, (data[i]['codice_serv_pred'],
+                                                                                                int(id_via),
+                                                                                                int(data[i]['cons_works'][t]['cod_std_qualita'].strip()),
+                                                                                                causale,
+                                                                                                nota_consuntivazione,
+                                                                                                data[i]['data_esecuzione_prevista'], 
+                                                                                                int(id_tappa)))
+                                                                    #cur1.rowfactory = makeDictFactory(cur1)
+                                                                except Exception as e:
+                                                                    logger.error(query_insert)
+                                                                    logger.error('1:{} 2:{} 3:{} 4:{} 5:{} 6:{} 7:{}'.format(data[i]['codice_serv_pred'],
+                                                                                                id_via,
+                                                                                                int(data[i]['cons_works'][t]['cod_std_qualita'].strip()),
+                                                                                                causale,
+                                                                                                nota_consuntivazione,
+                                                                                                data[i]['data_esecuzione_prevista'], 
+                                                                                                int(id_tappa)))
+                                                                    logger.error(e)
+                                                                    #logger.error('Ci sono troppi conferimenti con ID {}'.format(data[i]['cons_conferimenti'][c]['id']))
+                                                                    #logger.error('Data percorso progettata {}'.format(data[i]['data_pianif_iniziale']))
+                                                                    #logger.error('Data percorso effettiva {}'.format(data[i]['data_esecuzione_prevista']))  
+                                                                    #logger.error('Cod percorso {}'.format(data[i]['codice_serv_pred']))
+                                                                    #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                                    #exit()        
+                                                                
+                                                            elif len(consuntivazioni_uo)==1:
+                                                                query_update='''
+                                                                    UPDATE UNIOPE.CONSUNT_SPAZZAMENTO 
+                                                                    SET QTA_SPAZZATA=:c1, 
+                                                                    CAUSALE_SPAZZ=:c2, 
+                                                                    NOTA=:c3, 
+                                                                    DATA_INS=sysdate, 
+                                                                    ORIGINE_DATO='EKOVISION'
+                                                                    WHERE DATA_CONS=to_date(:c4, 'YYYYMMDD') AND ID_TAPPA=:c5
+                                                            '''
+                                                                try:
+                                                                    cur.execute(query_update, (int(data[i]['cons_works'][t]['cod_std_qualita'].strip()),
+                                                                                                causale,
+                                                                                                nota_consuntivazione,
+                                                                                                data[i]['data_esecuzione_prevista'], 
+                                                                                                id_tappa))
+                                                                except Exception as e:
+                                                                    logger.error(query_insert)
+                                                                    logger.error('{} {} {} {} {}'.format(int(data[i]['cons_works'][t]['cod_std_qualita'].strip()),
+                                                                                                causale,
+                                                                                                nota_consuntivazione,
+                                                                                                data[i]['data_esecuzione_prevista'], 
+                                                                                                id_tappa))
+                                                                    logger.error(e) 
+                                                            else: 
+                                                                logger.error('Problema consuntivazioni doppie su UO')
+                                                                logger.error('Id tappa {}'.format(id_tappa))
+                                                                logger.error('Data percorso progettata {}'.format(data[i]['data_pianif_iniziale']))
+                                                                logger.error('Data percorso effettiva {}'.format(data[i]['data_esecuzione_prevista']))  
+                                                                logger.error('Cod percorso {}'.format(data[i]['codice_serv_pred']))
+                                                                error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                                exit()
                                                 
-                                                    # cerco la tappa su UO
-                                                    query_id_tappa='''SELECT DISTINCT ID_TAPPA, DTA_IMPORT, DATA_PREVISTA, cmt.ID_PIAZZOLA, cmt2.ID_ELEMENTO 
-                                                        FROM CONS_PERCORSI_VIE_TAPPE cpvt 
-                                                        JOIN CONS_MACRO_TAPPA cmt ON cmt.ID_MACRO_TAPPA = cpvt.ID_TAPPA
-                                                        JOIN CONS_MICRO_TAPPA cmt2 ON cmt2.ID_MACRO_TAPPA=cmt.ID_MACRO_TAPPA
-                                                        WHERE ID_PERCORSO = :t1
-                                                        /*AND cmt.ID_PIAZZOLA = :t2*/
-                                                        AND cmt.RIPASSO = :t3
-                                                        AND cmt2.ID_ELEMENTO = :t4
-                                                        and  DATA_PREVISTA = (SELECT max(DATA_PREVISTA) FROM CONS_PERCORSI_VIE_TAPPE 
-                                                        WHERE DATA_PREVISTA <= to_date(:t5, 'YYYYMMDD') AND to_char(DATA_PREVISTA, 'HH24') LIKE '00' AND
-                                                        ID_PERCORSO = :t6)
-                                                        order by 1'''
                                                 
                                                 
-                                                    try:
-                                                        cur.execute(query_id_tappa, (data[i]['codice_serv_pred'],
-                                                                                    ripasso, 
-                                                                                    int(data[i]['cons_works'][t]['cod_componente'].strip()),
-                                                                                    data[i]['data_pianif_iniziale'], 
-                                                                                    data[i]['codice_serv_pred'])
-                                                                    )
-                                                        #cur1.rowfactory = makeDictFactory(cur1)
-                                                        tappe_uo=cur.fetchall()
-                                                    except Exception as e:
-                                                        logger.error(query_id_tappa)
-                                                        logger.error('1:{} 2:{} 3:{} 4:{} 5:{} 6:{}'.format(data[i]['codice_serv_pred'],
-
-                                                                                                ripasso, 
+                                            elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC' or data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
+                                                #logger.debug('Consuntivazione raccolta')
+                                                tipo_servizio='RACC'
+                                                #logger.debug(int(data[i]['cons_works'][t]['cod_componente']))
+                                                if int(data[i]['cons_works'][t]['pos'])>0 and int(data[i]['cons_works'][t]['flg_non_previsto'].strip())==0:
+                                                    if int(data[i]['cons_works'][t]['cod_componente'].strip()) in elenco_elementi:
+                                                        ripasso_sit=elenco_elementi.count(int(data[i]['cons_works'][t]['cod_componente'].strip()))
+                                                    else:
+                                                        ripasso_sit=0
+                                                    elenco_elementi.append(int(data[i]['cons_works'][t]['cod_componente'].strip()))
+                                                    
+                                                    if id_servizio != 114: # se non è botticella
+                                                        select_sit_per_tappa='''select codice_modello_servizio, 
+                                                        min(ordine)  as ordine, 
+                                                        vc.codice_punto_raccolta as id_piazzola , at.nota, at.ripasso, at.codice, 
+                                                        min(data_inizio) as data_inizio, 
+                                                        case 
+                                                            when max(data_fine) = '20991231' then null 
+                                                            else max(data_fine)
+                                                        end data_fine, 
+                                                        vc.tipo_servizio_componente
+                                                        from 
+                                                            (SELECT codice_modello_servizio, ordine, objecy_type, 
+                                                        codice, quantita, lato_servizio, percent_trattamento,frequenza,
+                                                        ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
+                                                        codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine
+                                                            FROM anagrafe_percorsi.v_percorsi_elementi_tratti 
+                                                            where data_inizio < coalesce(data_fine, '20991231')
+                                                            and codice_modello_servizio =  %s
+                                                            union 
+                                                            SELECT codice_modello_servizio, ordine, objecy_type, 
+                                                        codice, quantita, lato_servizio, percent_trattamento,frequenza,
+                                                        ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
+                                                        codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine
+                                                            FROM anagrafe_percorsi.v_percorsi_elementi_tratti_ovs 
+                                                            where data_inizio < coalesce(data_fine, '20991231')
+                                                            and codice_modello_servizio =  %s
+                                                            union 
+                                                            SELECT codice_modello_servizio, ordine, objecy_type, 
+                                                        codice, quantita, lato_servizio, percent_trattamento,frequenza,
+                                                        ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
+                                                        codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine
+                                                            FROM anagrafe_percorsi.mv_percorsi_elementi_tratti_dismessi 
+                                                            where data_inizio < coalesce(data_fine, '20991231')
+                                                            and codice_modello_servizio =  %s
+                                                            ) at
+                                                        left join etl.v_componenti vc on vc.cod_componente = at.codice
+                                                        where codice_tipo_servizio = %s 
+                                                        and codice = %s and ripasso=%s
+                                                        and (%s between data_inizio and coalesce((data_fine::int-1)::varchar,'20991231'))
+                                                        group by codice_modello_servizio,  
+                                                        vc.codice_punto_raccolta, at.nota, at.ripasso, at.codice, /*at.data_inizio, at.data_fine, */
+                                                        vc.tipo_servizio_componente
+                                                        '''
+                                                        try:
+                                                            
+                                                            
+                                                            curr.execute(select_sit_per_tappa, (data[i]['codice_serv_pred'],
+                                                                                                data[i]['codice_serv_pred'],
+                                                                                                data[i]['codice_serv_pred'],
+                                                                                                tipo_servizio, 
                                                                                                 int(data[i]['cons_works'][t]['cod_componente'].strip()),
-                                                                                                data[i]['data_pianif_iniziale'], 
-                                                                                                data[i]['codice_serv_pred']
-                                                                                                ))
-                                                        logger.error(e)
-                                                        exit()
-                                                
-                                                
-                                                
-                                                elif id_servizio == 114:
-                                                    # botticella 
-                                        
-                                                    quey_nota='''select coalesce(nota,'') from (
-                                                        SELECT * FROM anagrafe_percorsi.v_percorsi_elementi_tratti vpet 
-                                                        where codice_modello_servizio=%s and codice = %s
-                                                        union 
-                                                        SELECT * FROM anagrafe_percorsi.v_percorsi_elementi_tratti_ovs vpeto
-                                                        where codice_modello_servizio=%s and codice = %s
-                                                        union 
-                                                        SELECT * FROM anagrafe_percorsi.mv_percorsi_elementi_tratti_dismessi vpetd
-                                                        where codice_modello_servizio=%s and codice = %s
-                                                    )as foo '''
+                                                                                                ripasso_sit,
+                                                                                                data[i]['data_pianif_iniziale'])
+                                                                                                )
+                                                            tappe=curr.fetchall()
+                                                        except Exception as e:
+                                                            logger.error(select_sit_per_tappa)
+                                                            logger.error('1:{} 1:{} 1:{} 2:{} 3:{} 4:{} 5:{}'.format(data[i]['codice_serv_pred'],
+                                                                                                data[i]['codice_serv_pred'],
+                                                                                                data[i]['codice_serv_pred'],
+                                                                                                tipo_servizio, 
+                                                                                                int(data[i]['cons_works'][t]['cod_componente'].strip()),
+                                                                                                ripasso_sit,
+                                                                                                data[i]['data_pianif_iniziale']))
+                                                            logger.error(e)
+                                                        
+                                                        
+                                                        
+                                                        
+                                                        #counter=1
+                                                        ct=0
+                                                        for tt in tappe:
+                                                            #logger.debug(elenco_elementi.count(int(data[i]['cons_works'][t]['cod_componente'])))
+                                                            #if counter==elenco_elementi.count(int(data[i]['cons_works'][t]['cod_componente'])):
+                                                            ordine=tt[1]
+                                                            id_piazzola=tt[2]
+                                                            #elenco_piazzole.append(tt[2])
+                                                            ripasso=tt[4]
+                                                            tipo_elemento = int(tt[8])
+                                                            #logger.debug('Ordine {} - Id_via {} - Ripasso {}'.format(ordine, id_piazzola, ripasso))
+                                                            if ct>=1 :
+                                                                check_tappe_multiple=1
+                                                                logger.error('Trovata più di una tappa')
+                                                                logger.error(select_sit_per_tappa)
+                                                                logger.error('1:{} 2:{} 3:{} 4:{} 5:{}'.format(data[i]['cons_works'][t]['tipo_srv_comp'], 
+                                                                                                data[i]['codice_serv_pred'],
+                                                                                                int(data[i]['cons_works'][t]['cod_componente'].strip()),
+                                                                                                ripasso_sit,
+                                                                                                data[i]['data_pianif_iniziale']))
+                                                                #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                                #exit()  
+                                                            ct+=1                                     
+                                                            
+                                                            #counter+=1
+                                                        
+                                                            if ct == 0:
+                                                                check_tappe_non_trovate=1
+                                                                logger.warning('Tappa non trovata su SIT')
+                                                                logger.warning(select_sit_per_tappa)
+                                                                logger.warning('1:{} 2:{} 3:{} 4:{} 5:{}'.format(data[i]['cons_works'][t]['tipo_srv_comp'], 
+                                                                                                data[i]['codice_serv_pred'],
+                                                                                                int(data[i]['cons_works'][t]['cod_componente'].strip()),
+                                                                                                ripasso_sit,
+                                                                                                data[i]['data_pianif_iniziale']))
+                                                                #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                                #exit() 
+                                                    
+                                                        # cerco la tappa su UO
+                                                        query_id_tappa='''SELECT DISTINCT ID_TAPPA, DTA_IMPORT, DATA_PREVISTA, cmt.ID_PIAZZOLA, cmt2.ID_ELEMENTO 
+                                                            FROM CONS_PERCORSI_VIE_TAPPE cpvt 
+                                                            JOIN CONS_MACRO_TAPPA cmt ON cmt.ID_MACRO_TAPPA = cpvt.ID_TAPPA
+                                                            JOIN CONS_MICRO_TAPPA cmt2 ON cmt2.ID_MACRO_TAPPA=cmt.ID_MACRO_TAPPA
+                                                            WHERE ID_PERCORSO = :t1
+                                                            /*AND cmt.ID_PIAZZOLA = :t2*/
+                                                            AND cmt.RIPASSO = :t3
+                                                            AND cmt2.ID_ELEMENTO = :t4
+                                                            and  DATA_PREVISTA = (SELECT max(DATA_PREVISTA) FROM CONS_PERCORSI_VIE_TAPPE 
+                                                            WHERE DATA_PREVISTA <= to_date(:t5, 'YYYYMMDD') AND to_char(DATA_PREVISTA, 'HH24') LIKE '00' AND
+                                                            ID_PERCORSO = :t6)
+                                                            order by 1'''
+                                                    
+                                                    
+                                                        try:
+                                                            cur.execute(query_id_tappa, (data[i]['codice_serv_pred'],
+                                                                                        ripasso, 
+                                                                                        int(data[i]['cons_works'][t]['cod_componente'].strip()),
+                                                                                        data[i]['data_pianif_iniziale'], 
+                                                                                        data[i]['codice_serv_pred'])
+                                                                        )
+                                                            #cur1.rowfactory = makeDictFactory(cur1)
+                                                            tappe_uo=cur.fetchall()
+                                                        except Exception as e:
+                                                            logger.error(query_id_tappa)
+                                                            logger.error('1:{} 2:{} 3:{} 4:{} 5:{} 6:{}'.format(data[i]['codice_serv_pred'],
 
-                                                    try:
-                                                        curr.execute(quey_nota, (data[i]['codice_serv_pred'],
-                                                                                int(data[i]['cons_works'][t]['cod_componente'].strip()),
-                                                                                data[i]['codice_serv_pred'],
-                                                                                int(data[i]['cons_works'][t]['cod_componente'].strip()),
-                                                                                data[i]['codice_serv_pred'],
-                                                                                int(data[i]['cons_works'][t]['cod_componente'].strip())
-                                                                                            ))
-                                                        note=curr.fetchall()
+                                                                                                    ripasso, 
+                                                                                                    int(data[i]['cons_works'][t]['cod_componente'].strip()),
+                                                                                                    data[i]['data_pianif_iniziale'], 
+                                                                                                    data[i]['codice_serv_pred']
+                                                                                                    ))
+                                                            logger.error(e)
+                                                            exit()
                                                     
-                                                        for nn in note:
-                                                            nota_asta=nn[0]
                                                     
-                                                    except Exception as e:
-                                                        logger.error(quey_nota)
-                                                        logger.error('{} {} {} {} {}'.format(data[i]['codice_serv_pred'],
-                                                                                            int(data[i]['cons_works'][t]['cod_componente'].strip()),
-                                                                                            ))
-                                                        logger.error(e)
                                                     
+                                                    elif id_servizio == 114:
+                                                        # botticella 
+                                            
+                                                        quey_nota='''select coalesce(nota,'') from (
+                                                            SELECT * FROM anagrafe_percorsi.v_percorsi_elementi_tratti vpet 
+                                                            where codice_modello_servizio=%s and codice = %s
+                                                            union 
+                                                            SELECT * FROM anagrafe_percorsi.v_percorsi_elementi_tratti_ovs vpeto
+                                                            where codice_modello_servizio=%s and codice = %s
+                                                            union 
+                                                            SELECT * FROM anagrafe_percorsi.mv_percorsi_elementi_tratti_dismessi vpetd
+                                                            where codice_modello_servizio=%s and codice = %s
+                                                        )as foo '''
 
-                                                    
-                                                    quey_id_asta='''select id_asse_stradale, tipo_servizio_componente 
-                                                    from etl.v_componenti vc 
-                                                    where cod_componente = %s'''
-                                                    
-                                                    try:
-                                                        curr.execute(quey_id_asta, (int(data[i]['cons_works'][t]['cod_componente'].strip()),
-                                                                                            ))
-                                                        id_aste=curr.fetchall()
-                                                    
-                                                        for ia in id_aste:
-                                                            id_asta=ia[0]
-                                                            tipo_elemento=ia[1]
-                                                    
-                                                    except Exception as e:
-                                                        logger.error(quey_id_asta)
-                                                        logger.error('{} {} {} {} {}'.format(int(data[i]['cons_works'][t]['cod_componente'].strip()),
-                                                                                            ))
-                                                        logger.error(e)
-                                                
-                                                
-                                                    query_id_tappa='''SELECT ID_TAPPA, DTA_IMPORT, DATA_PREVISTA, cmt.ID_PIAZZOLA, cmt2.ID_ELEMENTO 
-                                                        FROM CONS_PERCORSI_VIE_TAPPE cpvt 
-                                                        JOIN CONS_MACRO_TAPPA cmt ON cmt.ID_MACRO_TAPPA = cpvt.ID_TAPPA
-                                                        LEFT JOIN CONS_MICRO_TAPPA cmt2 ON cmt2.ID_MACRO_TAPPA=cmt.ID_MACRO_TAPPA
-                                                        WHERE ID_PERCORSO = :t1
-                                                        AND cmt.ID_ASTA = :t2
-                                                        AND trim(COALESCE(cmt.NOTA_VIA, 'ND')) LIKE trim(COALESCE(:t3, 'ND'))
-                                                        and  DATA_PREVISTA = (SELECT max(DATA_PREVISTA) FROM CONS_PERCORSI_VIE_TAPPE 
-                                                        WHERE DATA_PREVISTA <= to_date(:t4, 'YYYYMMDD') AND to_char(DATA_PREVISTA, 'HH24') LIKE '00' AND
-                                                        ID_PERCORSO = :t5)
-                                                        order by 1'''
-                                                    
-                                                    try:
-                                                        cur.execute(query_id_tappa, (data[i]['codice_serv_pred'],
-                                                                                    id_asta, 
-                                                                                    nota_asta,
-                                                                                    data[i]['data_pianif_iniziale'], 
-                                                                                    data[i]['codice_serv_pred'])
-                                                                    )
-                                                        #cur1.rowfactory = makeDictFactory(cur1)
-                                                        tappe_uo=cur.fetchall()
-                                                    except Exception as e:
-                                                        logger.error(query_id_tappa)
-                                                        logger.error('1:{} 2:{} 3:{} 4:{} 5:{}'.format(data[i]['codice_serv_pred'],
-                                                                        id_asta, 
-                                                                        nota_asta,
-                                                                        data[i]['data_pianif_iniziale'], 
-                                                                        data[i]['codice_serv_pred']
+                                                        try:
+                                                            curr.execute(quey_nota, (data[i]['codice_serv_pred'],
+                                                                                    int(data[i]['cons_works'][t]['cod_componente'].strip()),
+                                                                                    data[i]['codice_serv_pred'],
+                                                                                    int(data[i]['cons_works'][t]['cod_componente'].strip()),
+                                                                                    data[i]['codice_serv_pred'],
+                                                                                    int(data[i]['cons_works'][t]['cod_componente'].strip())
                                                                                                 ))
-                                                        logger.error(e)
-                                                        exit()
-                                                    #ct=0
-                                                    # qua devo ancora scriverlo..
-                                                    
-                                                 
-                                                
-                                                    
-                                                    
-                                                    
-                                                    
-                                                ct=0
-                                                for ttu in tappe_uo:
-                                                    #logger.debug(ttu[0])
-                                                    id_tappa=ttu[0]
-                                                    #elenco_tappe.append(ttu[0])
-                                                    ct+=1
-                                                    #logger.debug('Sono qua')                                           
-                                                    # verificare se nel caso di tipologie diverse la tappa sia diversa o meno (prendi percorso 0101367901)
-                                                    
-                                                if ct>1:
-                                                        check_tappe_multiple = 1
-                                                        logger.error('Trovata più di una tappa')
-                                                        logger.error(query_id_tappa)
-                                                        if id_servizio != 114: # se non è botticella
+                                                            note=curr.fetchall()
+                                                        
+                                                            for nn in note:
+                                                                nota_asta=nn[0]
+                                                        
+                                                        except Exception as e:
+                                                            logger.error(quey_nota)
                                                             logger.error('{} {} {} {} {}'.format(data[i]['codice_serv_pred'],
-                                                                                id_piazzola,
-                                                                                ripasso,
-                                                                                int(data[i]['cons_works'][t]['cod_componente'].strip()),
-                                                                                data[i]['data_pianif_iniziale']))
-                                                        else :
+                                                                                                int(data[i]['cons_works'][t]['cod_componente'].strip()),
+                                                                                                ))
+                                                            logger.error(e)
+                                                        
+
+                                                        
+                                                        quey_id_asta='''select id_asse_stradale, tipo_servizio_componente 
+                                                        from etl.v_componenti vc 
+                                                        where cod_componente = %s'''
+                                                        
+                                                        try:
+                                                            curr.execute(quey_id_asta, (int(data[i]['cons_works'][t]['cod_componente'].strip()),
+                                                                                                ))
+                                                            id_aste=curr.fetchall()
+                                                        
+                                                            for ia in id_aste:
+                                                                id_asta=ia[0]
+                                                                tipo_elemento=ia[1]
+                                                        
+                                                        except Exception as e:
+                                                            logger.error(quey_id_asta)
+                                                            logger.error('{} {} {} {} {}'.format(int(data[i]['cons_works'][t]['cod_componente'].strip()),
+                                                                                                ))
+                                                            logger.error(e)
+                                                    
+                                                    
+                                                        query_id_tappa='''SELECT ID_TAPPA, DTA_IMPORT, DATA_PREVISTA, cmt.ID_PIAZZOLA, cmt2.ID_ELEMENTO 
+                                                            FROM CONS_PERCORSI_VIE_TAPPE cpvt 
+                                                            JOIN CONS_MACRO_TAPPA cmt ON cmt.ID_MACRO_TAPPA = cpvt.ID_TAPPA
+                                                            LEFT JOIN CONS_MICRO_TAPPA cmt2 ON cmt2.ID_MACRO_TAPPA=cmt.ID_MACRO_TAPPA
+                                                            WHERE ID_PERCORSO = :t1
+                                                            AND cmt.ID_ASTA = :t2
+                                                            AND trim(COALESCE(cmt.NOTA_VIA, 'ND')) LIKE trim(COALESCE(:t3, 'ND'))
+                                                            and  DATA_PREVISTA = (SELECT max(DATA_PREVISTA) FROM CONS_PERCORSI_VIE_TAPPE 
+                                                            WHERE DATA_PREVISTA <= to_date(:t4, 'YYYYMMDD') AND to_char(DATA_PREVISTA, 'HH24') LIKE '00' AND
+                                                            ID_PERCORSO = :t5)
+                                                            order by 1'''
+                                                        
+                                                        try:
+                                                            cur.execute(query_id_tappa, (data[i]['codice_serv_pred'],
+                                                                                        id_asta, 
+                                                                                        nota_asta,
+                                                                                        data[i]['data_pianif_iniziale'], 
+                                                                                        data[i]['codice_serv_pred'])
+                                                                        )
+                                                            #cur1.rowfactory = makeDictFactory(cur1)
+                                                            tappe_uo=cur.fetchall()
+                                                        except Exception as e:
+                                                            logger.error(query_id_tappa)
+                                                            logger.error('1:{} 2:{} 3:{} 4:{} 5:{}'.format(data[i]['codice_serv_pred'],
+                                                                            id_asta, 
+                                                                            nota_asta,
+                                                                            data[i]['data_pianif_iniziale'], 
+                                                                            data[i]['codice_serv_pred']
+                                                                                                    ))
+                                                            logger.error(e)
+                                                            exit()
+                                                        #ct=0
+                                                        # qua devo ancora scriverlo..
+                                                        
+                                                    
+                                                    
+                                                        
+                                                        
+                                                        
+                                                        
+                                                    ct=0
+                                                    for ttu in tappe_uo:
+                                                        #logger.debug(ttu[0])
+                                                        id_tappa=ttu[0]
+                                                        #elenco_tappe.append(ttu[0])
+                                                        ct+=1
+                                                        #logger.debug('Sono qua')                                           
+                                                        # verificare se nel caso di tipologie diverse la tappa sia diversa o meno (prendi percorso 0101367901)
+                                                        
+                                                    if ct>1:
+                                                            check_tappe_multiple = 1
+                                                            logger.error('Trovata più di una tappa')
+                                                            logger.error(query_id_tappa)
+                                                            if id_servizio != 114: # se non è botticella
+                                                                logger.error('{} {} {} {} {}'.format(data[i]['codice_serv_pred'],
+                                                                                    id_piazzola,
+                                                                                    ripasso,
+                                                                                    int(data[i]['cons_works'][t]['cod_componente'].strip()),
+                                                                                    data[i]['data_pianif_iniziale']))
+                                                            else :
+                                                                logger.error('1:{} 2:{} 3:{} 4:{} 5:{}'.format(data[i]['codice_serv_pred'],
+                                                                            id_asta, 
+                                                                            nota_asta,
+                                                                            data[i]['data_pianif_iniziale'], 
+                                                                            data[i]['codice_serv_pred']
+                                                                                                    ))
+
+                                                            #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                            #exit()                                       
+                                                    
+                                                    
+                                                    # se 
+                                                    elif ct == 0:
+                                                        check_tappe_non_trovate=1
+                                                        logger.warning('Tappa non trovata su UO. La inserisco nella tabella dei soccorsi')
+                                                        logger.warning(query_id_tappa)
+                                                        if id_servizio != 114: # se non è botticella
+                                                            logger.warning('{} {} {} {} {}'.format(data[i]['codice_serv_pred'],
+                                                                                    id_piazzola,
+                                                                                    ripasso,
+                                                                                    int(data[i]['cons_works'][t]['cod_componente'].strip()),
+                                                                                    data[i]['data_pianif_iniziale']))                                                                          
+                                                        
+                                                            # DA VERIFICARE e RIVEDERE con il nuovo tracciato
+                                                            
+                                                            
+                                                            # inserisco la tappa nella tabella apposita 
+                                                            if int(data[i]['cons_works'][t]['flg_exec'].strip())==1:
+                                                                if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC':
+                                                                    causale=100
+                                                                elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
+                                                                    causale=110
+                                                            
+                                                                query_select= '''SELECT * 
+                                                                from UNIOPE.CONSUNT_ELEMENTO_SOCCORSO
+                                                                WHERE ID_ELEMENTO=:c1
+                                                                AND CAUSALE = :c2
+                                                                and DATALAV= to_date(:c3, 'YYYYMMDD')
+                                                                and ID_PERCORSO_OSPITANTE= :c4'''
+                                                                
+                                                                try:
+                                                                    cur.execute(query_select, (int(data[i]['cons_works'][t]['cod_componente'].strip()),
+                                                                                            causale,
+                                                                                            data[i]['data_esecuzione_prevista'],
+                                                                                            data[i]['codice_serv_pred']))
+                                                                    #cur1.rowfactory = makeDictFactory(cur1)
+                                                                    consuntivazioni_socc_uo=cur.fetchall()
+                                                                except Exception as e:
+                                                                    logger.error(query_select)
+                                                                    logger.error('1:{}, 2:{}, 3:{}, 4:{}'.format(int(data[i]['cons_works'][t]['cod_componente'].strip()),
+                                                                                            causale,
+                                                                                            data[i]['data_esecuzione_prevista'],
+                                                                                            data[i]['codice_serv_pred']))
+                                                                    logger.error(e)
+                                                                
+                                                                
+                                                                
+                                                                cur.close()
+                                                                cur = con.cursor()
+                                                                
+                                                                #logger.debug(len(consuntivazioni_uo))
+                                                                #exit()
+                                                                # FASCIA TURNI SAREBBE DA RIVEDERE MEGLIO CON IL TURNO EFFETTIVO
+                                                                    
+                                                                if len(consuntivazioni_socc_uo)==0:
+                                                                    query_insert='''INSERT INTO UNIOPE.CONSUNT_ELEMENTO_SOCCORSO (
+                                                                    ID_ELEMENTO, ID_PERCORSO_OSPITANTE, CAUSALE,
+                                                                    DATALAV, FASCIA_TURNO, ORIGINE) 
+                                                                    VALUES (
+                                                                    :c1, :c2, :c3,
+                                                                    to_date(:c4, 'YYYYMMDD'), 
+                                                                    (SELECT DISTINCT at2.FASCIA_TURNO 
+                                                                    FROM ANAGR_SER_PER_UO aspu 
+                                                                    JOIN ANAGR_TURNI at2 ON at2.ID_TURNO = aspu.ID_TURNO 
+                                                                    WHERE aspu.ID_PERCORSO = :c5
+                                                                    AND to_date(:c6, 'YYYYMMDD') 
+                                                                    BETWEEN aspu.DTA_ATTIVAZIONE AND aspu.DTA_DISATTIVAZIONE),
+                                                                    'Ekovision')'''
+                                                                    try:
+                                                                        cur.execute(query_insert, (int(data[i]['cons_works'][t]['cod_componente'].strip()),
+                                                                                            data[i]['codice_serv_pred'],
+                                                                                            causale,
+                                                                                            data[i]['data_esecuzione_prevista'],
+                                                                                            data[i]['codice_serv_pred'],
+                                                                                            data[i]['data_esecuzione_prevista']))
+                                                                    except Exception as e:
+                                                                        logger.error(query_insert)
+                                                                        logger.error('1:{}, 2:{}, 3:{}, 4:{}, 5:{}, 6:{}'.format(
+                                                                                            int(data[i]['cons_works'][t]['cod_componente'].strip()),
+                                                                                            data[i]['codice_serv_pred'],
+                                                                                            causale,
+                                                                                            data[i]['data_esecuzione_prevista'],
+                                                                                            data[i]['codice_serv_pred'],
+                                                                                            data[i]['data_esecuzione_prevista']))
+                                                                        logger.error(e)
+                                                                else:
+                                                                    query_update='''UPDATE UNIOPE.CONSUNT_ELEMENTO_SOCCORSO 
+                                                                        SET FASCIA_TURNO=
+                                                                        (SELECT DISTINCT at2.FASCIA_TURNO 
+                                                                        FROM ANAGR_SER_PER_UO aspu 
+                                                                        JOIN ANAGR_TURNI at2 ON at2.ID_TURNO = aspu.ID_TURNO 
+                                                                        WHERE aspu.ID_PERCORSO = :c1
+                                                                        AND to_date(:c2, 'YYYYMMDD') 
+                                                                        BETWEEN aspu.DTA_ATTIVAZIONE AND aspu.DTA_DISATTIVAZIONE), 
+                                                                        DATA_ORA_INSER=SYSDATE , 
+                                                                        ORIGINE='Ekovision' 
+                                                                        WHERE ID_ELEMENTO=:c3 
+                                                                        AND CAUSALE=:c4 AND 
+                                                                        DATALAV=to_date(:c5, 'YYYYMMDD') 
+                                                                        AND ID_PERCORSO_OSPITANTE=:c6'''
+                                                                    try:
+                                                                        cur.execute(query_update, (
+                                                                                            data[i]['codice_serv_pred'],
+                                                                                            data[i]['data_esecuzione_prevista'],
+                                                                                            int(data[i]['cons_works'][t]['cod_componente'].strip()),
+                                                                                            causale,
+                                                                                            data[i]['data_esecuzione_prevista'],
+                                                                                            data[i]['codice_serv_pred']                                                                                          
+                                                                                            ))
+                                                                    except Exception as e:
+                                                                        logger.error(query_update)
+                                                                        logger.error('1:{}, 2:{}, 3:{}, 4:{}, 5:{}, 6:{}'.format(
+                                                                                            data[i]['codice_serv_pred'],
+                                                                                            data[i]['data_esecuzione_prevista'],
+                                                                                            int(data[i]['cons_works'][t]['cod_componente'].strip()),
+                                                                                            causale,
+                                                                                            data[i]['data_esecuzione_prevista'],
+                                                                                            data[i]['codice_serv_pred']))
+                                                                        logger.error(e)
+                                                        else : # se fosse botticella non sto a fare tutto il giro sopra
                                                             logger.error('1:{} 2:{} 3:{} 4:{} 5:{}'.format(data[i]['codice_serv_pred'],
                                                                         id_asta, 
                                                                         nota_asta,
                                                                         data[i]['data_pianif_iniziale'], 
                                                                         data[i]['codice_serv_pred']
                                                                                                 ))
-
                                                         #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
-                                                        #exit()                                       
-                                                
-                                                
-                                                # se 
-                                                elif ct == 0:
-                                                    check_tappe_non_trovate=1
-                                                    logger.warning('Tappa non trovata su UO. La inserisco nella tabella dei soccorsi')
-                                                    logger.warning(query_id_tappa)
-                                                    if id_servizio != 114: # se non è botticella
-                                                        logger.warning('{} {} {} {} {}'.format(data[i]['codice_serv_pred'],
-                                                                                id_piazzola,
-                                                                                ripasso,
-                                                                                int(data[i]['cons_works'][t]['cod_componente'].strip()),
-                                                                                data[i]['data_pianif_iniziale']))                                                                          
+                                                        #exit()
                                                     
-                                                        # DA VERIFICARE e RIVEDERE con il nuovo tracciato
+                                            
+                                                    
+                                                    #se trovo una tappa
+                                                    
+                                                    else:
+                                                        # conto gli elementi
+                                                        #for tt in tappe:  
+                                                        if len(elenco_tappe)==0:
+                                                            count_elementi=1
+                                                            #if id_servizio != 114:
+                                                            #    elenco_piazzole.append(int(id_piazzola))
+                                                            elenco_tappe.append(int(id_tappa))
+                                                            elenco_tipi.append(int(tipo_elemento))
+                                                            ##########################################
+                                                            # questa parte sarà da cambiare
+                                                            nota_consuntivazione=''
+                                                            ##########################################
+                                                            if int(data[i]['cons_works'][t]['flg_exec'].strip())==1:
+                                                                count_fatti=1
+                                                                if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC':
+                                                                    causale=100
+                                                                elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
+                                                                    causale=110
+                                                            else:
+                                                                if causale_non_es != None:
+                                                                    causale=causale_non_es
+                                                                else:
+                                                                    try:
+                                                                        causale=int(data[i]['cons_works'][t-1]['cod_giustificativo_ext'].strip())
+                                                                        count_fatti=0
+                                                                    except Exception as e:
+                                                                        logger.warning(e)
+                                                                        logger.warning('Scheda {} - Posizione: {} Manca la causale quindi lo do per fatto'.format(
+                                                                            int(data[i]['id_scheda']),
+                                                                            int(data[i]['cons_works'][t]['pos'])
+                                                                        ))
+                                                                        if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC':
+                                                                            causale=100
+                                                                        elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
+                                                                            causale=110
+                                                                        count_fatti=1
+                                                        elif id_tappa == elenco_tappe[-1] and tipo_elemento == elenco_tipi[-1]:
+                                                            # stessa tappa di prima 
+                                                            count_elementi+=1
+                                                            if int(data[i]['cons_works'][t]['flg_exec'].strip())==1:
+                                                                count_fatti+=1
+                                                            else:
+                                                                if causale_non_es != None:
+                                                                    causale=causale_non_es
+                                                                else:
+                                                                    try:
+                                                                        causale=int(data[i]['cons_works'][t-1]['cod_giustificativo_ext'].strip())
+                                                                    except Exception as e:
+                                                                        logger.warning(e)
+                                                                        logger.warning('Scheda {} - Posizione: {} Manca la causale quindi lo do per fatto'.format(
+                                                                            int(data[i]['id_scheda']),
+                                                                            int(data[i]['cons_works'][t]['pos'])
+                                                                        ))
+                                                                        if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC':
+                                                                            causale=100
+                                                                        elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
+                                                                            causale=110
+                                                                        count_fatti+=1
+                                                            if (count_elementi-count_fatti)==0 and (causale==100 or causale==110):
+                                                                causale=causale  
+                                                            ##########################################
+                                                            # questa parte sarà da cambiare
+                                                            nota_consuntivazione=''
+                                                            ##########################################
+                                                        elif id_tappa != elenco_tappe[-1] or tipo_elemento != elenco_tipi[-1]:
+                                                            # nuova tappa (o tipo elemento)
+                                                            elenco_tappe.append(int(id_tappa))
+                                                            elenco_tipi.append(int(tipo_elemento))
+                                                            count_elementi=1
+                                                            if int(data[i]['cons_works'][t]['flg_exec'].strip())==1:
+                                                                count_fatti=1
+                                                                if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC':
+                                                                    causale=100
+                                                                elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
+                                                                    casuale=110
+                                                            else:
+                                                                if causale_non_es != None:
+                                                                    causale=causale_non_es
+                                                                else:
+                                                                    try:
+                                                                        causale=int(data[i]['cons_works'][t-1]['cod_giustificativo_ext'].strip())
+                                                                        count_fatti=0
+                                                                    except Exception as e:
+                                                                        logger.warning(e)
+                                                                        logger.warning('Scheda {} - Posizione: {} Manca la causale quindi lo do per fatto'.format(
+                                                                            int(data[i]['id_scheda']),
+                                                                            int(data[i]['cons_works'][t]['pos'])
+                                                                        ))
+                                                                        if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC':
+                                                                            causale=100
+                                                                        elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
+                                                                            causale=110
+                                                                        count_fatti=1
+                                                                        #causale=int(data[i]['cons_works'][t-1]['cod_giustificativo_ext'].strip())
+                                                            ##########################################
+                                                            # questa parte sarà da cambiare
+                                                            nota_consuntivazione=''
+                                                            ##########################################
+                                                        else:
+                                                            logger.error('Non capisco perchè finisca qua')
+                                                                
+                                                    
+                                                    
+                                                
+                                                    
+                                                        # devo fare gli insert
+                                                        query_select=''' 
+                                                        SELECT * 
+                                                        FROM CONSUNT_MACRO_TAPPA cs 
+                                                        WHERE DATA_CONS = to_date(:c1, 'YYYYMMDD')
+                                                        and id_MACRO_TAPPA = :c2
+                                                        and TIPO_ELEMENTO = :c3
+                                                        '''
+                                                        
+                                                    
+                                                        try:
+                                                            cur.execute(query_select, (data[i]['data_esecuzione_prevista'], elenco_tappe[-1], elenco_tipi[-1]))
+                                                            #cur1.rowfactory = makeDictFactory(cur1)
+                                                            consuntivazioni_uo=cur.fetchall()
+                                                        except Exception as e:
+                                                            logger.error(query_select)
+                                                            logger.error('1:{}, 2:{}, 3:{}'.format(data[i]['data_esecuzione_prevista'], elenco_tappe[-1], elenco_tipi[-1]))
+                                                            logger.error(e)
                                                         
                                                         
-                                                        # inserisco la tappa nella tabella apposita 
-                                                        if int(data[i]['cons_works'][t]['flg_exec'].strip())==1:
-                                                            if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC':
-                                                                causale=100
-                                                            elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
-                                                                causale=110
                                                         
-                                                            query_select= '''SELECT * 
-                                                            from UNIOPE.CONSUNT_ELEMENTO_SOCCORSO
-                                                            WHERE ID_ELEMENTO=:c1
-                                                            AND CAUSALE = :c2
-                                                            and DATALAV= to_date(:c3, 'YYYYMMDD')
-                                                            and ID_PERCORSO_OSPITANTE= :c4'''
+                                                        cur.close()
+                                                        cur = con.cursor()
+                                                        
+                                                        #logger.debug(len(consuntivazioni_uo))
+                                                        #exit()
+                                                            
+                                                        if len(consuntivazioni_uo)==0:
+                                                            query_insert='''INSERT INTO UNIOPE.CONSUNT_MACRO_TAPPA (
+                                                            ID_MACRO_TAPPA, QTA_ELEM_NON_VUOTATI, CAUSALE_ELEM,
+                                                            NOTA, DATA_CONS, ID_PERCORSO,
+                                                            ID_VIA, TIPO_ELEMENTO,
+                                                            ID_SERVIZIO,
+                                                            INS_DATE, MOD_DATE, ORIGINE_DATO) VALUES 
+                                                            (:c1, :c2, :c3, 
+                                                            :c4, to_date(:c5, 'YYYYMMDD'), :c6,
+                                                            (SELECT distinct ID_VIA 
+                                                            FROM CONS_PERCORSI_VIE_TAPPE cpvt  
+                                                            WHERE ID_TAPPA = :c7), 
+                                                            :c8,
+                                                            (SELECT DISTINCT ID_SERVIZIO 
+                                                                    FROM ANAGR_SER_PER_UO aspu 
+                                                                    WHERE ID_PERCORSO = :c9
+                                                                    AND to_date(:c10, 'YYYYMMDD') BETWEEN DTA_ATTIVAZIONE AND DTA_DISATTIVAZIONE),
+                                                            sysdate, NULL, 'EKOVISION')'''
                                                             
                                                             try:
-                                                                cur.execute(query_select, (int(data[i]['cons_works'][t]['cod_componente'].strip()),
-                                                                                           causale,
-                                                                                           data[i]['data_esecuzione_prevista'],
-                                                                                           data[i]['codice_serv_pred']))
+                                                                cur.execute(query_insert, (int(id_tappa), 
+                                                                                            (count_elementi-count_fatti),
+                                                                                            causale,
+                                                                                            nota_consuntivazione, 
+                                                                                            data[i]['data_esecuzione_prevista'],
+                                                                                            data[i]['codice_serv_pred'],
+                                                                                            int(id_tappa), 
+                                                                                            tipo_elemento,
+                                                                                            data[i]['codice_serv_pred'],
+                                                                                            data[i]['data_esecuzione_prevista']
+                                                                                            ))
                                                                 #cur1.rowfactory = makeDictFactory(cur1)
-                                                                consuntivazioni_socc_uo=cur.fetchall()
                                                             except Exception as e:
-                                                                logger.error(query_select)
-                                                                logger.error('1:{}, 2:{}, 3:{}, 4:{}'.format(int(data[i]['cons_works'][t]['cod_componente'].strip()),
-                                                                                           causale,
-                                                                                           data[i]['data_esecuzione_prevista'],
-                                                                                           data[i]['codice_serv_pred']))
+                                                                logger.error(query_insert)
+                                                                logger.error('1:{} 2:{} 3:{} 4:{} 5:{} 6:{} 7:{} 8:{} 9:{} 10:{}'.format(int(id_tappa), 
+                                                                                            (count_elementi-count_fatti),
+                                                                                            causale,
+                                                                                            nota_consuntivazione, 
+                                                                                            data[i]['data_esecuzione_prevista'],
+                                                                                            data[i]['codice_serv_pred'],
+                                                                                            int(id_tappa), 
+                                                                                            int(tipo_elemento),
+                                                                                            data[i]['codice_serv_pred'],
+                                                                                            data[i]['data_esecuzione_prevista'])
+                                                                )
+                                                                logger.error(e)
+                                                                                                            
+                                                                
+                                                        
+                                                        elif len(consuntivazioni_uo)==1:
+                                            
+                                                            query_update='''
+                                                                UPDATE UNIOPE.CONSUNT_MACRO_TAPPA 
+                                                                SET QTA_ELEM_NON_VUOTATI=:c1, 
+                                                                CAUSALE_ELEM=:c2, 
+                                                                NOTA=:c3, 
+                                                                MOD_DATE=sysdate, 
+                                                                ORIGINE_DATO='EKOVISION'
+                                                                WHERE DATA_CONS=to_date(:c4, 'YYYYMMDD') 
+                                                                AND ID_MACRO_TAPPA = :c5
+                                                                AND TIPO_ELEMENTO = :c6
+                                                                '''
+                                                            try:
+                                                                cur.execute(query_update, ((count_elementi-count_fatti),
+                                                                                            causale,
+                                                                                            nota_consuntivazione,
+                                                                                            data[i]['data_esecuzione_prevista'], 
+                                                                                            int(id_tappa),
+                                                                                            tipo_elemento))
+                                                            except Exception as e:
+                                                                logger.error(query_insert)
+                                                                logger.error('1:{} 2:{} 3:{} 4:{} 5:{}, 6:{}'.format((count_elementi-count_fatti),
+                                                                                                        causale,
+                                                                                                        nota_consuntivazione,
+                                                                                                        data[i]['data_esecuzione_prevista'], 
+                                                                                                        int(id_tappa), 
+                                                                                                        tipo_elemento))
                                                                 logger.error(e)
                                                             
                                                             
-                                                            
-                                                            cur.close()
-                                                            cur = con.cursor()
-                                                            
-                                                            #logger.debug(len(consuntivazioni_uo))
-                                                            #exit()
-                                                            # FASCIA TURNI SAREBBE DA RIVEDERE MEGLIO CON IL TURNO EFFETTIVO
+                                                        else:
+                                                            logger.error('Problema consuntivazioni doppie su UO')
+                                                            logger.error('Id tappa {}'.format(id_tappa))
+                                                            logger.error('Tipo elemento {}'.format(tipo_elemento))
+                                                            logger.error('Data percorso progettata {}'.format(data[i]['data_pianif_iniziale']))
+                                                            logger.error('Data percorso effettiva {}'.format(data[i]['data_esecuzione_prevista']))  
+                                                            logger.error('Cod percorso {}'.format(data[i]['codice_serv_pred']))
+                                                            error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                            exit()
                                                                 
-                                                            if len(consuntivazioni_socc_uo)==0:
-                                                                query_insert='''INSERT INTO UNIOPE.CONSUNT_ELEMENTO_SOCCORSO (
-                                                                ID_ELEMENTO, ID_PERCORSO_OSPITANTE, CAUSALE,
-                                                                DATALAV, FASCIA_TURNO, ORIGINE) 
-                                                                VALUES (
-                                                                :c1, :c2, :c3,
-                                                                to_date(:c4, 'YYYYMMDD'), 
-                                                                (SELECT DISTINCT at2.FASCIA_TURNO 
-                                                                FROM ANAGR_SER_PER_UO aspu 
-                                                                JOIN ANAGR_TURNI at2 ON at2.ID_TURNO = aspu.ID_TURNO 
-                                                                WHERE aspu.ID_PERCORSO = :c5
-                                                                AND to_date(:c6, 'YYYYMMDD') 
-                                                                BETWEEN aspu.DTA_ATTIVAZIONE AND aspu.DTA_DISATTIVAZIONE),
-                                                                'Ekovision')'''
-                                                                try:
-                                                                    cur.execute(query_insert, (int(data[i]['cons_works'][t]['cod_componente'].strip()),
-                                                                                           data[i]['codice_serv_pred'],
-                                                                                           causale,
-                                                                                           data[i]['data_esecuzione_prevista'],
-                                                                                           data[i]['codice_serv_pred'],
-                                                                                           data[i]['data_esecuzione_prevista']))
-                                                                except Exception as e:
-                                                                    logger.error(query_insert)
-                                                                    logger.error('1:{}, 2:{}, 3:{}, 4:{}, 5:{}, 6:{}'.format(
-                                                                                           int(data[i]['cons_works'][t]['cod_componente'].strip()),
-                                                                                           data[i]['codice_serv_pred'],
-                                                                                           causale,
-                                                                                           data[i]['data_esecuzione_prevista'],
-                                                                                           data[i]['codice_serv_pred'],
-                                                                                           data[i]['data_esecuzione_prevista']))
-                                                                    logger.error(e)
-                                                            else:
-                                                                query_update='''UPDATE UNIOPE.CONSUNT_ELEMENTO_SOCCORSO 
-                                                                    SET FASCIA_TURNO=
-                                                                    (SELECT DISTINCT at2.FASCIA_TURNO 
-                                                                    FROM ANAGR_SER_PER_UO aspu 
-                                                                    JOIN ANAGR_TURNI at2 ON at2.ID_TURNO = aspu.ID_TURNO 
-                                                                    WHERE aspu.ID_PERCORSO = :c1
-                                                                    AND to_date(:c2, 'YYYYMMDD') 
-                                                                    BETWEEN aspu.DTA_ATTIVAZIONE AND aspu.DTA_DISATTIVAZIONE), 
-                                                                    DATA_ORA_INSER=SYSDATE , 
-                                                                    ORIGINE='Ekovision' 
-                                                                    WHERE ID_ELEMENTO=:c3 
-                                                                    AND CAUSALE=:c4 AND 
-                                                                    DATALAV=to_date(:c5, 'YYYYMMDD') 
-                                                                    AND ID_PERCORSO_OSPITANTE=:c6'''
-                                                                try:
-                                                                    cur.execute(query_update, (
-                                                                                           data[i]['codice_serv_pred'],
-                                                                                           data[i]['data_esecuzione_prevista'],
-                                                                                           int(data[i]['cons_works'][t]['cod_componente'].strip()),
-                                                                                           causale,
-                                                                                           data[i]['data_esecuzione_prevista'],
-                                                                                           data[i]['codice_serv_pred']                                                                                          
-                                                                                           ))
-                                                                except Exception as e:
-                                                                    logger.error(query_update)
-                                                                    logger.error('1:{}, 2:{}, 3:{}, 4:{}, 5:{}, 6:{}'.format(
-                                                                                           data[i]['codice_serv_pred'],
-                                                                                           data[i]['data_esecuzione_prevista'],
-                                                                                           int(data[i]['cons_works'][t]['cod_componente'].strip()),
-                                                                                           causale,
-                                                                                           data[i]['data_esecuzione_prevista'],
-                                                                                           data[i]['codice_serv_pred']))
-                                                                    logger.error(e)
-                                                    else : # se fosse botticella non sto a fare tutto il giro sopra
-                                                        logger.error('1:{} 2:{} 3:{} 4:{} 5:{}'.format(data[i]['codice_serv_pred'],
-                                                                    id_asta, 
-                                                                    nota_asta,
-                                                                    data[i]['data_pianif_iniziale'], 
-                                                                    data[i]['codice_serv_pred']
-                                                                                            ))
-                                                    #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
-                                                    #exit()
-                                                
-                                        
-                                                
-                                                #se trovo una tappa
-                                                
-                                                else:
-                                                    # conto gli elementi
-                                                    #for tt in tappe:  
-                                                    if len(elenco_tappe)==0:
-                                                        count_elementi=1
-                                                        #if id_servizio != 114:
-                                                        #    elenco_piazzole.append(int(id_piazzola))
-                                                        elenco_tappe.append(int(id_tappa))
-                                                        elenco_tipi.append(int(tipo_elemento))
-                                                        ##########################################
-                                                        # questa parte sarà da cambiare
-                                                        nota_consuntivazione=''
-                                                        ##########################################
-                                                        if int(data[i]['cons_works'][t]['flg_exec'].strip())==1:
-                                                            count_fatti=1
-                                                            if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC':
-                                                                causale=100
-                                                            elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
-                                                                causale=110
-                                                        else:
-                                                            if causale_non_es != None:
-                                                                causale=causale_non_es
-                                                            else:
-                                                                try:
-                                                                    causale=int(data[i]['cons_works'][t-1]['cod_giustificativo_ext'].strip())
-                                                                    count_fatti=0
-                                                                except Exception as e:
-                                                                    logger.warning(e)
-                                                                    logger.warning('Scheda {} - Posizione: {} Manca la causale quindi lo do per fatto'.format(
-                                                                        int(data[i]['id_scheda']),
-                                                                        int(data[i]['cons_works'][t]['pos'])
-                                                                    ))
-                                                                    if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC':
-                                                                        causale=100
-                                                                    elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
-                                                                        causale=110
-                                                                    count_fatti=1
-                                                    elif id_tappa == elenco_tappe[-1] and tipo_elemento == elenco_tipi[-1]:
-                                                        # stessa tappa di prima 
-                                                        count_elementi+=1
-                                                        if int(data[i]['cons_works'][t]['flg_exec'].strip())==1:
-                                                            count_fatti+=1
-                                                        else:
-                                                            if causale_non_es != None:
-                                                                causale=causale_non_es
-                                                            else:
-                                                                try:
-                                                                    causale=int(data[i]['cons_works'][t-1]['cod_giustificativo_ext'].strip())
-                                                                except Exception as e:
-                                                                    logger.warning(e)
-                                                                    logger.warning('Scheda {} - Posizione: {} Manca la causale quindi lo do per fatto'.format(
-                                                                        int(data[i]['id_scheda']),
-                                                                        int(data[i]['cons_works'][t]['pos'])
-                                                                    ))
-                                                                    if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC':
-                                                                        causale=100
-                                                                    elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
-                                                                        causale=110
-                                                                    count_fatti+=1
-                                                        if (count_elementi-count_fatti)==0 and (causale==100 or causale==110):
-                                                            causale=causale  
-                                                        ##########################################
-                                                        # questa parte sarà da cambiare
-                                                        nota_consuntivazione=''
-                                                        ##########################################
-                                                    elif id_tappa != elenco_tappe[-1] or tipo_elemento != elenco_tipi[-1]:
-                                                        # nuova tappa (o tipo elemento)
-                                                        elenco_tappe.append(int(id_tappa))
-                                                        elenco_tipi.append(int(tipo_elemento))
-                                                        count_elementi=1
-                                                        if int(data[i]['cons_works'][t]['flg_exec'].strip())==1:
-                                                            count_fatti=1
-                                                            if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC':
-                                                                causale=100
-                                                            elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
-                                                                casuale=110
-                                                        else:
-                                                            if causale_non_es != None:
-                                                                causale=causale_non_es
-                                                            else:
-                                                                try:
-                                                                    causale=int(data[i]['cons_works'][t-1]['cod_giustificativo_ext'].strip())
-                                                                    count_fatti=0
-                                                                except Exception as e:
-                                                                    logger.warning(e)
-                                                                    logger.warning('Scheda {} - Posizione: {} Manca la causale quindi lo do per fatto'.format(
-                                                                        int(data[i]['id_scheda']),
-                                                                        int(data[i]['cons_works'][t]['pos'])
-                                                                    ))
-                                                                    if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC':
-                                                                        causale=100
-                                                                    elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
-                                                                        causale=110
-                                                                    count_fatti=1
-                                                                    #causale=int(data[i]['cons_works'][t-1]['cod_giustificativo_ext'].strip())
-                                                        ##########################################
-                                                        # questa parte sarà da cambiare
-                                                        nota_consuntivazione=''
-                                                        ##########################################
-                                                    else:
-                                                        logger.error('Non capisco perchè finisca qua')
+                        
+                                                            
+                                                            
                                                             
                                                 
-                                                
+                                            else:
+                                                logger.error('PROBLEMA CONSUNTIVAZIONE')
+                                                logger.error('File:{}'.format(filename))
+                                                logger.error('Mi sono fermato alla riga {}'.format(i))
+                                                error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                exit()
+                                            t+=1
+                                            con.commit()
                                             
-                                                
-                                                    # devo fare gli insert
-                                                    query_select=''' 
-                                                    SELECT * 
-                                                    FROM CONSUNT_MACRO_TAPPA cs 
-                                                    WHERE DATA_CONS = to_date(:c1, 'YYYYMMDD')
-                                                    and id_MACRO_TAPPA = :c2
-                                                    and TIPO_ELEMENTO = :c3
-                                                    '''
-                                                    
-                                                   
-                                                    try:
-                                                        cur.execute(query_select, (data[i]['data_esecuzione_prevista'], elenco_tappe[-1], elenco_tipi[-1]))
-                                                        #cur1.rowfactory = makeDictFactory(cur1)
-                                                        consuntivazioni_uo=cur.fetchall()
-                                                    except Exception as e:
-                                                        logger.error(query_select)
-                                                        logger.error('1:{}, 2:{}, 3:{}'.format(data[i]['data_esecuzione_prevista'], elenco_tappe[-1], elenco_tipi[-1]))
-                                                        logger.error(e)
-                                                    
-                                                    
-                                                    
-                                                    cur.close()
-                                                    cur = con.cursor()
-                                                    
-                                                    #logger.debug(len(consuntivazioni_uo))
-                                                    #exit()
-                                                        
-                                                    if len(consuntivazioni_uo)==0:
-                                                        query_insert='''INSERT INTO UNIOPE.CONSUNT_MACRO_TAPPA (
-                                                        ID_MACRO_TAPPA, QTA_ELEM_NON_VUOTATI, CAUSALE_ELEM,
-                                                        NOTA, DATA_CONS, ID_PERCORSO,
-                                                        ID_VIA, TIPO_ELEMENTO,
-                                                        ID_SERVIZIO,
-                                                        INS_DATE, MOD_DATE, ORIGINE_DATO) VALUES 
-                                                        (:c1, :c2, :c3, 
-                                                        :c4, to_date(:c5, 'YYYYMMDD'), :c6,
-                                                        (SELECT distinct ID_VIA 
-                                                        FROM CONS_PERCORSI_VIE_TAPPE cpvt  
-                                                        WHERE ID_TAPPA = :c7), 
-                                                        :c8,
-                                                        (SELECT DISTINCT ID_SERVIZIO 
-                                                                FROM ANAGR_SER_PER_UO aspu 
-                                                                WHERE ID_PERCORSO = :c9
-                                                                AND to_date(:c10, 'YYYYMMDD') BETWEEN DTA_ATTIVAZIONE AND DTA_DISATTIVAZIONE),
-                                                        sysdate, NULL, 'EKOVISION')'''
-                                                        
-                                                        try:
-                                                            cur.execute(query_insert, (int(id_tappa), 
-                                                                                        (count_elementi-count_fatti),
-                                                                                        causale,
-                                                                                        nota_consuntivazione, 
-                                                                                        data[i]['data_esecuzione_prevista'],
-                                                                                        data[i]['codice_serv_pred'],
-                                                                                        int(id_tappa), 
-                                                                                        tipo_elemento,
-                                                                                        data[i]['codice_serv_pred'],
-                                                                                        data[i]['data_esecuzione_prevista']
-                                                                                        ))
-                                                            #cur1.rowfactory = makeDictFactory(cur1)
-                                                        except Exception as e:
-                                                            logger.error(query_insert)
-                                                            logger.error('1:{} 2:{} 3:{} 4:{} 5:{} 6:{} 7:{} 8:{} 9:{} 10:{}'.format(int(id_tappa), 
-                                                                                        (count_elementi-count_fatti),
-                                                                                        causale,
-                                                                                        nota_consuntivazione, 
-                                                                                        data[i]['data_esecuzione_prevista'],
-                                                                                        data[i]['codice_serv_pred'],
-                                                                                        int(id_tappa), 
-                                                                                        int(tipo_elemento),
-                                                                                        data[i]['codice_serv_pred'],
-                                                                                        data[i]['data_esecuzione_prevista'])
-                                                            )
-                                                            logger.error(e)
-                                                                                                        
-                                                            
-                                                    
-                                                    elif len(consuntivazioni_uo)==1:
-                                        
-                                                        query_update='''
-                                                            UPDATE UNIOPE.CONSUNT_MACRO_TAPPA 
-                                                            SET QTA_ELEM_NON_VUOTATI=:c1, 
-                                                            CAUSALE_ELEM=:c2, 
-                                                            NOTA=:c3, 
-                                                            MOD_DATE=sysdate
-                                                            WHERE DATA_CONS=to_date(:c4, 'YYYYMMDD') 
-                                                            AND ID_MACRO_TAPPA = :c5
-                                                            AND TIPO_ELEMENTO = :c6
-                                                            '''
-                                                        try:
-                                                            cur.execute(query_update, ((count_elementi-count_fatti),
-                                                                                        causale,
-                                                                                        nota_consuntivazione,
-                                                                                        data[i]['data_esecuzione_prevista'], 
-                                                                                        int(id_tappa),
-                                                                                        tipo_elemento))
-                                                        except Exception as e:
-                                                            logger.error(query_insert)
-                                                            logger.error('1:{} 2:{} 3:{} 4:{} 5:{}, 6:{}'.format((count_elementi-count_fatti),
-                                                                                                    causale,
-                                                                                                    nota_consuntivazione,
-                                                                                                    data[i]['data_esecuzione_prevista'], 
-                                                                                                    int(id_tappa), 
-                                                                                                    tipo_elemento))
-                                                            logger.error(e)
-                                                        
-                                                        
-                                                    else:
-                                                        logger.error('Problema consuntivazioni doppie su UO')
-                                                        logger.error('Id tappa {}'.format(id_tappa))
-                                                        logger.error('Tipo elemento {}'.format(tipo_elemento))
-                                                        logger.error('Data percorso progettata {}'.format(data[i]['data_pianif_iniziale']))
-                                                        logger.error('Data percorso effettiva {}'.format(data[i]['data_esecuzione_prevista']))  
-                                                        logger.error('Cod percorso {}'.format(data[i]['codice_serv_pred']))
-                                                        error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
-                                                        exit()
-                                                            
-                    
-                                                        
-                                                        
-                                                        
                                             
-                                        else:
-                                            logger.error('PROBLEMA CONSUNTIVAZIONE')
-                                            logger.error('File:{}'.format(filename))
-                                            logger.error('Mi sono fermato alla riga {}'.format(i))
-                                            error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
-                                            exit()
-                                        t+=1
-                                        con.commit()
-                                        
-                                        
-                                    if check_tappe_non_trovate==1 or check_tappe_multiple ==1:
-                                        query_reimport='''INSERT INTO util.sys_history ("type", "action", description, datetime, id_user,  id_percorso) 
-                                            (
-                                                select distinct 'PERCORSO', 'UPDATE', 'Forzatura re-importazione Ekovision', now(),  0, foo.id_percorso 
-                                                from (
-                                                    select id_percorso from elem.percorsi p  
-                                                    where id_categoria_uso = 3 and cod_percorso = %s
-                                                    ) foo
-                                            )'''    
-                                        try:
-                                            curr.execute(query_reimport, (data[i]['codice_serv_pred'],))
-                                        except Exception as e:
-                                            logger.error(query_reimport)
-                                            logger.error('cod percorso: {}'.format(data[i]['codice_serv_pred']))
-                                            logger.error(e)
-                                        conn.commit()
+                                        if check_tappe_non_trovate==1 or check_tappe_multiple ==1:
+                                            query_reimport='''INSERT INTO util.sys_history ("type", "action", description, datetime, id_user,  id_percorso) 
+                                                (
+                                                    select distinct 'PERCORSO', 'UPDATE', 'Forzatura re-importazione Ekovision', now(),  0, foo.id_percorso 
+                                                    from (
+                                                        select id_percorso from elem.percorsi p  
+                                                        where id_categoria_uso = 3 and cod_percorso = %s
+                                                        ) foo
+                                                )'''    
+                                            try:
+                                                curr.execute(query_reimport, (data[i]['codice_serv_pred'],))
+                                            except Exception as e:
+                                                logger.error(query_reimport)
+                                                logger.error('cod percorso: {}'.format(data[i]['codice_serv_pred']))
+                                                logger.error(e)
+                                            conn.commit()
                                     
                                 else:
                                     logger.info('Non processo la scheda perchè antecedente alla data di partenza di Ekovision {}'.format(data_start_ekovision))
                             except Exception as e:
                                 logger.error('File:{}'.format(filename))
+                                logger.error(e)
+                                logger.error('Error on line {}'.format(sys.exc_info()[-1].tb_lineno))
+                                logger.error(type(e).__name__)
                                 logger.error('Non processo la riga {}'.format(i))
                             i+=1
                         con.commit()
@@ -1954,7 +2039,7 @@ def main():
                             logger.error(e)
                             logger.error('Problema spostamento in archivio del file {}'.format(filename)) 
                             logger.error('Entrare in filezilla e spostare il file a mano')
-                            error_log_mail(errorfile, 'AssTerritorio@amiu.genova.it; Riccardo.Piana@amiu.genova.it', os.path.basename(__file__), logger)
+                            error_log_mail(errorfile, 'AssTerritorio@amiu.genova.it, Riccardo.Piana@amiu.genova.it', os.path.basename(__file__), logger)
                             exit() 
                     except Exception as e:
                         logger.error(e)
@@ -1963,7 +2048,7 @@ def main():
                         f.close()
                         #error_log_mail(errorfile, 'AssTerritorio@amiu.genova.it', os.path.basename(__file__), logger)
                         srv.rename(filename, "json_error/" + filename)
-                        error_log_mail(errorfile, 'AssTerritorio@amiu.genova.it; andrea.volpi@ekovision.it; francesco.venturi@ekovision.it', os.path.basename(__file__), logger)
+                        error_log_mail(errorfile, 'AssTerritorio@amiu.genova.it, andrea.volpi@ekovision.it, francesco.venturi@ekovision.it', os.path.basename(__file__), logger)
                        
 
 

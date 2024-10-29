@@ -210,7 +210,8 @@ def main():
             insert='''INSERT INTO elem.turni
             (id_turno, descrizione, cod_turno, inizio_ora, fine_ora, inizio_minuti, fine_minuti)
             VALUES(%s, %s, %s, %s, %s, %s, %s);'''
-            curr.execute(insert, (id_uo[i],f,cod_turno, h_s[i], h_e[i], m_s[i], m_e[i],))        
+            curr.execute(insert, (id_uo[i],f,cod_turno, h_s[i], h_e[i], m_s[i], m_e[i],)) 
+            # sarebbe da inviare una mail per aggiunta su Ekovision       
         i+=1
 
 

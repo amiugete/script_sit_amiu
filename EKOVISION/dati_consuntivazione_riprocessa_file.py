@@ -230,12 +230,62 @@ def main():
 
         with srv.cd(cartella_sftp_eko): #chdir to public
             #print(srv.listdir('./'))
-            for filename in srv.listdir('./'):
+            
+            # qua correggo tutti i casi in cui il tipo elemento era sbagliato a causa del RACC-LAV 
+            """
+            select_file='''select DISTINCT /*ID_PERCORSO, DATA_CONS, */
+                see.nomefile
+                from consunt_macro_Tappa i 
+                JOIN SCHEDE_ESEGUITE_EKOVISION see ON see.CODICE_SERV_PRED = i.ID_PERCORSO 
+                            AND to_char(i.DATA_CONS, 'YYYYMMDD') = see.DATA_ESECUZIONE_PREVISTA 
+                where i.data_cons > to_date('20240101', 'yyyymmdd') and --id_percorso = '0500132901' and
+                not exists (select 1 from (select distinct tipo_elemento, id_macro_Tappa from cons_elementi ce 
+                    inner join cons_micro_tappa cm 
+                    on ce.id_elemento = cm.id_elemento) a
+                    where i.id_macro_tappa = a.id_macro_tappa
+                    and i.tipo_elemento = a.tipo_elemento)
+                and origine_dato = 'EKOVISION'
+                AND CAUSALE_ELEM = 110
+                AND RECORD_VALIDO = 'S' '''
+            """
+            
+                    
+            # json che davano errore su un singolo percorso        
+            select_file='''select distinct e.nomefile from schede_eseguite_ekovision e
+                inner join anagr_Ser_per_uo aspu
+                on aspu.id_percorso  = E.CODICE_SERV_PRED
+                and to_date(E.DATA_PIANIF_INIZIALE,'yyyymmdd') between ASPU.DTA_ATTIVAZIONE  and ASPU.DTA_DISATTIVAZIONE
+                inner join anagr_servizi s
+                on s.id_servizio = aspu.id_servizio
+                where S.TIPO_SERVIZIO = 'RACCOLTA'
+                and e.record_valido  ='S'
+                and not exists (select 1 from pr_tmp4 c where c.id_percorso  = aspu.id_percorso and C.DATA_CONS = to_date(E.DATA_PIANIF_INIZIALE,'yyyymmdd') )
+                and aspu.id_percorso != '0500132901'
+                and e.data_pianif_iniziale like '2024%' '''
+
+
+            try:
+                cur.execute(select_file)
+                check_filename=cur.fetchall()
+            except Exception as e:
+                logger.error(select_file)
+                logger.error(e)
+            for filename in check_filename:
+            #for filename in srv.listdir('./'):
                 #logger.debug(filename)
-                select_file='''SELECT DISTINCT NOMEFILE
+                
+                # questo era per correggere il 101 con il 110
+                """select_file='''SELECT DISTINCT NOMEFILE
                     FROM SCHEDE_ESEGUITE_EKOVISION see
                     WHERE COD_CAUS_SRV_NON_ESEG_EXT = 101
                     AND RECORD_VALIDO = 'S' and NOMEFILE=:f1'''
+                    
+                    
+                    
+                
+                
+                
+                
 
                 try:
                     cur.execute(select_file, (filename,))
@@ -247,7 +297,7 @@ def main():
                 # se non ho già letto il file
                 if len(check_filename)==1:
                     logger.info('Sposto il file {} nella cartella per cui debba essere riprocessato'.format(filename))
-                    
+                
                     try:
                         srv.rename(filename, "../" + filename)
                     except Exception as e:
@@ -256,6 +306,17 @@ def main():
                         logger.error('Entrare in filezilla e spostare il file a mano')
                         #error_log_mail(errorfile, 'AssTerritorio@amiu.genova.it; Riccardo.Piana@amiu.genova.it', os.path.basename(__file__), logger)
                         exit() 
+                """    
+                
+                logger.info(filename[0])
+                try:
+                    srv.rename(filename[0], "../" + filename[0])
+                except Exception as e:
+                    logger.error(e)
+                    logger.error('Problema spostamento in archivio del file {}'.format(filename)) 
+                    logger.error('Entrare in filezilla e spostare il file a mano')
+                    #error_log_mail(errorfile, 'AssTerritorio@amiu.genova.it; Riccardo.Piana@amiu.genova.it', os.path.basename(__file__), logger)
+                    exit() 
                     
                     
                     

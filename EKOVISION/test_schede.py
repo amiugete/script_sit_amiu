@@ -220,7 +220,7 @@ def main():
     body_mail='''E' arrivata una consuntivazione da totem per il percorso {} in data {}.
     <br>Non esistendo la scheda per il giorno in questione è stata creata in automatico.
     La nuova scheda ha ID {}'''.format(cp, data_check, id_scheda)           
-    creazione_scheda_mail(body_mail,'roberto.marzocchi@amiu.genova.it; vobbo@libero.it', os.path.basename(__file__), logger)
+    creazione_scheda_mail(body_mail,'roberto.marzocchi@amiu.genova.it, vobbo@libero.it', os.path.basename(__file__), logger)
 
     curr.close()
     error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)

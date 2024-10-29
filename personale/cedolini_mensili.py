@@ -99,7 +99,10 @@ f_handler.setFormatter(cc_format)
 def main():
     
     # PARAMETRI INIZIALI 
-    CF_AZIENDA='03818890109'
+    # 0 AMIU
+    # 1 Bonifiche
+    CFS_AZIENDE=['03818890109', '01266290996']
+    
     file_processati='file_processati.csv'
     
     
@@ -160,17 +163,31 @@ def main():
             text=page.extract_text() 
             # Split the text into lines 
             lines = text.splitlines() 
-            
             # solo per il debug cerco di capire a quali righe leggo le informazioni corrette
-            '''
+            #'''
             logger.debug(len(lines)) 
-            k=0
-            while k<len(lines):
-                logger.debug('{}, {}'.format(k,lines[k]))
-                k+=1         
+            kk=0
+            check_azienda=0
+            while kk<len(lines):
+                #logger.debug('{}, {}'.format(kk,lines[kk]))
+                if check_azienda==0 and CFS_AZIENDE[0] in lines[kk]:
+                    CF_AZIENDA= CFS_AZIENDE[0]
+                    check_azienda=1
+                    logger.warning('AMIU')
+                elif check_azienda==0 and CFS_AZIENDE[1] in lines[kk]:
+                    CF_AZIENDA= CFS_AZIENDE[1]   
+                    logger.warning('Bonifiche')
+                    check_azienda=1
+                kk+=1  
+                
             
-            exit()
-            '''
+            if check_azienda==0:
+                logger.error('Non trovo la partita IVA nè di AMIU Bonifiche nè di AMIU. Controllare lo script')
+                    
+                       
+            
+            #exit()
+            #'''
             
             
                     
@@ -181,6 +198,7 @@ def main():
                 matricola_old=matricola
                 CF_old=CF
                 
+                # cercp il CF aziendale
                 
                 
                 matricola=lines[0].split()[1].replace(',', '')
@@ -196,15 +214,21 @@ def main():
                 
                 caso 1) lo trovo nella riga 54 (se non c'è indirizzo AMIU nell'intestazione)
                 caso 2) lo trovo nella riga 55 (se c'è indirizzo AMIU nell'intestazione)
-                
+                caso 3) Bonifiche linea 53
                 
                 '''
                 
                
+                
+                
                 CF=lines[54].replace(nome.upper(),'')[:16]
                 if len(CF.strip())<16: #in questo caso dovrei essere nella caso 2
                     logger.debug('''c'è indirizzo amiu nell'intestazione e il codice fiscale è alla riga 55''')
                     CF=lines[55].replace(nome.upper(),'')[:16]
+                
+                # cerco se c'è uno slash e nel caso vado alla linea 53 
+                if '/' in CF:
+                    CF=lines[53].replace(nome.upper(),'')[:16]
                 
                 
                 
@@ -268,7 +292,15 @@ def main():
                 #inizializzo la scrittura del file
                 writer = PdfWriter()
                 #creo nuovo file
-                outputpdf='{0}/output/cedolini/{1}-{2}-{3}-{4}--LUL1--{5}.pdf'.format(path,CF_AZIENDA, CF, anno,mese, matricola)
+                path_cedolini='{0}/output/cedolini'.format(path)
+                path_anno='{0}/{1}'.format(path_cedolini, anno)
+                if not os.path.exists(path_anno):
+                    os.makedirs(path_anno)
+                path_mese='{0}/{1}'.format(path_anno, mese)
+                if not os.path.exists(path_mese):
+                    os.makedirs(path_mese)
+                
+                outputpdf='{0}/{1}-{2}-{3}-{4}--LUL1--{5}.pdf'.format(path_mese,CF_AZIENDA, CF, anno,mese, matricola)
             else:
                 # non creo nuovo file
                 logger.warning('sono alla pagina {0}. Due pagine per stesso dipendente CF: {1}, Matr:{2}'.format(i, CF, matricola))

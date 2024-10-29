@@ -27,7 +27,9 @@ import holidays
 from workalendar.europe import Italy
 
 
-from credenziali import db, port, user, pwd, host, user_mail, pwd_mail, port_mail, smtp_mail
+from credenziali import *
+
+import report_settimanali_percorsi_ok 
 
 
 #import requests
@@ -59,17 +61,6 @@ import pysftp
 filename = inspect.getframeinfo(inspect.currentframe()).filename
 path     = os.path.dirname(os.path.abspath(filename))
 
-'''#path=os.path.dirname(sys.argv[0]) 
-#tmpfolder=tempfile.gettempdir() # get the current temporary directory
-logfile='{}/log/variazioni_importazioni.log'.format(path)
-#if os.path.exists(logfile):
-#    os.remove(logfile)
-
-logging.basicConfig(format='%(asctime)s\t%(levelname)s\t%(message)s',
-    filemode='a', # overwrite or append
-    filename=logfile,
-    level=logging.DEBUG)
-'''
 
 
 path=os.path.dirname(sys.argv[0]) 
@@ -190,7 +181,6 @@ def main():
     logger.debug(parametri_con)
     con = cx_Oracle.connect(parametri_con)
     logger.info("Versione ORACLE: {}".format(con.version))
-    
     
     
 
@@ -386,6 +376,7 @@ def main():
     servizio=[]
     ut=[]
     stato_importazione=[]
+    invio_mail=[]
 
            
     for vv in lista_variazioni:
@@ -507,6 +498,37 @@ def main():
         logger.debug('Check1={}'.format(check1))        
         cur.close()
         
+        # recupero le mail cui inviare il report
+        if (check1==1): 
+            cur = con.cursor()
+            query_uo='''SELECT aspu.ID_UO, au.MAIL FROM ANAGR_SER_PER_UO aspu 
+            JOIN ANAGR_UO au ON au.ID_UO = aspu.ID_UO  
+            WHERE aspu.ID_PERCORSO = :cod_perc
+            AND aspu.DTA_ATTIVAZIONE <= TO_DATE (:data1, 'DD/MM/YYYY') 
+            AND aspu.DTA_DISATTIVAZIONE > TO_DATE (:data2, 'DD/MM/YYYY') '''
+
+            try:
+                cur.execute(query_uo, (vv[0], oggi1, oggi1))
+                uu_oo=cur.fetchall()
+            except Exception as e:
+                logger.error(query_uo)
+                logger.error(e)                                            
+
+            invio_mail_tmp=''
+            for u_o in uu_oo:
+                logger.debug(u_o[1])
+                # le mail sono aggiornate a partire dall'HUB di GAVA 
+                if invio_mail_tmp!='':
+                    invio_mail_tmp='{}, {}'.format(invio_mail_tmp,u_o[1])
+                else: 
+                    invio_mail_tmp='{}'.format(u_o[1])
+            
+            invio_mail.append(invio_mail_tmp)
+                
+                        
+            cur.close()
+        else:
+            invio_mail.append('')    
         
         # Se ho superato primo check verifico che il percorso non sia già importato
         check2=0
@@ -1342,6 +1364,7 @@ from (
         w.write(0, 2, 'servizio') 
         w.write(0, 3, 'ut') 
         w.write(0, 4, 'ESITO IMPORTAZIONE') 
+        w.write(0, 5, 'MAIL') 
         
         '''
         w.write(1, 0, 1234.56)  # Writes a float
@@ -1363,6 +1386,14 @@ from (
         w.write(i+1,2,'{}'.format(servizio[i]))
         w.write(i+1,3,'{}'.format(ut[i]))
         w.write(i+1,4,'{}'.format(stato_importazione[i]))
+        w.write(i+1,5,'{}'.format(invio_mail[i]))
+        # provo l'invio dei report 
+        try:
+            if stato_importazione[i].lower().startswith("ok"):              
+                report_settimanali_percorsi_ok.main(cod_percorso[i], 'sempl', invio_mail[i], num)
+        except Exception as e:
+            logger.error(e)
+            
         i+=1
 
     if len(cod_percorso)>0:
@@ -1436,8 +1467,8 @@ from (
     
     # aggiunto allegato (usando la funzione importata)
     allegato(message, file_variazioni, nome_file)
-    # Add body to email
-    message.attach(MIMEText(body, "plain"))
+    
+
     
     
     text = message.as_string()

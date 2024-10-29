@@ -124,14 +124,6 @@ def main():
     
 
     
-    test= {"name": "école '& c/o aaa", 
-        "location": "New York"}
-    
-    json_data = json.dumps(test , ensure_ascii=False).encode('utf-8')
-    
-    print(json_data)
-    
-    #exit()
     
     # Get today's date
     #presentday = datetime.now() # or presentday = datetime.today()
@@ -146,14 +138,11 @@ def main():
     
 
     
-    id_scheda =  423327   #423341 OK #   423319 da problemi
     
     
     
 
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-    
-    #headers = {'Content-type': 'application/json;'}
 
     data={'user': eko_user, 
         'password': eko_pass,
@@ -162,56 +151,18 @@ def main():
     
     
     
-    logger.info('Provo a leggere i dettagli della scheda')
+    logger.info('Provo a leggere i dati del personale')
     
     
-    params2={'obj':'schede_lavoro',
+    params2={'obj':'personale',
             'act' : 'r',
-            'id': '{}'.format(id_scheda),
+            'data': '{}'.format(oggi.strftime('%Y%m%d')),
             }
     
-    response2 = requests.post(eko_url, params=params2, data=data, headers=headers)
-    #letture2 = response2.json()
+    response2 = requests.post(eko_url_test, params=params2, data=data, headers=headers)
     letture2 = response2.json()
     logger.info(letture2)
-    #exit()
-    # key to remove
-    #key_to_remove = "status"
-    del letture2["status"]  
-    del letture2['schede_lavoro'][0]['trips']  
-    del letture2['schede_lavoro'][0]['risorse_tecniche']
-    del letture2['schede_lavoro'][0]['filtri_rfid']        
-    logger.info(letture2)
     
-    #logger.info(json.dumps(letture2).encode("utf-8"))
-    
-    
-    
-    if len(letture2['schede_lavoro'][0]['risorse_umane'])> 0:
-        #logger.info(letture2['schede_lavoro'][0]['risorse_umane'][0]['id_giustificativo'])
-        
-        if letture2['schede_lavoro'][0]['risorse_umane'][0]['id_giustificativo'] != '3':
-            letture2['schede_lavoro'][0]['risorse_umane'][0]['id_giustificativo']='3'
-        #logger.info(letture2['schede_lavoro'][0]['risorse_umane'][0]['id_giustificativo'])    
-    #exit()
-    '''
-    k=0
-    while k <len(letture2['schede_lavoro'][0]['risorse_umane']):
-        logger.debug(letture2['schede_lavoro'][0]['risorse_umane'][k])
-        k+=1
-    '''
-    
-    
-    
-    '''
-    # provo l'esecuzione automatica 
-    logger.info(letture2['schede_lavoro'][0]['tracing_exec_date'])
-    logger.info(letture2['schede_lavoro'][0]['flg_imposta_eseguito'])
-    letture2['schede_lavoro'][0]['flg_imposta_eseguito']='1'
-    
-    
-    logger.debug(len(letture2['schede_lavoro'][0]['trips'][0]['waypoints']))
-    '''
     
     
     
@@ -223,44 +174,11 @@ def main():
         letture2['schede_lavoro'][0]['trips'][0]['waypoints'][k]['works'][0]['flg_exec_manuale']='1'
         k+=1     
     '''
-    
-    
-    
-    
-    logger.info('Provo a inserire un giustificativo')
-    giason={
-                "schede_lavoro": [
-                {
-                    "id_scheda_lav": id_scheda,
-                    "risorse_umane":[
-                         {"id_scheda_lav": id_scheda,
-                          "id_progressivo": "1", 
-                          "flg_autista":"1",
-                          "id_giustificativo":3
-                          }
-                    ]
-                }
-                ]
-                } 
-    params2={'obj':'schede_lavoro',
-            'act' : 'w',
-            'ruid': 'A{}'.format(id_scheda),
-            'json': json.dumps(letture2, ensure_ascii=False).encode('utf-8')
-            }
     #exit()
-    response2 = requests.post(eko_url, params=params2, data=data, headers=headers)
-    result2 = response2.json()
-    if result2['status']=='error':
-        logger.error('Id_scheda = {}'.format(id_scheda))
-        logger.error(result2)
-    #else :
-    #    logger.info(result2['status'])
     
-    '''try: 
-        id_scheda=letture['crea_schede_lavoro'][0]['id']
-    except Exception as e:
-        logger.error(e)
-    '''
+    
+    
+    
 
 
 

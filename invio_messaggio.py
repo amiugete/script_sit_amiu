@@ -32,6 +32,11 @@ sys.path.append(currentdir)
 from credenziali import *
 
 
+mail_footer='''<hr>Questa mail è stata creata in automatico. 
+            In caso di dubbi non rispondere alla presente mail ma scrivere a
+            <a href="mailto:AssTerritorio@amiu.genova.it">AssTerritorio@amiu.genova.it</a>.'''
+
+
 
 def invio_messaggio(messaggio):
 
@@ -249,8 +254,7 @@ def creazione_scheda_mail(body_text_html, receiver_email, script_name, logger_na
     body = '''{}<br><br>
     AMIU Assistenza Territorio<br>
      <img src="cid:image1" alt="Logo" width=197>
-    <br><hr>Questa mail è stata creata in automatico. 
-    In caso di dubbi non rispondere alla presente mail ma scrivere a <a href="mailto:AssTerritorio@amiu.genova.it">AssTerritorio@amiu.genova.it</a>.'''.format(body_text_html)
+    <br>{}'''.format(body_text_html, mail_footer)
     #sender_email = user_mail
 
 

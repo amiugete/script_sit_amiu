@@ -45,6 +45,10 @@ currentdir = os.path.dirname(os.path.realpath(__file__))
 parentdir = os.path.dirname(currentdir)
 sys.path.append(parentdir)
 
+
+
+
+
 from credenziali import *
 #from credenziali import db, port, user, pwd, host, user_mail, pwd_mail, port_mail, smtp_mail
 
@@ -52,6 +56,52 @@ from credenziali import *
 
 #libreria per gestione log
 import logging
+
+giorno_file=datetime.datetime.today().strftime('%Y%m%d%H%M%S')
+path=os.path.dirname(sys.argv[0]) 
+nome=os.path.basename(__file__).replace('.py','')
+#tmpfolder=tempfile.gettempdir() # get the current temporary directory
+logfile='{}/log/{}_{}.log'.format(path, giorno_file, nome)
+#logfile='{0}/log/{1}.log'.format(path,nome)
+errorfile='{0}/log/error_{1}.log'.format(path,nome)
+
+
+
+
+
+
+
+# Create a custom logger
+logging.basicConfig(
+    level=logging.DEBUG,
+    handlers=[
+    ]
+)
+
+logger = logging.getLogger()
+
+# Create handlers
+c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
+#f_handler = logging.StreamHandler()
+f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+
+
+c_handler.setLevel(logging.ERROR)
+f_handler.setLevel(logging.DEBUG)
+
+
+# Add handlers to the logger
+logger.addHandler(c_handler)
+logger.addHandler(f_handler)
+
+
+cc_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
+
+c_handler.setFormatter(cc_format)
+f_handler.setFormatter(cc_format)
+
+
+
 
 
 # Libreria per invio mail
@@ -82,19 +132,12 @@ def main(argv):
     path     = os.path.dirname(os.path.abspath(filename))
 
 
-    giorno_file=datetime.datetime.today().strftime('%Y%m%d%H%M%S')
+    
 
     #giorno_file='{}_{}'.format(giorno_file, prefisso1.replace(' ', '_'))
+    giorno_file=datetime.datetime.today().strftime('%Y%m%d%H%M%S')
+    
 
-    logfile='{}/log/{}_utenze.log'.format(path, giorno_file)
-
-    logging.basicConfig(
-        handlers=[logging.FileHandler(filename=logfile, encoding='utf-8', mode='a')],
-        format='%(asctime)s\t%(levelname)s\t%(message)s',
-        #filemode='w', # overwrite or append
-        #fileencoding='utf-8',
-        #filename=logfile,
-        level=logging.DEBUG)
 
 
 
@@ -102,11 +145,11 @@ def main(argv):
 
 
  
-    logging.info('Leggo gli input')
+    logger.info('Leggo gli input')
     try:
         opts, args = getopt.getopt(argv,"hi:p:m:c:",["ifile=","prefix=", "mail="])
     except getopt.GetoptError:
-        logging.error('seleziona_utenze_vie.py -i <inputfile> -p <prefisso> -m <mail>')
+        logger.error('seleziona_utenze_vie.py -i <inputfile> -p <prefisso> -m <mail>')
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
@@ -114,33 +157,33 @@ def main(argv):
             sys.exit()
         elif opt in ("-i", "--ifile"):
             file_csv = arg
-            logging.info('Input file = {}'.format(file_csv))
+            logger.info('Input file = {}'.format(file_csv))
         elif opt in ("-p", "--prefix"):
             prefisso1 = arg
-            logging.info('Prefisso file = {}'.format(prefisso1))
+            logger.info('Prefisso file = {}'.format(prefisso1))
         elif opt in ("-m", "--mail"):
             mail = arg
-            logging.info('Mail cui inviare i dati = {}'.format(mail))
+            logger.info('Mail cui inviare i dati = {}'.format(mail))
         elif opt in ("-c", "--consegne"):
             consegne = arg
-            logging.info('Da inserire sul portale consegne (1) o no (0) (default 0) = {}'.format(mail))
+            logger.info('Da inserire sul portale consegne (1) o no (0) (default 0) = {}'.format(mail))
 
 
     consegne=int(consegne)
-    logging.debug(consegne)
+    logger.debug(consegne)
 
     #aggiorno il prefisso del file
     giorno_file='{}_{}'.format(giorno_file, prefisso1.replace(' ', '_'))
     
     # Leggo il file
-    logging.info('Leggo il file CSV {}' . format(file_csv))
+    logger.info('Leggo il file CSV {}' . format(file_csv))
 
     with open(file_csv) as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=',')
         line_count = 0
         for row in csv_reader:
             if line_count == 0:
-                logging.debug(f'Column names are {", ".join(row)}')
+                logger.debug(f'Column names are {", ".join(row)}')
                 line_count += 1
             elif line_count==1:
                 codici_via = '{}'.format(row[0])
@@ -148,13 +191,13 @@ def main(argv):
             else: 
                 codici_via = '{}, {}'.format(codici_via, row[0])
                 line_count += 1
-        logging.debug(f'Processed {line_count-1} lines.')
-        logging.debug(codici_via)
+        logger.debug(f'Processed {line_count-1} lines.')
+        logger.debug(codici_via)
 
     #exit()
     
 
-    logging.info('Connessione al db')
+    logger.info('Connessione al db')
     conn = psycopg2.connect(dbname=db,
                         port=port,
                         user=user,
@@ -177,7 +220,7 @@ where cod_strada::integer in ({0})'''.format(codici_via)
         curr.execute(query)
         lista_civici=curr.fetchall()
     except Exception as e:
-        logging.error(e)
+        logger.error(e)
 
 
     #inizializzo gli array
@@ -185,13 +228,13 @@ where cod_strada::integer in ({0})'''.format(codici_via)
 
            
     for vv in lista_civici:
-        #logging.debug(vv[0])
+        #logger.debug(vv[0])
         cod_civico.append(vv[0])
 
     curr.close()
 
 
-    logging.info('Lista civici')
+    logger.info('Lista civici')
     curr2 = conn.cursor()
     query2 = ''' SELECT v.nome, be.testo FROM
 (select n.testo, n.cod_strada from geo.civici_neri n 
@@ -206,7 +249,7 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
         curr2.execute(query2)
         lista_civici2=curr2.fetchall()
     except Exception as e:
-        logging.error(e)
+        logger.error(e)
 
 
     # array che uso dopo quando devo inviare le mail
@@ -246,14 +289,14 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
 
 
 
-    logging.info("Tentativo connessione ORACLE")
+    logger.info("Tentativo connessione ORACLE")
     # connessione Oracle
     #cx_Oracle.init_oracle_client(lib_dir=r"C:\oracle\instantclient_19_10")
     cx_Oracle.init_oracle_client()
     parametri_con='{}/{}@//{}:{}/{}'.format(user_strade,pwd_strade, host_uo,port_uo,service_uo)
-    logging.debug(parametri_con)
+    logger.debug(parametri_con)
     con = cx_Oracle.connect(parametri_con)
-    logging.info("Versione ORACLE: {}".format(con.version))
+    logger.info("Versione ORACLE: {}".format(con.version))
 
 
 
@@ -325,8 +368,8 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
 
 
 
-    logging.info('*****************************************************')
-    logging.info('Utenze domestiche su strade')
+    logger.info('*****************************************************')
+    logger.info('Utenze domestiche su strade')
 
     cur = con.cursor()
     query=''' SELECT ID_UTENTE, PROGR_UTENZA, COGNOME, NOME, COD_VIA, DESCR_VIA,
@@ -340,15 +383,15 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
     try: 
         lista_domestiche = cur.execute(query)
     except Exception as e:
-        logging.error(query)
-        logging.error(e)
+        logger.error(query)
+        logger.error(e)
         exit()
     
 
     i=1
     for rr in lista_domestiche:
         j=0
-        #logging.debug(len(rr))
+        #logger.debug(len(rr))
         while j<len(rr):
             w.write(i, j, rr[j])
             j+=1
@@ -358,8 +401,8 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
     workbook.close()
 
 
-    logging.info('*****************************************************')
-    logging.info('Civici Utenze domestiche su strade')
+    logger.info('*****************************************************')
+    logger.info('Civici Utenze domestiche su strade')
     # civici domestiche
     workbook3 = xlsxwriter.Workbook(file_civdomestiche)
     w3 = workbook3.add_worksheet()
@@ -380,13 +423,13 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
         '''.format(codici_via) 
         
 
-    #logging.debug(query)
+    #logger.debug(query)
     lista_civdomestiche = cur3.execute(query)
 
     i=1
     for rr in lista_civdomestiche:
         j=0
-        #logging.debug(len(rr))
+        #logger.debug(len(rr))
         while j<len(rr):
             w3.write(i, j, rr[j])
             j+=1
@@ -395,8 +438,8 @@ ON v.id_via::integer = be.cod_strada::integer'''.format(codici_via)
     cur3.close()
     workbook3.close()
 
-    logging.info('*****************************************************')
-    logging.info('Uenze non domestiche su strade')
+    logger.info('*****************************************************')
+    logger.info('Uenze non domestiche su strade')
     # non domestiche
     cur2 = con.cursor()
 
@@ -442,7 +485,7 @@ WHERE COD_VIA in ({})
     i=1
     for rr in lista_nondomestiche:
         j=0
-        #logging.debug(len(rr))
+        #logger.debug(len(rr))
         while j<len(rr):
             w2.write(i, j, rr[j])
             j+=1
@@ -452,8 +495,8 @@ WHERE COD_VIA in ({})
     workbook2.close()
 
 
-    logging.info('*****************************************************')
-    logging.info('Civici Utenze Non domestiche su strade')
+    logger.info('*****************************************************')
+    logger.info('Civici Utenze Non domestiche su strade')
     # civici  non domestiche
     workbook4 = xlsxwriter.Workbook(file_civnondomestiche)
     w4 = workbook4.add_worksheet()
@@ -473,13 +516,13 @@ WHERE COD_VIA in ({})
         WHERE COD_VIA in ({}) ORDER BY DESCR_VIA
         '''.format(codici_via)
 
-    #logging.debug(query)
+    #logger.debug(query)
     lista_civnondomestiche = cur4.execute(query)
 
     i=1
     for rr in lista_civnondomestiche:
         j=0
-        #logging.debug(len(rr))
+        #logger.debug(len(rr))
         while j<len(rr):
             w4.write(i, j, rr[j])
             j+=1
@@ -493,8 +536,8 @@ WHERE COD_VIA in ({})
 
 
     if consegne == 1:
-        logging.info('*****************************************************')
-        logging.info('FILE X IDEA')
+        logger.info('*****************************************************')
+        logger.info('FILE X IDEA')
         # civici  non domestiche
         workbook5 = xlsxwriter.Workbook(file_idea)
         date_format = workbook5.add_format({'font_size': 9, 'border':   1,
@@ -524,9 +567,9 @@ WHERE COD_VIA in ({})
             cur5.rowfactory = makeDictFactory(cur5)
             lista_idea=cur5.fetchall()
         except Exception as e:
-            logging.error(query)
-            logging.error(e)
-        #logging.debug(query)
+            logger.error(query)
+            logger.error(e)
+        #logger.debug(query)
         #lista_civnondomestiche = cur4.execute(query)
 
 
@@ -550,7 +593,7 @@ WHERE COD_VIA in ({})
         '''i=1
         for rr in lista_idea:
             j=0
-            #logging.debug(len(rr))
+            #logger.debug(len(rr))
             while j<len(rr):
                 w4.write(i, j, rr[j])
                 j+=1
@@ -561,8 +604,8 @@ WHERE COD_VIA in ({})
 
 
         
-        logging.info('*****************************************************')
-        logging.info('FILE X PORTALE UTENZE')
+        logger.info('*****************************************************')
+        logger.info('FILE X PORTALE UTENZE')
         # civici  non domestiche
         workbook6 = xlsxwriter.Workbook(file_portale_utenze)
         date_format = workbook6.add_format({'font_size': 9, 'border':   1,
@@ -593,9 +636,9 @@ WHERE COD_VIA in ({})
             cur6.rowfactory = makeDictFactory(cur6)
             lista_idea=cur6.fetchall()
         except Exception as e:
-            logging.error(query)
-            logging.error(e)
-        #logging.debug(query)
+            logger.error(query)
+            logger.error(e)
+        #logger.debug(query)
         #lista_civnondomestiche = cur4.execute(query)
 
 
@@ -620,7 +663,7 @@ WHERE COD_VIA in ({})
         '''i=1
         for rr in lista_idea:
             j=0
-            #logging.debug(len(rr))
+            #logger.debug(len(rr))
             while j<len(rr):
                 w4.write(i, j, rr[j])
                 j+=1
@@ -638,7 +681,7 @@ WHERE COD_VIA in ({})
     # Invio mail 
     ###########################
 
-    logging.info("Invio mail")
+    logger.info("Invio mail")
 
 
 
@@ -657,7 +700,7 @@ WHERE COD_VIA in ({})
     #debug_email='roberto.marzocchi@amiu.genova.it'
     #debug_email2='roberto.marzocchi@amiu.genova.it'
     if consegne == 1:
-        debug_email='calvello@amiu.genova.it; assterritorio@amiu.genova.it'
+        debug_email='calvello@amiu.genova.it, assterritorio@amiu.genova.it'
     else: 
         debug_email='assterritorio@amiu.genova.it'
     #debug_email='assterritorio@amiu.genova.it'
@@ -747,15 +790,18 @@ Giorno {}<br><br>
 
 
 
-    logging.info("Richiamo la funzione per inviare mail")
+    logger.info("Richiamo la funzione per inviare mail")
     invio=invio_messaggio(message)
-    logging.info(invio)
+    logger.info(invio)
 
     if invio==200:
-        logging.info("Mail inviata a {} e a nostro indirizzo".format(receiver_email))
+        logger.info("Mail inviata a {} e a nostro indirizzo".format(receiver_email))
     else:
-        logging.error('Problema invio mail. Error:{}'.format(invio))
+        logger.error('Problema invio mail. Error:{}'.format(invio))
 
+
+    # check se c_handller contiene almeno una riga 
+    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
 
 if __name__ == "__main__":
     main(sys.argv[1:])

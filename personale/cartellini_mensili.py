@@ -176,7 +176,14 @@ def main():
                 #inizializzo la scrittura del file
                 writer = PdfWriter()
                 #creo nuovo file
-                outputpdf='{0}/output/cartellini/{1}-{2}-{3}-{4}--BLD--{5}.pdf'.format(path,CF_AZIENDA, CF, anno,mese, matricola)
+                path_cartellini='{0}/output/cartellini'.format(path)
+                path_anno='{0}/{1}'.format(path_cartellini, anno)
+                if not os.path.exists(path_anno):
+                    os.makedirs(path_anno)
+                path_mese='{0}/{1}'.format(path_anno, mese)
+                if not os.path.exists(path_mese):
+                    os.makedirs(path_mese)
+                outputpdf='{0}/{1}-{2}-{3}-{4}--BLD--{5}.pdf'.format(path_mese,CF_AZIENDA, CF, anno,mese, matricola)
             else:
                 # non creo nuovo file
                 logger.warning('sono alla pagina {0}. Due pagine per stesso dipendente CF: {1}, Matr:{2}'.format(i, CF, matricola))

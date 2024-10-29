@@ -185,7 +185,7 @@ def main():
     query_effettuati_totem='''select distinct 
 	e.id, 
 	e.id_percorso,
-	e.datalav::date ,
+	coalesce(ecd.datalav_ok, e.datalav)::date as datalav,
 	t.id_piazzola, 
 	t.num_elementi, 
     t.cronologia,
@@ -199,6 +199,7 @@ def main():
     mu.mail
 	from raccolta.cons_percorsi_raccolta_amiu t
 	join raccolta.effettuati_amiu e on e.id_tappa::bigint =  t.id_tappa::bigint
+ 	left join raccolta.effettuati_correzione_date ecd on e.id_percorso=ecd.id_percorso and e.datalav= ecd.datalav_errata 
   	left join totem.v_personale_ekovision_step1 vpes on vpes.codice_badge::text = e.codice 
 	left join raccolta.causali_testi ct on trim(replace(e.causale, ' - (no in questa giornata)', '')) ilike trim(ct.descrizione)
     left join servizi.mail_ut mu on mu.id_uo::int  = t.id_uo::int
@@ -226,7 +227,7 @@ def main():
     for cc in lista_causali:
         if cc[0] == None:
             logger.error('''La causale {} non è riconosciuta. Andare sull'HUB ggiungere un id nella tabella raccolta.causali_testo'''.format(cc[1])) 
-            error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
+            error_log_mail(errorfile, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
             exit()
     
     logger.info('CONTROLLO CAUSALI TERMINATO')
@@ -242,6 +243,7 @@ def main():
         logger.error(e)
 
 
+    logger.info('Trovo {} righe consuntivate'.format(len(lista_x_piazzola)))
     
     for vv in lista_x_piazzola:
         
@@ -264,7 +266,9 @@ def main():
                             '0111000301',
                             '0111000402',
                             '0111000501',
-                            '0502006201'
+                            '0502006201',
+                            '0507118001',
+                            '0508051001'
                          ):
         
         
@@ -294,7 +298,7 @@ def main():
                 logger.error(query_id_percorso)
                 logger.error('Codice percorso = {}'.format(vv[1]))
                 logger.error('Data rif = {}'.format(vv[2]))
-                error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
+                error_log_mail(errorfile, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
                 exit()
                 
             #logger.debug(id_percorso_sit)
@@ -348,7 +352,7 @@ def main():
                 logger.error('Id percorso SIT = {}'.format(id_percorso_sit))
                 logger.error('id_piazzola = {}'.format(vv[3]))
                 logger.error(e)
-                error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
+                error_log_mail(errorfile, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
                 exit()
             
             # vv[4] num_elementi
@@ -384,7 +388,7 @@ def main():
                     logger.error(vv[11])
                     logger.error('''{0} {1} {2} {3}'''.format(vv[1], vv[2].strftime('%Y-%m-%d'), vv[11], int(vv[0])))
                     logger.error(e)
-                    error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
+                    error_log_mail(errorfile, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
                     exit()
                                     
                 # se ci fosse un punteggio superiore o una consuntivazione del RUT (serve fino a quando il backoffice è di WingSOFT non servirà più dopo)
@@ -709,7 +713,7 @@ def main():
            
 
     # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
     logger.info("chiudo le connessioni in maniera definitiva")
     
     currc.close()

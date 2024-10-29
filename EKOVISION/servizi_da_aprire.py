@@ -110,7 +110,8 @@ from invio_messaggio import *
 
 def main():
     
-    
+    logger.info('Il PID corrente è {0}'.format(os.getpid()))
+
     # Get today's date
     #presentday = datetime.now() # or presentday = datetime.today()
     oggi=datetime.today()

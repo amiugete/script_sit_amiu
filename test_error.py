@@ -103,7 +103,8 @@ def main():
     if  count >0:
         print('''C'è un problema''')
         
-    subject = "PROBLEMA SCRIPT PYTHON"
+    
+    subject = "TEST ERROR LOG"
     body = '''TEST creazione file {} e {}  \n\n'''.format(errorfile ,logfile)
     #sender_email = user_mail
     receiver_email='assterritorio@amiu.genova.it'
@@ -119,11 +120,21 @@ def main():
 
     # Add body to email
     message.attach(MIMEText(body, "plain"))
-    check=invio_messaggio(message)
-    logger.info(check)
+    #check=invio_messaggio(message)
+    #logger.info(check)
     
     
-    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it; roberto.marzocchi@gmail.com', os.path.basename(__file__), logger)
+    #error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+
+    #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+
+    #error_log_mail(errorfile, 'assterritorio@amiu.genova.it; roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+
+    #error_log_mail(errorfile, 'assterritorio@amiu.genova.it, roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+
+    #error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
+
+    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
 
 if __name__ == "__main__":
     main()  

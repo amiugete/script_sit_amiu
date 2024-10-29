@@ -220,7 +220,7 @@ def main():
     for cc in lista_causali:
         if cc[0] == None:
             logger.error('''La causale {} non è riconosciuta. Andare sull'HUB ggiungere un id nella tabella spazzamento.causali_testo'''.format(cc[1])) 
-            error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
+            error_log_mail(errorfile, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
             exit()
     
     logger.info('CONTROLLO CAUSALI TERMINATO')
@@ -288,7 +288,7 @@ def main():
                 logger.error('Id Via = {}'.format(vv[3]))
                 logger.error('Nota = {}'.format(vv[4]))
                 logger.error(e)
-                error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
+                error_log_mail(errorfile, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
                 exit()
             for aa in lista_aste:
                 #logger.debug(aa[0])       
@@ -333,7 +333,7 @@ def main():
                             logger.error(int(aa[3]))
                             logger.error(select_componenti)
                             logger.error(e)
-                            error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
+                            error_log_mail(errorfile, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
                             exit()
                         for cc in componenti:
                             cod_percorso.append(vv[1])
@@ -502,7 +502,7 @@ def main():
                     logger.error(' - Data: {}'.format(date_distinct[k]))
                     #logger.error('Id Scheda: {}'.format(id_scheda[k]))
                     # check se c_handller contiene almeno una riga 
-                    error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
+                    error_log_mail(errorfile, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
                     logger.info("chiudo le connessioni in maniera definitiva")
                     currc.close()
                     #currc1.close()
@@ -627,7 +627,7 @@ def main():
                             logger.error('Id Via = {}'.format(vv[3]))
                             logger.error('Nota = {}'.format(vv[4]))
                             logger.error(e)
-                            error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
+                            error_log_mail(errorfile, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
                             exit()
                         for aa in lista_aste:
                             #logger.debug(aa[0])       
@@ -647,7 +647,7 @@ def main():
                                     logger.error(int(aa[3]))
                                     logger.error(select_componenti)
                                     logger.error(e)
-                                    error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
+                                    error_log_mail(errorfile, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
                                     exit()
                                 for cc in componenti:
                                     cod_percorso.append(vv[1])
@@ -801,7 +801,7 @@ def main():
            
     
     # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
     logger.info("chiudo le connessioni in maniera definitiva")
     
     currc.close()

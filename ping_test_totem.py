@@ -241,7 +241,7 @@ def main():
         subject = "ALERT MAIL - Totem offline"
         
         ##sender_email = user_mail
-        receiver_email='assterritorio@amiu.genova.it; asstelefoni@amiu.genova.it'
+        receiver_email='assterritorio@amiu.genova.it, asstelefoni@amiu.genova.it'
         debug_email='riccardo.piana@amiu.genova.it'
 
         mail_test='roberto.marzocchi@amiu.genova.it'
@@ -284,7 +284,7 @@ def main():
         
         
     # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'assterritorio@amiu.genova.it; pianar@amiu.genova.it', os.path.basename(__file__), logger)
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
     logger.info("chiudo le connessioni in maniera definitiva")
     
     currc.close()
