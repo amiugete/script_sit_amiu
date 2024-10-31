@@ -120,6 +120,7 @@ def main():
     
     filenames = []
     cf_aziende_file=[]
+    folder_aziende=[]
     
     a=0
     while a<len(AZIENDE):
@@ -127,6 +128,7 @@ def main():
             if filename.lower().endswith('.pdf')and filename not in filenames_check:
                 filenames.append(os.path.join(filename))
                 cf_aziende_file.append(CFS_AZIENDE[a])
+                folder_aziende.append(AZIENDE[a])
         a+=1
         
 
@@ -149,7 +151,7 @@ def main():
         logger.info('Processo il file PDF dal nome {0}, che ho trovato in questa cartella'.format(filenames[k]))
         
         # creating a pdf reader object 
-        reader = PdfReader('{0}/input/cartellini/{1}'.format(path, filenames[k])) 
+        reader = PdfReader('{0}/input/cartellini/{2}/{1}'.format(path, filenames[k],folder_aziende[k])) 
         
         # printing number of pages in pdf file 
         logger.info('Il file PDF ha {0} pagine di cui scarto la prima'.format(len(reader.pages)))
@@ -162,6 +164,7 @@ def main():
         
 
         i=1 # impostando 1 salto la prima pagina, se non volessi saltarla dovrei mettere 0 
+        count_doc=1
         while i<len(reader.pages):
             # creating a page object 
             page = reader.pages[i] 
@@ -204,6 +207,7 @@ def main():
                 if not os.path.exists(path_mese):
                     os.makedirs(path_mese)
                 outputpdf='{0}/{1}-{2}-{3}-{4}--BLD--{5}.pdf'.format(path_mese, cf_aziende_file[k], CF, anno,mese, matricola)
+                count_doc+=1
             else:
                 # non creo nuovo file
                 logger.warning('sono alla pagina {0}. Due pagine per stesso dipendente CF: {1}, Matr:{2}'.format(i, CF, matricola))
@@ -224,7 +228,7 @@ def main():
 
         giorno_file=datetime.today().strftime('%Y/%m/%d %H:%M:%S')
         f = open('{}/{}'.format(path, file_processati), "a")
-        f.write('{};{}\n'.format(filenames[k], giorno_file))
+        f.write('{};{};{}\n'.format(filenames[k], giorno_file, count_doc))
         f.close()
         
         k+=1
