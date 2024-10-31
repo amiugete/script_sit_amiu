@@ -118,7 +118,8 @@ def main():
                    'SETTEMBRE',
                    'OTTOBRE',
                    'NOVEMBRE',
-                   'DICEMBRE']
+                   'DICEMBRE', 
+                   'TREDIC']
     
     
     
@@ -166,6 +167,7 @@ def main():
         
 
         i=1 # impostando 1 salto la prima pagina, se non volessi saltarla dovrei mettere 0 
+        count_doc=0
         while i<len(reader.pages):
             # creating a page object 
             page = reader.pages[i] 
@@ -179,7 +181,7 @@ def main():
             kk=0
             check_azienda=0
             while kk<len(lines):
-                #logger.debug('{}, {}'.format(kk,lines[kk]))
+                logger.debug('{}, {}'.format(kk,lines[kk]))
                 if check_azienda==0 and CFS_AZIENDE[0] in lines[kk]:
                     CF_AZIENDA= CFS_AZIENDE[0]
                     check_azienda=1
@@ -233,7 +235,7 @@ def main():
                 
                 CF=lines[54].replace(nome.upper(),'')[:16]
                 if len(CF.strip())<16: #in questo caso dovrei essere nella caso 2
-                    logger.debug('''c'è indirizzo amiu nell'intestazione e il codice fiscale è alla riga 55''')
+                    #logger.debug('''c'è indirizzo amiu nell'intestazione e il codice fiscale è alla riga 55''')
                     CF=lines[55].replace(nome.upper(),'')[:16]
                 
                 # cerco se c'è uno slash e nel caso vado alla linea 53 
@@ -252,17 +254,20 @@ def main():
                 '''
                 logger.debug(lines[(len(lines)-3)].strip())
                 logger.debug(lines[(len(lines)-2)].strip())
+                #logger.debug(len(lines[(len(lines)-3)].strip()))
                 
                 check_periodo=0
 
                 # CASO 1 (vedi sopra)
                 m=0
                 while m<len(mesi_italiano):
+                    #logger.debug(m)
                     # se manca IBAN mese in posizione 0, se no in posizione 1 assieme a IBAN
-                    if mesi_italiano[m] in lines[(len(lines)-3)].strip().split()[0] or mesi_italiano[m] in lines[(len(lines)-3)].strip().split()[1] :
-                        mese=str(m+1).rjust(2,'0')
-                        check_periodo=1
-                        logger.debug('sono nel caso 1')
+                    if len(lines[(len(lines)-3)].strip().split())>1:
+                        if mesi_italiano[m] in lines[(len(lines)-3)].strip().split()[0] or mesi_italiano[m] in lines[(len(lines)-3)].strip().split()[1] :
+                            logger.debug('sono nel caso 1')
+                            mese=str(m+1).rjust(2,'0')
+                            check_periodo=1
                     m+=1
                 
                 
@@ -271,12 +276,22 @@ def main():
                     logger.debug('sono nel caso 2')
                     m=0
                     while m<len(mesi_italiano):
-                        if mesi_italiano[m] in lines[(len(lines)-2)].strip().split()[0] :
-                            mese=str(m+1).rjust(2,'0')
-                            check_periodo=1
+                        #logger.debug(m)
+                        if len(lines[(len(lines)-2)].strip().split())>1:
+                            #logger.debug(mesi_italiano[m])
+                            if mesi_italiano[m] in lines[(len(lines)-2)].strip().split()[0] or mesi_italiano[m] in lines[(len(lines)-2)].strip().split()[1]:
+                                mese=str(m+1).rjust(2,'0')
+                                check_periodo=1
+                        else:
+                            if mesi_italiano[m] in lines[(len(lines)-2)].strip().split()[0] :
+                                mese=str(m+1).rjust(2,'0')
+                                check_periodo=1
                         m+=1
                         # ANNO CASO 2
-                        anno= lines[(len(lines)-2)].strip().split()[1][:4]
+                        try:
+                            anno = int(lines[(len(lines)-2)].strip().split()[2])
+                        except:
+                            anno = int(lines[(len(lines)-2)].strip().split()[1][:4])
                 # ANNO CASO 1
                 else:      
                     # se manca IBAN sono nella posizione 1 e non 2 
@@ -291,6 +306,7 @@ def main():
                 logger.debug(CF)
                 logger.debug(mese)
                 logger.debug(anno)
+                
                 
             
                 
@@ -311,6 +327,7 @@ def main():
                     os.makedirs(path_mese)
                 
                 outputpdf='{0}/{1}-{2}-{3}-{4}--LUL1--{5}.pdf'.format(path_mese,CF_AZIENDA, CF, anno,mese, matricola)
+                count_doc+=1
             else:
                 # non creo nuovo file
                 logger.warning('sono alla pagina {0}. Due pagine per stesso dipendente CF: {1}, Matr:{2}'.format(i, CF, matricola))
@@ -331,7 +348,7 @@ def main():
 
         giorno_file=datetime.today().strftime('%Y/%m/%d %H:%M:%S')
         f = open('{}/{}'.format(path, file_processati), "a")
-        f.write('{};{}\n'.format(filenames[k], giorno_file))
+        f.write('{};{};{}\n'.format(filenames[k], giorno_file, count_doc))
         f.close()
         
         k+=1

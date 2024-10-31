@@ -166,6 +166,7 @@ def main():
         
 
         i=0 # impostando 1 salto la prima pagina, se non volessi saltarla dovrei mettere 0 
+        count_doc=0
         while i<len(reader.pages):
             # creating a page object 
             page = reader.pages[i] 
@@ -240,6 +241,7 @@ def main():
                 writer = PdfWriter()
                 #creo nuovo file
                 outputpdf='{0}/output/cu/{1}-{2}-{3}-12--CUD--{4}.pdf'.format(path,CF_AZIENDA, CF, anno, matricola)
+                count_doc+=1
             else:
                 # non creo nuovo file
                 logger.debug('sono alla pagina {0}. Più pagine per stesso dipendente CF: {1}, Matr:{2}'.format(i, CF, matricola))
@@ -259,7 +261,7 @@ def main():
 
         giorno_file=datetime.today().strftime('%Y/%m/%d %H:%M:%S')
         f = open('{}/{}'.format(path, file_processati), "a")
-        f.write('{};{}\n'.format(filenames[k], giorno_file))
+        f.write('{};{};{}\n'.format(filenames[k], giorno_file,count_doc))
         f.close()
         
         k+=1
