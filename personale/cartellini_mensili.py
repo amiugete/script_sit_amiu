@@ -159,7 +159,7 @@ def main():
         reader = PdfReader('{0}/input/cartellini/{2}/{1}'.format(path, filenames[k],folder_aziende[k])) 
         
         # printing number of pages in pdf file 
-        logger.info('Il file PDF ha {0} pagine di cui scarto la prima'.format(len(reader.pages)))
+        logger.info('Il file PDF ha {0} pagine'.format(len(reader.pages)))
 
 
 
@@ -169,7 +169,7 @@ def main():
         
 
         i=0 # impostando 1 salto la prima pagina, se non volessi saltarla dovrei mettere 0 
-        count_doc=1
+        count_doc=0
         while i<len(reader.pages):
             # creating a page object 
             page = reader.pages[i] 
@@ -181,54 +181,57 @@ def main():
             #logger.debug(len(lines)) 
             # Iterate through each line 
             
-            if len(lines)> 4:
-                presenze=lines[2]
-                persona=lines[3]
-                mese_anno=presenze.split('PRESENZE DEL MESE')[1].strip().split('SEDE')[0]
-                anno=int(mese_anno.split('/')[1])
-                mese=int(mese_anno.split('/')[0])
-                
-                #logger.debug(mese)
-                matricola_old=matricola
-                CF_old=CF
-                
-                matricola= int(persona.split()[1].strip())
-                #logger.debug(matricola)
-                CF= persona.split()[len(persona.split())-1].strip()
-                #logger.debug(CF)
-            #exit()
-            
-            
-
-            if CF!=CF_old:
-                #inizializzo la scrittura del file
-                writer = PdfWriter()
-                #creo nuovo file
-                path_cartellini='{0}/output/cartellini'.format(path)
-                path_anno='{0}/{1}'.format(path_cartellini, anno)
-                if not os.path.exists(path_anno):
-                    os.makedirs(path_anno)
-                path_mese='{0}/{1}'.format(path_anno, mese)
-                if not os.path.exists(path_mese):
-                    os.makedirs(path_mese)
-                outputpdf='{0}/{1}-{2}-{3}-{4}--BLD--{5}.pdf'.format(path_mese, cf_aziende_file[k], CF, anno,mese, matricola)
-                if os.path.isfile(outputpdf):
-                        outputpdf='{0}/{1}-{2}-{3}-{4}--BLD--{5}_bis.pdf'.format(path_mese, cf_aziende_file[k], CF, anno,mese, matricola)
-                        a_anno.append(anno)
-                        a_mese.append(mese)
-                        a_CF.append(CF)
-                        a_file.append(outputpdf)
-                count_doc+=1
+            if len(lines)<=4:
+                logger.error('Scarto la pagina {}'.format(i))
             else:
-                # non creo nuovo file
-                logger.warning('sono alla pagina {0}. Due pagine per stesso dipendente CF: {1}, Matr:{2}'.format(i, CF, matricola))
-                logger.warning ('il file {0} è costituito da 2 pagine'.format(outputpdf))
+                if len(lines)> 4:
+                    presenze=lines[2]
+                    persona=lines[3]
+                    mese_anno=presenze.split('PRESENZE DEL MESE')[1].strip().split('SEDE')[0]
+                    anno=int(mese_anno.split('/')[1])
+                    mese=int(mese_anno.split('/')[0])
+                    
+                    #logger.debug(mese)
+                    matricola_old=matricola
+                    CF_old=CF
+                    
+                    matricola= int(persona.split()[1].strip())
+                    #logger.debug(matricola)
+                    CF= persona.split()[len(persona.split())-1].strip()
+                    #logger.debug(CF)
+                #exit()
                 
-            # aggiungo la pagina al file
-            writer.add_page(reader.pages[i]) 
-            # esporto il file 
-            with open(outputpdf, "ab") as f: 
-                writer.write(f)
+                
+
+                if CF!=CF_old:
+                    #inizializzo la scrittura del file
+                    writer = PdfWriter()
+                    #creo nuovo file
+                    path_cartellini='{0}/output/cartellini'.format(path)
+                    path_anno='{0}/{1}'.format(path_cartellini, anno)
+                    if not os.path.exists(path_anno):
+                        os.makedirs(path_anno)
+                    path_mese='{0}/{1}'.format(path_anno, mese)
+                    if not os.path.exists(path_mese):
+                        os.makedirs(path_mese)
+                    outputpdf='{0}/{1}-{2}-{3}-{4}--BLD--{5}.pdf'.format(path_mese, cf_aziende_file[k], CF, anno,mese, matricola)
+                    if os.path.isfile(outputpdf):
+                            outputpdf='{0}/{1}-{2}-{3}-{4}--BLD--{5}_bis.pdf'.format(path_mese, cf_aziende_file[k], CF, anno,mese, matricola)
+                            a_anno.append(anno)
+                            a_mese.append(mese)
+                            a_CF.append(CF)
+                            a_file.append(outputpdf)
+                    count_doc+=1
+                else:
+                    # non creo nuovo file
+                    logger.warning('sono alla pagina {0}. Due pagine per stesso dipendente CF: {1}, Matr:{2}'.format(i, CF, matricola))
+                    logger.warning ('il file {0} è costituito da 2 pagine'.format(outputpdf))
+                    
+                # aggiungo la pagina al file
+                writer.add_page(reader.pages[i]) 
+                # esporto il file 
+                with open(outputpdf, "ab") as f: 
+                    writer.write(f)
                 
             i+=1
             #exit()
