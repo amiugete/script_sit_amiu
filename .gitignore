@@ -29,6 +29,7 @@ personale/output/cu/*.pdf
 personale/output/*.pdf
 personale/log/*.log
 personale/file_processati.csv
+personale/file_anomalie.csv
 
 
 # tengo solo un esempio non tutta una serie di ul
