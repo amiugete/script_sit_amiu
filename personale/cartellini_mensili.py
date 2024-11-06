@@ -245,5 +245,15 @@ def main():
         k+=1
 
 
+    aa=0
+    f2 = open('{}/{}'.format(path, file_anomalie), "a")
+    while aa<len(a_file):
+        f2.write('cartellini;{};{};{};{}\n'.format(a_anno[aa], a_mese[aa], a_CF[aa], a_file[aa]))
+        aa+=1
+    f2.close()
+    
+    
+    
+    
 if __name__ == "__main__":
     main()       
