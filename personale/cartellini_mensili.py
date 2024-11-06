@@ -99,11 +99,16 @@ f_handler.setFormatter(cc_format)
 def main():
     
     # PARAMETRI INIZIALI 
-    CFS_AZIENDE=['03818890109', '01266290996']
-    AZIENDE=['AMIU', 'BONIFICHE']
+    CFS_AZIENDE=['03818890109', '01266290996', '01426960991']
+    AZIENDE=['AMIU', 'BONIFICHE', 'SATER']
     file_processati='file_processati.csv'
     
-    
+    # anomalie
+    a_anno=[]
+    a_mese=[]
+    a_CF=[]
+    a_file=[]
+    file_anomalie='file_anomalie.csv'
     
     
     filenames_check = []
@@ -163,7 +168,7 @@ def main():
         
         
 
-        i=1 # impostando 1 salto la prima pagina, se non volessi saltarla dovrei mettere 0 
+        i=0 # impostando 1 salto la prima pagina, se non volessi saltarla dovrei mettere 0 
         count_doc=1
         while i<len(reader.pages):
             # creating a page object 
@@ -207,6 +212,12 @@ def main():
                 if not os.path.exists(path_mese):
                     os.makedirs(path_mese)
                 outputpdf='{0}/{1}-{2}-{3}-{4}--BLD--{5}.pdf'.format(path_mese, cf_aziende_file[k], CF, anno,mese, matricola)
+                if os.path.isfile(outputpdf):
+                        outputpdf='{0}/{1}-{2}-{3}-{4}--BLD--{5}_bis.pdf'.format(path_mese, cf_aziende_file[k], CF, anno,mese, matricola)
+                        a_anno.append(anno)
+                        a_mese.append(mese)
+                        a_CF.append(CF)
+                        a_file.append(outputpdf)
                 count_doc+=1
             else:
                 # non creo nuovo file

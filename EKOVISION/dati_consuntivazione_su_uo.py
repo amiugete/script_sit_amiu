@@ -872,7 +872,7 @@ def main():
                                             
                                             if len(conferimenti_su_uo)==0:
                                                 # nelle note ci metto l'ID
-                                                insert_query='''INSERT INTO UNIOPE.TB_PESI_PERCORSI (
+                                                """insert_query='''INSERT INTO UNIOPE.TB_PESI_PERCORSI (
                                                 ID_SER_PER_UO, DATA_PERCORSO, 
                                                 DATA_CONFERIMENTO, ORA_CONFERIMENTO,
                                                 PESO, DESTINAZIONE, PROVENIENZA, INS_DATE, 
@@ -907,6 +907,55 @@ def main():
                                                     WHERE ID_SER_PER_UO=:c11
                                                     )),
                                                 :c12)'''
+                                                """
+                                                
+                                                # ho corretto il caso di UT TITOLARE DITTE TERZE
+                                                insert_query='''INSERT INTO UNIOPE.TB_PESI_PERCORSI (
+                                                ID_SER_PER_UO, DATA_PERCORSO, 
+                                                DATA_CONFERIMENTO, ORA_CONFERIMENTO,
+                                                PESO, DESTINAZIONE, PROVENIENZA, INS_DATE, 
+                                                ID_UO_TITOLARE, 
+                                                COD_CER, DESCR_RIFIUTO, NOTE) 
+                                                VALUES
+                                                (:c1, to_date(:c2, 'YYYYMMDD'), 
+                                                to_date(:c3, 'YYYYMMDD'), 
+                                                :c4,
+                                                :c5, 
+                                                (SELECT ID_DESTINAZIONE 
+                                                FROM ANAGR_DESTINAZIONI ad 
+                                                WHERE IMP_COD_ECOS =:c6 
+                                                AND UNI_COD_ECOS =:c7),'RIMESSA', sysdate,
+                                                (CASE 
+                                                    WHEN 
+                                                        (SELECT au.ID_ZONATERRITORIALE FROM ANAGR_SER_PER_UO aspu1 
+                                                        JOIN anagr_uo au ON au.ID_UO =aspu1.id_Uo
+                                                        WHERE ID_SER_PER_UO =  :c8 ) = 7
+                                                    THEN 
+                                                        (SELECT id_uo FROM anagr_ser_per_uo WHERE ID_SER_PER_UO = :c9 ) 
+                                                ELSE 
+                                                    (SELECT ID_UT_TITOLARE FROM PERCORSI_UT_TITOLARE put
+                                                    WHERE ID_PERCORSO = :c10 AND 
+                                                    to_date(:c11, 'YYYYMMDD') BETWEEN DATA_INIZIO AND DATA_FINE)
+                                                END),
+                                                (SELECT as2.CER  
+                                                FROM ANAGR_SERVIZI as2 
+                                                JOIN ANAGR_CER ac ON ac.CODICE_CER = as2.CER  
+                                                WHERE ID_SERVIZIO =
+                                                    (SELECT ID_SERVIZIO 
+                                                    FROM ANAGR_SER_PER_UO 
+                                                    WHERE ID_SER_PER_UO=:c12
+                                                    )),
+                                                (SELECT ac.DESCR_SEMPL  
+                                                FROM ANAGR_SERVIZI as2 
+                                                JOIN ANAGR_CER ac ON ac.CODICE_CER = as2.CER  
+                                                WHERE ID_SERVIZIO =
+                                                    (SELECT ID_SERVIZIO 
+                                                    FROM ANAGR_SER_PER_UO 
+                                                    WHERE ID_SER_PER_UO=:c13
+                                                    )),
+                                                :c14)'''
+                                                
+                                                
                                                 
                                                 try:
                                                     cur.execute(insert_query, (
@@ -917,6 +966,8 @@ def main():
                                                                         peso_netto,
                                                                         imp_cod_ecos,
                                                                         uni_cod_ecos,
+                                                                        id_ser_per_uo,
+                                                                        id_ser_per_uo,
                                                                         data[i]['codice_serv_pred'],
                                                                         data[i]['data_esecuzione_prevista'],
                                                                         id_ser_per_uo,
@@ -926,7 +977,7 @@ def main():
                                                             )
                                                 except Exception as e:
                                                     logger.error(insert_query)
-                                                    logger.error('1:{}, 2:{}, 3:{}, 4:{}, 5:{}, 6:{}, 7:{}, 8:{}, 9:{}, 10{}, 11:{}, 12:{}'.format(
+                                                    logger.error('1:{}, 2:{}, 3:{}, 4:{}, 5:{}, 6:{}, 7:{}, 8:{}, 9:{}, 10{}, 11:{}, 12:{}, 13:{}, 14:{}'.format(
                                                                         id_ser_per_uo,
                                                                         data[i]['data_esecuzione_prevista'],
                                                                         data_conferimento,
@@ -934,6 +985,8 @@ def main():
                                                                         peso_netto,
                                                                         imp_cod_ecos,
                                                                         uni_cod_ecos,
+                                                                        id_ser_per_uo,
+                                                                        id_ser_per_uo,
                                                                         data[i]['codice_serv_pred'],
                                                                         data[i]['data_esecuzione_prevista'],
                                                                         id_ser_per_uo,

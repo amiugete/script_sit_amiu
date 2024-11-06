@@ -20,6 +20,7 @@ personale/input/cedolini/*.pdf
 personale/input/cartellini/*.pdf
 personale/input/cartellini/AMIU/*.pdf
 personale/input/cartellini/BONIFICHE/*.pdf
+personale/input/cartellini/SATER/*.pdf
 personale/input/cu/*.pdf
 personale/output/cedolini/**
 personale/output/cartellini/**
