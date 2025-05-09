@@ -118,7 +118,7 @@ def main():
         for ll in csvFile:
             filenames_check.append(ll[0])
     
-    logger.debug(filenames_check)
+    #logger.debug(filenames_check)
     #exit()
     
     
@@ -181,6 +181,12 @@ def main():
             #logger.debug(len(lines)) 
             # Iterate through each line 
             
+            '''l=0
+            while l <len(lines):
+                logger.debug('Linea: {} - Testo letto: {}'.format(l, lines[l]))
+                l+=1
+            '''
+            
             if len(lines)<=4:
                 logger.error('Scarto la pagina {}'.format(i))
             else:
@@ -194,8 +200,9 @@ def main():
                     #logger.debug(mese)
                     matricola_old=matricola
                     CF_old=CF
-                    
-                    matricola= int(persona.split()[1].strip())
+                    #logger.debug(persona)
+                    #matricola= int(persona.split()[1].strip())
+                    matricola= int(persona.replace('MATRICOL ', '').replace('CODICE : ','').split()[0].strip())
                     #logger.debug(matricola)
                     CF= persona.split()[len(persona.split())-1].strip()
                     #logger.debug(CF)

@@ -99,22 +99,27 @@ preconsuntivazioni='{}/EKOVISION/preconsuntivazioni'.format(path)
 consuntivazioni='{}/EKOVISION/consuntivazioni'.format(path)
 timbrature='{}/EKOVISION/timbrature'.format(path)
 assenze='{}/EKOVISION/assenze'.format(path)
+eko_pesi='{}/EKOVISION/pesi'.format(path)
 
 json_ekovision='{}/EKOVISION/eko_output'.format(path)
 
+csv_ekovision_personale='{}/EKOVISION/inaz_output'.format(path)
 
 personale_ca_o='{}/personale/output/cartellini'.format(path)
 personale_ce_o='{}/personale/output/cedolini'.format(path)
 personale_cu_o='{}/personale/output/cu'.format(path)
 
+report='{}/report'.format(path)
 
 cartelle_da_pulire=[logpath, variazioni, idea, ecopunti, utenze, 
                     consuntivazioni, preconsuntivazioni, timbrature, assenze, json_ekovision,
-                    personale_ca_o, personale_ce_o, personale_cu_o]
+                    personale_ca_o, personale_ce_o, personale_cu_o, csv_ekovision_personale, report,
+                    eko_pesi]
 
 giorni_pulizia = [ 14, 14, 7, 14, 14,
           7, 7, 7, 7, 1,
-          1, 1, 1]
+          1, 1, 1, 7, 7,
+          7]
 
 c=0
 while c < len(cartelle_da_pulire):
@@ -126,5 +131,16 @@ while c < len(cartelle_da_pulire):
                 if os.path.isfile(f):
                     #print(f)
                     os.remove(os.path.join(path, f))
-    logging.debug('Sono arrivato qua')
+                if os.path.isdir(f):
+                    logger.debug('Guardo la sottocartella {}'.format(f))
+                    for ff in os.listdir(f):
+                        if ff not in ('README.md'):
+                            ff = os.path.join(f, ff)
+                            if os.stat(ff).st_mtime < now - giorni_pulizia[c] * 86400: 
+                                if os.path.isfile(ff):
+                                    #print(f)
+                                    os.remove(os.path.join(path, ff))    
+                            
+                              
+    logger.debug('Sono arrivato qua')
     c+=1

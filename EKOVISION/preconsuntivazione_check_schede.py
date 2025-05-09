@@ -49,9 +49,10 @@ import json
 import logging
 
 path=os.path.dirname(sys.argv[0]) 
+nome=os.path.basename(__file__).replace('.py','')
 #tmpfolder=tempfile.gettempdir() # get the current temporary directory
-logfile='{}/log/preconsunsuntivazione.log'.format(path)
-errorfile='{}/log/error_preconsuntivazione.log'.format(path)
+logfile='{0}/log/{1}.log'.format(path,nome)
+errorfile='{0}/log/error_{1}.log'.format(path,nome)
 #if os.path.exists(logfile):
 #    os.remove(logfile)
 
@@ -332,7 +333,7 @@ and data_inizio_validita >= now()::date - 14'''
             gg+=1
     
     curr.close()
-    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
     exit()
     curr = conn.cursor()
     
@@ -538,7 +539,7 @@ and data_inizio_validita >= now()::date - 14'''
     
     
     # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
     logger.info("chiudo le connessioni in maniera definitiva")
     curr.close()
     conn.close()

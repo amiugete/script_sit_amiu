@@ -5,7 +5,7 @@
 # Roberto Marzocchi
 
 '''
-Lo script della gestione e invio dei dati delle timbrature
+Lo script si occupa della gestione e invio dei dati delle assenze
 
 DA esipertbo (dblink su UO) minvio i dati sul db dwh per creare un progressivo e gestire le date/ora di aggiornamento
 
@@ -129,7 +129,7 @@ def makeDictFactory(cursor):
 def main():
       
 
-
+    logger.info('Il PID corrente è {0}'.format(os.getpid()))
     # preparo gli array 
     id=[]
     cod_dip=[]
@@ -192,7 +192,7 @@ from personale_ekovision.invio_assenze_ekovision iae'''
     except Exception as e:
         logger.error(select_x_invio)
         logger.error(e)
-        error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+        error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
         exit()
     
     for d in data:
@@ -206,7 +206,8 @@ from personale_ekovision.invio_assenze_ekovision iae'''
     query_timbrature='''SELECT ID_PERSONA,
         CLTIMBRA AS "DATA", lpad(to_char(MTTIMBRA), 4,'0') AS "ORARIO",
         trim(CDVERSOT) AS VERSO,
-        trim(FLMANUAL) AS NOTE 
+        trim(FLMANUAL) AS NOTE, 
+        MATRICOLA, AZIENDA
         FROM esipertbo.v_timbr_eko@sipedb a
         WHERE (cltimbra > :dd) 
         OR (trim(FLMANUAL) IS NOT NULL AND cltimbra > to_char(trunc((sysdate - interval '2' MONTH), 'MONTH'), 'YYYYMMDD'))
@@ -237,7 +238,8 @@ from personale_ekovision.invio_assenze_ekovision iae'''
         ORE_ASS_AL,
         MTORAFIN AS ORA_E,
         CDCAUSAL AS COD_CAU_ASS, 
-        ADCAUSAL AS DES_CAU_ASS
+        ADCAUSAL AS DES_CAU_ASS, 
+        MATRICOLA, AZIENDA
         FROM esipertbo.v_assenze_eko@sipedb
         WHERE 
         clinival > to_char(trunc((sysdate - interval '2' MONTH), 'MONTH'), 'YYYYMMDD')
@@ -283,7 +285,7 @@ from personale_ekovision.invio_assenze_ekovision iae'''
             logger.error('Data = {}'.format(tt["DT_ASS_DAL"]))
             logger.error('Ora = {}'.format(tt["ORE_ASS_DAL"]))
             logger.error(e)
-            error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+            error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
             exit()
         
         if len(check_t_e)==0:
@@ -294,15 +296,18 @@ from personale_ekovision.invio_assenze_ekovision iae'''
                 dt_ass_dal, ore_ass_dal,
                 dt_ass_al, ore_ass_al,
                 cod_cau_ass, des_cau_ass,
-                flg_deleted, flg_ass_contr, data_ultima_modifica, ora_s, ora_e)
+                flg_deleted, flg_ass_contr, data_ultima_modifica, ora_s, ora_e, cod_dipendente)
                 VALUES ( (select (coalesce(max(id),0)+1) from personale_ekovision.imp_personale_assenze),
                 %s,
                 %s, %s,
                 %s, %s,
                 %s, %s,
-                0, 1, now(), %s, %s ) '''
+                0, 1, now(), %s, %s,
+                concat(%s,'_', %s)) '''
             try:
-                curr1.execute(query_insert, (int(tt["COD_DIP"]), int(tt["DT_ASS_DAL"]), tt["ORE_ASS_DAL"],tt["DT_ASS_AL"], tt["ORE_ASS_AL"], tt["COD_CAU_ASS"], tt["DES_CAU_ASS"] , int(tt["ORA_S"]), int(tt["ORA_E"])))     
+                curr1.execute(query_insert, (int(tt["COD_DIP"]), int(tt["DT_ASS_DAL"]), tt["ORE_ASS_DAL"],tt["DT_ASS_AL"],
+                                             tt["ORE_ASS_AL"], tt["COD_CAU_ASS"], tt["DES_CAU_ASS"] , int(tt["ORA_S"]), int(tt["ORA_E"]),
+                                            tt["MATRICOLA"], tt["AZIENDA"]))     
             except Exception as e:
                 logger.error(query_insert)
                 logger.error('Codice persona = {}'.format(int(tt["COD_DIP"])))
@@ -310,17 +315,23 @@ from personale_ekovision.invio_assenze_ekovision iae'''
                 logger.error('ORE_ASS_DAL = {}'.format(tt["ORE_ASS_DAL"]))
                 logger.error('DT_ASS_AL = {}'.format(tt["DT_ASS_AL"]))
                 logger.error('ORE_ASS_AL = {}'.format(tt["ORE_ASS_AL"]))
+                logger.error('Matricola = {}'.format(tt["MATRICOLA"]))
+                logger.error('Azienda = {}'.format(tt["AZIENDA"]))
                 logger.error(e)
-                error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                 exit()
         else:
             for tp in  check_t_e: # tp sta per assenza su PostgreSQL
                 if tp[6].strip()!=tt["COD_CAU_ASS"].strip() or tp[7].strip()!= tt["DES_CAU_ASS"].strip() or int(tp[4])!=int(tt["DT_ASS_AL"]) or int(tp[5])!=int(tt["ORE_ASS_AL"]): # allora faccio update
                     query_update='''UPDATE personale_ekovision.imp_personale_assenze
-                    SET  cod_cau_ass=%s, des_cau_ass=%s, dt_ass_dal=%s, ore_ass_dal=%s, dt_ass_al=%s, ore_ass_al=%s, data_ultima_modifica=now()
+                    SET  cod_cau_ass=%s, des_cau_ass=%s, dt_ass_dal=%s, ore_ass_dal=%s, dt_ass_al=%s, ore_ass_al=%s, data_ultima_modifica=now(),
+                    cod_dipendente = concat(%s,'_',%s)
                     WHERE id=%s ; '''
                     try:
-                        curr1.execute(query_update, (tt["COD_CAU_ASS"],tt["DES_CAU_ASS"],tt["DT_ASS_DAL"], tt["ORE_ASS_DAL"], tt["DT_ASS_AL"], tt["ORE_ASS_AL"], tp[0]))     
+                        curr1.execute(query_update, (tt["COD_CAU_ASS"],tt["DES_CAU_ASS"],tt["DT_ASS_DAL"],
+                                                     tt["ORE_ASS_DAL"], tt["DT_ASS_AL"], tt["ORE_ASS_AL"],
+                                                     tt["MATRICOLA"], tt["AZIENDA"],
+                                                     tp[0]))     
                     except Exception as e:
                         logger.error(query_insert)
                         logger.error('Codice persona = {}'.format(int(tt["COD_DIP"])))
@@ -331,7 +342,7 @@ from personale_ekovision.invio_assenze_ekovision iae'''
                         logger.error('DT_ASS_AL = {}'.format(tt["DT_ASS_AL"]))
                         logger.error('ORE_ASS_AL = {}'.format(tt["ORE_ASS_AL"]))
                         logger.error(e)
-                        error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                        error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                         exit()
                 #altrimenti non faccio nulla    
     conn.commit()
@@ -346,10 +357,16 @@ from personale_ekovision.invio_assenze_ekovision iae'''
     
     
     
+    ###########################################################################################
+    # a regime devo usare il cod_dipendente (Matricola azienda anzichè l'ID PERSONA )
+    
+    
+    
+    
     # ora l'inverso.. devo controllare i delete             
     # parto da dwh e verifico se c'è nella vista su UO (DB LINK DA ESIPERTBO)       
     check_assenza_dwh = '''SELECT id, cod_dip, dt_ass_dal, ora_s, dt_ass_al, ora_e,
-        cod_cau_ass, des_cau_ass, flg_deleted, flg_ass_contr
+        cod_cau_ass, des_cau_ass, flg_deleted, flg_ass_contr, cod_dipendente
         FROM personale_ekovision.imp_personale_assenze
         where dt_ass_dal > to_char((now() - INTERVAL '3' MONTH),'YYYYMMDD')::int
           or  dt_ass_al  > to_char((now() - INTERVAL '3' MONTH),'YYYYMMDD')::int 
@@ -361,7 +378,7 @@ from personale_ekovision.invio_assenze_ekovision iae'''
     except Exception as e:
         logger.error(check_assenza_dwh)
         logger.error(e)
-        error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+        error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
         exit()
     
     
@@ -393,7 +410,7 @@ from personale_ekovision.invio_assenze_ekovision iae'''
             logger.error(int(ad[4]))
             logger.error(int(ad[5]))
             logger.error(e)
-            error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+            error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
             exit()
     
         if len(ass_esipert)==0:
@@ -421,12 +438,12 @@ from personale_ekovision.invio_assenze_ekovision iae'''
     #exit()
     
     check_ekovision=200
-    select_x_invio='''SELECT id, cod_dip, dt_ass_dal, ore_ass_dal, dt_ass_al, ore_ass_al,
+    select_x_invio='''SELECT id, cod_dipendente as cod_dip, dt_ass_dal, ore_ass_dal, dt_ass_al, ore_ass_al,
         cod_cau_ass, des_cau_ass, flg_deleted, flg_ass_contr
         FROM personale_ekovision.imp_personale_assenze 
         where (id > (select max(progr) from personale_ekovision.invio_assenze_ekovision iae) 
         or data_ultima_modifica > (select max(data_ora) from personale_ekovision.invio_assenze_ekovision iae))
-        and cod_dip in (select id_persona from personale_ekovision.personale p )
+        and cod_dipendente in (select cod_dipendente from personale_ekovision.personale p )
         order by id''' 
     
     try:
@@ -435,13 +452,13 @@ from personale_ekovision.invio_assenze_ekovision iae'''
     except Exception as e:
         logger.error(assenze_x_invio)
         logger.error(e)
-        error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+        error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
         exit()
    
     for t_i in assenze_x_invio:
         
         id.append(int(t_i[0]))
-        cod_dip.append(int(t_i[1]))
+        cod_dip.append(t_i[1])
         dt_ass_dal.append(int(t_i[2]))
         ore_ass_dal.append(int(t_i[3]))
         dt_ass_al.append(int(t_i[4]))
@@ -491,7 +508,7 @@ from personale_ekovision.invio_assenze_ekovision iae'''
             logger.debug(des_cau_ass[k])
             logger.debug(int(flg_deleted[k]))
             logger.debug(int(flg_ass_contr[k]))"""
-            row=[int(id[k]), int(cod_dip[k]), 
+            row=[int(id[k]), cod_dip[k], 
                  int(dt_ass_dal[k]), int(ore_ass_dal[k]), 
                  int(dt_ass_al[k]), int(ore_ass_al[k]),
                 cod_cau_ass[k], des_cau_ass[k],
@@ -542,7 +559,7 @@ from personale_ekovision.invio_assenze_ekovision iae'''
         conn.commit()   
     
     # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
     logger.info("chiudo le connessioni in maniera definitiva")
     
     logger.info("Chiusura cursori e connessioni")

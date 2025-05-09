@@ -117,7 +117,7 @@ import csv
 
 
 # per vedere se il percorso era previsto quel giorno
-from preconsuntivazione import *
+from preconsuntivazione import tappa_prevista
 
     
      
@@ -295,10 +295,12 @@ and id_squadra = 44"""
                     # controllo se è da fare (per evitare di rifarlo)
                     if check_inserimento==1:
                         logger.info('Inserisco il giustificativo sulla scheda {}'.format(id_scheda))
-                            
+                        
+                        
+                        # la P sta per il personale     
                         params2={'obj':'schede_lavoro',
                                 'act' : 'w',
-                                'ruid': 'A{}'.format(id_scheda),
+                                'ruid': 'P{}'.format(id_scheda),
                                 'json': json.dumps(letture2)
                                 }
                         try:
@@ -320,7 +322,7 @@ and id_squadra = 44"""
         logger.error(e)
     '''
 
-    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
     logger.info("chiudo le connessioni in maniera definitiva")
     
     

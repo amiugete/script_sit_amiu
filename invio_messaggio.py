@@ -183,8 +183,47 @@ http://amiuintranet.amiu.genova.it/content/accesso-server-amiugis'''.format(scri
    
    
    
+def warning_message_mail(message, receiver_email, script_name, logger_name):
+    '''
+    Funzione presente nello script invio_messaggio.py per inviare l'eventuale LOG con WARNING via mail
+    Input:
+        - messaggio
+        - receiver_email
+        - script_name
+        - logger_name
+    '''
+
+
    
-   
+    subject = 'WARNING MESSAGE - {}'.format(script_name)
+    body = '''
+    {0}<br><br>
+    Automatically sent from AMIU Genova by {1} script<br><br>
+    '''.format(message,script_name)
+    #sender_email = user_mail
+
+
+    # Create a multipart message and set headers
+    message = MIMEMultipart()
+    message["From"] = sender_email
+    message["To"] = receiver_email
+    #message["CC"] = 'roberto.marzocchi@amiu.genova.it'
+    message["Subject"] = subject
+    #message["Bcc"] = debug_email  # Recommended for mass emails
+    message.preamble = subject
+
+                    
+    # Add body to email
+    message.attach(MIMEText(body, "html"))
+
+    # aggiungi allegato
+    #allegato(message, warning_log_file,'warning.log')
+
+
+    invio_messaggio(message)
+    logger_name.info('Messaggio inviato')
+    return 200
+    
    
     
 def warning_log_mail(warning_log_file, receiver_email, script_name, logger_name):

@@ -223,6 +223,7 @@ def main():
                     
                     matricola=lines[0].split()[1].replace(',', '')
                     nome=lines[0].split()[2]
+                    
                     n=3
                     while n < len(lines[0].split()):
                         nome='{0} {1}'.format(nome,lines[0].split()[n])

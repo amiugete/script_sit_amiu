@@ -110,16 +110,32 @@ def sett(giorno):
 
 
 def ctrl_freq(freq_oggi, freq_prev ):
+    sett=''
     if freq_prev[0]=='S':
         '''Frequenza settimanale'''
         check=int(freq_prev[int(freq_oggi[1])])
     elif freq_prev[0]=='M':
         '''Frequenza mensile'''
+        # stringa contiene 
+        # la settimana del mese e 
+        # poi il giorno
         if freq_prev.find(freq_oggi)>0:
             check=1
         else:
-            check=0    
-    return check
+            check=0
+            giorni_mese=freq_prev[1:].split('_')
+            # faccio ciclo sui giorni_mese
+            # vedo se c'è quel giorno un'altra settimana 
+            ss=0
+            while ss < len(giorni_mese):
+                if freq_oggi[1]==giorni_mese[ss][1]:
+                    if sett=='':
+                        sett='{}s'.format(giorni_mese[ss][0])
+                    else:
+                        sett='{},{}s'.format(sett,giorni_mese[ss][0])
+                ss+=1
+          
+    return check, sett
 
 
 def dayNameFromWeekday(weekday):
@@ -475,16 +491,19 @@ where p.cod_percorso= %s and p.id_categoria_uso in (3,6)
                 g1=sett(giorno.day)
                 w.write(5,5+i, '{} ({}s)'.format(dayNameFromWeekday(giorno.weekday()), g1), cell_format_title)
                 stringa='{}{}'.format(g1, g2)
-                logger.debug(stringa)
-                logger.debug(vv[7])
+                logger.debug('g1g2={}'.format(stringa))
+                logger.debug('freqbinaria={}'.format(vv[7]))
                 logger.debug(ctrl_freq(stringa,vv[7]))
-                if ctrl_freq(stringa,vv[7])==1:
+                if ctrl_freq(stringa,vv[7])[0]==1:
                     if check_s==1:
                         w.write(6+k,5+i, 'x', cell_format_colorato)
                     else:
                         w.write(6+k,5+i, 'x', cell_format)
                 else: 
-                    w.write(6+k,5+i, None, cell_format)
+                    if ctrl_freq(stringa,vv[7])[1]=='':
+                        w.write(6+k,5+i, None, cell_format)
+                    else:
+                        w.write(6+k,5+i, ctrl_freq(stringa,vv[7])[1], cell_format)
                 i+=1
             k+=1
         
@@ -568,7 +587,7 @@ order by min(ap.num_seq) asc'''
                 logger.debug(stringa)
                 logger.debug(vv[4])
                 logger.debug(ctrl_freq(stringa,vv[4]))
-                if ctrl_freq(stringa,vv[4])==1:
+                if ctrl_freq(stringa,vv[4])[0]==1:
                     if check_s == 0:
                         w.write(6+k,5+i, 'x', cell_format)
                     else: 
@@ -589,8 +608,12 @@ order by min(ap.num_seq) asc'''
                         mq_sab+=vv[7]
                     elif i==6:
                         mq_dom+=vv[7]
-                else: 
-                    w.write(6+k,5+i, None, cell_format)
+                else:
+                    # se non è nel giorno controllo se lo stesso giorno c'è in altre settimane
+                    if ctrl_freq(stringa,vv[4])[1]=='':
+                        w.write(6+k,5+i, None, cell_format)
+                    else:
+                        w.write(6+k,5+i, ctrl_freq(stringa,vv[4])[1], cell_format) 
                 i+=1
             k+=1
         if check_s == 0:    

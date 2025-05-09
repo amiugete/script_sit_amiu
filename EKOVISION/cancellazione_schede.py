@@ -285,7 +285,7 @@ def main():
     except Exception as e:
         logger.error(e) # se non fossi riuscito a mandare la mail
     curr.close()
-    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
     
     logger.info("chiudo le connessioni in maniera definitiva")
     curr.close()

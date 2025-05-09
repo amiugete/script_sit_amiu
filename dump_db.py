@@ -168,7 +168,7 @@ for row in list_db:
 cur.close
 conn.close
 '''
-error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
 logger.info("chiudo le connessioni in maniera definitiva")
 
 

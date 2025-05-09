@@ -5,7 +5,10 @@
 # Roberto Marzocchi
 
 '''
-Lo script verifica le variazioni e manda excel a assterritorio@amiu.genova.it giornalmemte con la sintesi delle stesse 
+Script derivante da variazioni_importazioni.py a cui è stata rimossa la parte relativa alla UO
+
+Lo script verifica le variazioni  per una lista di percorsi dati (array cod_percorso_reimp) o per tutti i percorsi modificati il giorno precedente (vedi ## OGGETTO INVIO ) 
+e salva i csv su spazio SFTP di ekovision
 '''
 
 import os, sys, re  # ,shutil,glob
@@ -363,60 +366,11 @@ def main():
     stato_importazione=[]
 
            
-    for vv in lista_variazioni:
-        #logger.debug(vv[0])
-        cod_percorso.append(vv[0])
-        descrizione.append(vv[1])
-        servizio.append(vv[2])
-        ut.append(vv[3])
-        
-        
-        
-        
-        
-        # cerco se il percorso esiste per gestire la nuova tabella anagrafe_percorsi.date_modifica_itinerari
-        curr1 = conn.cursor()
-        sel_date = '''select * from anagrafe_percorsi.date_modifica_itinerari where cod_percorso = %s'''  
-        try:
-            curr1.execute(sel_date, (vv[0],))
-            lista_date=curr1.fetchall()
-        except Exception as e:
-            logger.error(e)
-        
-        
-        if len(lista_date)==0:
-            # insert
-            curr2 = conn.cursor()
-            insert_q='''insert into anagrafe_percorsi.date_modifica_itinerari (cod_percorso, data_ultima_modifica)
-            values (%s, to_date(%s, 'YYYYMMDD')'''
-            curr2.execute(insert_q, (vv[0],giorno_file))
-            conn.commit()
-            curr2.close()
-        else:
-            #UPDATE
-            for ld in lista_date:
-                logger.debug(ld[0])
-                logger.debug(ld[1])
-            curr2 = conn.cursor()
-            insert_q='''UPDATE anagrafe_percorsi.date_modifica_itinerari 
-            set data_ultima_modifica= to_date(%s, 'YYYYMMDD')
-            where cod_percorso = %s'''
-            curr2.execute(insert_q, (giorno_file, vv[0]))
-            conn.commit()
-            curr2.close()
-            
-                
-        
-        
-        
-        
-        
-        curr1.close()  
     #exit()
        
     #print(cod_percorso)
-    cod_percorso_reimp=[ '0201238701'
-    ]
+    cod_percorso_reimp=['0201036501'
+                        ]
     
     logger.info('Itinerari da esportare :{}'.format(cod_percorso_reimp))
     
@@ -433,14 +387,14 @@ codice_modello_servizio,
 coalesce((select distinct ordine from anagrafe_percorsi.v_percorsi_elementi_tratti 
 where codice_modello_servizio = tab.codice_modello_servizio 
 and codice = tab.codice
-and ripasso = tab.ripasso and data_fine is null ),1)
+and ripasso = tab.ripasso and data_fine is null limit 1 ),1)
 as ordine,
 objecy_type, 
   codice, quantita, lato_servizio, percent_trattamento,
 coalesce((select distinct frequenza from anagrafe_percorsi.v_percorsi_elementi_tratti 
 where codice_modello_servizio = tab.codice_modello_servizio 
 and codice = tab.codice
-and ripasso = tab.ripasso and data_fine is null),0)
+and ripasso = tab.ripasso and data_fine is null limit 1),0)
 as 
   frequenza, 
   numero_passaggi, nota,
@@ -479,8 +433,13 @@ from (
     #print(test)
     #exit()
     try:
-        curr.execute(query_variazioni_ekovision,(cod_percorso,))
-        #curr.execute(query_variazioni_ekovision,(cod_percorso_reimp,))
+        ## OGGETTO INVIO: 
+        ##mando tutti i percorsi modificati il giorno precedente
+        #curr.execute(query_variazioni_ekovision,(cod_percorso,))
+
+        ## OGGETTO INVIO:
+        ## mando solo i percorsi definiti nella lista cod_percorso_reimp
+        curr.execute(query_variazioni_ekovision,(cod_percorso_reimp,))
         dettaglio_percorsi_ekovision=curr.fetchall()
     except Exception as e:
         logger.error(e)

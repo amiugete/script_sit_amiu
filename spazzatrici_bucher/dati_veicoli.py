@@ -120,6 +120,7 @@ def main():
     api_url=url_bucher_token
     logger.debug(payload_bucher)
     response = requests.post(api_url, json=payload_bucher)
+    logger.debug(response)
     #response.json()
     logger.info("Status code: {0}".format(response.status_code))
     try:      

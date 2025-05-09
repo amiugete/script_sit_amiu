@@ -117,7 +117,7 @@ import csv
 
 
 # per vedere se il percorso era previsto quel giorno
-from preconsuntivazione import *
+from preconsuntivazione import tappa_prevista
 
     
      

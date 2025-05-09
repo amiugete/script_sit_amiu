@@ -340,9 +340,10 @@ where cod_frequenza not in (select cod_frequenza from etl.frequenze_ok_1)'''
 <h3>Aggiungere ricorrenza {1} a EKOVISION (rif. Marzocchi o Magioncalda) </h3>
 <ol>
 <li> Servizi --> Anagrafiche --> Configurazione ricorrenze</li>
-<li> Aggiungere la ricorrenza usando come codice esterno quello di SIT ({1}) e poi specificare nei dettagli i giorni 
-che creano quella frequenza. <br> <b>Va fatta manualmente per ogni giorno che compone quella frequenza 
-                (o ricorrenza come la chiama EKOVISION)</b></li>
+<li> Aggiungere la ricorrenza usando come <b><i>codice esterno<7i></b> quello di SIT ({1}) e poi specificare nei dettagli i giorni 
+che creano quella frequenza. <br> <b>Va fatta manualmente per ogni giorno che compone quella frequenza(o ricorrenza come la chiama EKOVISION).
+NOTA BENE: ricordarsi di usare <b><i> <font color="green"> qualunque </font></b></i> come opzione del <i>tipo giorno</i> invece che <b><i> <font color="red">feriale</font></b></i>, perchè così gestiamo i festivi in questo momento. 
+                </b></li>
 </ol>
 <hr>
 <h3>Modifiche alla UO (fino a quando necessarie - Marzocchi o Calvello):</h3>

@@ -214,13 +214,13 @@ ORDER BY NUM_PROTOCOLLO '''
     except Exception as e:
         logger.error(query_pesi)
         logger.error(e)
-        error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+        error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
         exit()
    
     for pp in pesi:
         if int(pp['COD_PROTOCOLLO'])!=838:
             logger.error('''C'è un codice protocollo ({0}) diverso da 838 verificare'''.format(pp['COD_PROTOCOLLO']))
-            error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+            error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
             exit()
         else:
             barcode.append(pp['BARCODE'])
@@ -309,7 +309,7 @@ ORDER BY NUM_PROTOCOLLO '''
         con.commit()   
     
     # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
     logger.info("chiudo le connessioni in maniera definitiva")
     
     logger.info("Chiusura cursori e connessioni")

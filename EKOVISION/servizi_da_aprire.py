@@ -32,7 +32,7 @@ parentdir = os.path.dirname(currentdir)
 sys.path.append(parentdir)
 from credenziali import *
 
-from preconsuntivazione import *
+from preconsuntivazione import tappa_prevista
 
 import requests
 from requests.exceptions import HTTPError
@@ -227,7 +227,7 @@ order by data_inizio_validita"""
                     response = requests.post(eko_url, headers=headers, params=params, data=data_json)
                 except Exception as err:
                     logger.error(f'Errore in connessione: {err}')
-                    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                     logger.info("chiudo le connessioni in maniera definitiva")
                     curr.close()
                     conn.close()
@@ -325,7 +325,7 @@ order by data_inizio_validita"""
                             logger.error(' - Data: {}'.format(day))
                             #logger.error('Id Scheda: {}'.format(id_scheda[k]))
                             # check se c_handller contiene almeno una riga 
-                            error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                            error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                             logger.info("chiudo le connessioni in maniera definitiva")
                             curr.close()
                             conn.close()
@@ -436,7 +436,7 @@ order by data_inizio_validita"""
     
     
     # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
     logger.info("chiudo le connessioni in maniera definitiva")
     curr.close()
     conn.close()
