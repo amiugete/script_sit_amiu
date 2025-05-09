@@ -414,7 +414,7 @@ def main():
 
 
     # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
 
     logger.info("Chiudo definitivamente la connesione al DB")
     

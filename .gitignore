@@ -4,6 +4,9 @@ variazioni/*.csv
 variazioni/*.xlsx
 
 
+
+
+
 EKOVISION/preconsuntivazioni/*.csv
 EKOVISION/consuntivazioni/*.csv
 EKOVISION/timbrature/*.csv
@@ -12,6 +15,17 @@ EKOVISION/pesi/*.csv
 EKOVISION/log/*.log
 EKOVISION/eko_output/*.json
 EKOVISION/eko_output2/*.json
+EKOVISION/inaz_output/*.csv
+
+
+dati_consuntivazione_posteriori/log/*.log
+
+
+inaz_output/*.xlsx
+inaz_output/*.txt
+inaz_output/*.csv
+
+
 
 
 personale/*.pdf
@@ -21,9 +35,13 @@ personale/input/cartellini/*.pdf
 personale/input/cartellini/AMIU/*.pdf
 personale/input/cartellini/BONIFICHE/*.pdf
 personale/input/cartellini/SATER/*.pdf
+personale/input/cu/AMIU/*.pdf
+personale/input/cu/BONIFICHE/*.pdf
+personale/input/cu/SATER/*.pdf
 personale/input/cu/*.pdf
 personale/output/cedolini/**
 personale/output/cartellini/**
+personale/output/cu/**
 personale/output/cartellini/*.pdf
 personale/output/cu/*.pdf
 personale/output/*.pdf
@@ -34,7 +52,9 @@ personale/file_anomalie.csv
 
 # tengo solo un esempio non tutta una serie di ul
 update_piazzole/template_update_*
-
+update_piazzole/*.xlsx
+update_piazzole/*.xls
+update_piazzole/*.ods
 
 ecopunti/*.xlsx
 utenze/*.xlsx
@@ -56,6 +76,8 @@ img_sit/*
 
 IDEA/output_file/*.xlsx
 IDEA/*.log
+
+
 
 
 

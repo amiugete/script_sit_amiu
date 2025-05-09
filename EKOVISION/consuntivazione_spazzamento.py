@@ -174,7 +174,7 @@ def main():
     
             
     # ciclo su elenco vie / note consuntivate
-    query_effettuati_totem='''select 
+    """query_effettuati_totem='''select 
 	e.id, 
 	e.idpercorso,
 	e.datalav::date ,
@@ -200,8 +200,74 @@ def main():
  	left join totem.v_personale_ekovision_step1 vpes on vpes.codice_badge::text = e.codice 
 	left join spazzamento.causali_testi ct on trim(e.causale) ilike trim(ct.descrizione)
  	left join servizi.mail_ut mu on mu.id_uo::int  =t.id_uo::int 
-	where e.id > (select coalesce(max(max_id),0) from spazzamento.invio_consuntivazioni_ekovision ice)
-	order by 1'''
+	where e.id > (select coalesce(max(max_id),0) from spazzamento.invio_consuntivazioni_ekovision ice) 
+    /*and
+	e.datalav <= (select max(datalav) + interval '3' day from  spazzamento.invio_consuntivazioni_ekovision ice)*/
+	order by 1 limit 5000'''
+    """
+    
+    
+    # modifica del 08/05 per integrare nuovo backoffice AMIU
+    query_effettuati_totem='''select 
+	distinct 
+	substr(e.id,3)::int as id,
+	e.idpercorso,
+	e.datalav::date ,
+	t.id_via,
+	trim(t.nota_via) as nota_via,
+	case 
+		when e.punteggio::int = 100 or ct.id = 100 then 1
+		when e.punteggio::int = 0 and ct.id <> 100 then 0 
+		when e.punteggio::int > 0 and e.punteggio::int < 100 then 1
+	end flag_esecuzione, 
+	e.causale as descr_causale,
+	ct.id as causale,
+	case 
+		when e.punteggio::int > 0 and e.punteggio::int < 100 then concat('Svolto al ', e.punteggio,'% CAUSALE: ', ct.id ,' - ',  e.causale)
+	end note_causale, 
+	concat('TOTEM Badge ', e.codice, ' - Matr. ', vpes.matricola::text, ' - ', vpes.cognome, ' ', vpes.nome) as sorgente_dati, 
+	e.datainsert, 
+    e.tappa, 
+    e.punteggio,
+    string_agg(distinct mu.mail, ',')
+	from spazzamento.cons_percorsi_spazz_x_app t
+	join spazzamento.v_effettuati e on e.tappa::int =  t.id_tappa_raggr::int
+ 	left join totem.v_personale_ekovision_step1 vpes on vpes.codice_badge::text = e.codice 
+	left join spazzamento.causali_testi ct on trim(e.causale) ilike trim(ct.descrizione)
+ 	left join servizi.mail_ut mu on mu.id_uo::int  =t.id_uo::int 
+	where
+	/*tabella wingsoft*/
+	(substr(e.id,1,1) = 'w'
+	and substr(e.id,3)::int > (select coalesce(max(max_id),0) from spazzamento.invio_consuntivazioni_ekovision ice) 
+	)
+	or 
+	(substr(e.id,1,1) = 'a'
+	and substr(e.id,3)::int > (select coalesce(max(max_id),0) from spazzamento.invio_consuntivazioni_a_ekovision ice)
+	)
+    /*and
+	e.datalav <= (select max(datalav) + interval '3' day from  spazzamento.invio_consuntivazioni_ekovision ice)*/
+	group by 
+	substr(e.id,3),
+	e.idpercorso,
+	e.datalav::date ,
+	t.id_via,
+	trim(t.nota_via) ,
+	case 
+		when e.punteggio::int = 100 or ct.id = 100 then 1
+		when e.punteggio::int = 0 and ct.id <> 100 then 0 
+		when e.punteggio::int > 0 and e.punteggio::int < 100 then 1
+	end , 
+	e.causale ,
+	ct.id ,
+	case 
+		when e.punteggio::int > 0 and e.punteggio::int < 100 then concat('Svolto al ', e.punteggio,'% CAUSALE: ', ct.id ,' - ',  e.causale)
+	end , 
+	concat('TOTEM Badge ', e.codice, ' - Matr. ', vpes.matricola::text, ' - ', vpes.cognome, ' ', vpes.nome), 
+	e.datainsert, 
+    e.tappa, 
+    e.punteggio
+	order by 1 limit 5000'''
+    
     
     # prima di tutto faccio un controllo che non ci siano causali che non so gestire e nel caso fermo tutto il passaggio dati e lancio allarme
     query_check='''select distinct causale, descr_causale from (
@@ -219,12 +285,36 @@ def main():
 
     for cc in lista_causali:
         if cc[0] == None:
-            logger.error('''La causale {} non è riconosciuta. Andare sull'HUB ggiungere un id nella tabella spazzamento.causali_testo'''.format(cc[1])) 
+            logger.error('''La causale {} non è riconosciuta. Andare sull'HUB aggiungere un id nella tabella spazzamento.causali_testo'''.format(cc[1])) 
             error_log_mail(errorfile, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
             exit()
     
     logger.info('CONTROLLO CAUSALI TERMINATO')
     currc.close()
+    
+    # recupero la max_datalav NON SERVE era un tentativo
+    """currc = connc.cursor()
+    query_dl='''select max(datalav) from (
+        {}
+        ) as foo'''.format(query_effettuati_totem)
+    
+    
+    try:
+        currc.execute(query_dl)
+        lista_datalav=currc.fetchall()
+    except Exception as e:
+        logger.error(query_dl)
+        logger.error(e)
+
+
+    for dl in lista_datalav:
+        max_datalav=dl[0].strftime("%Y%m%d")
+    
+    logger.info('max_datalav={}'.format(max_datalav))
+    currc.close()
+    """
+    
+    
     currc = connc.cursor()
     currc1 = connc.cursor()
                 
@@ -272,29 +362,8 @@ def main():
                 #query_aste='''{} and trim(ap.nota) like %s'''.format(query_aste) 
                 query_aste='''{} and similarity(trim(ap.nota), trim(%s))>=1'''.format(query_aste) 
                 
-                
-            try:
-                # se nota asta fosse nulla
-                if vv[4]==None:
-                    curr.execute(query_aste, (vv[2], vv[1], vv[2], vv[2], vv[3]))
-                else:
-                    curr.execute(query_aste, (vv[2], vv[1], vv[2], vv[2], vv[3], vv[4]))
-                lista_aste=curr.fetchall()
-            except Exception as e:
-                logger.error('NON TROVO LE ASTE SUL SIT')
-                logger.error(query_aste)
-                logger.error('Codice percorso = {}'.format(vv[1]))
-                logger.error('Data rif = {}'.format(vv[2]))
-                logger.error('Id Via = {}'.format(vv[3]))
-                logger.error('Nota = {}'.format(vv[4]))
-                logger.error(e)
-                error_log_mail(errorfile, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
-                exit()
-            for aa in lista_aste:
-                #logger.debug(aa[0])       
-                # controllo sulla consuntivazione pregressa
-                
-                query_check='''select *  
+            # prima di lanciare la query faccio questo check
+            query_check='''select *  
                     from spazzamento.effettuati e 
                     where idpercorso = %s
                     and to_char(datalav, 'YYYY-MM-DD') = %s
@@ -303,21 +372,44 @@ def main():
                     and ((punteggio::int > %s) or left(codice,2) ilike 'ut')
                     '''
                 
+            try:
+                currc1.execute(query_check, (vv[1], vv[2].strftime('%Y-%m-%d'), vv[11], int(vv[0]), int(vv[12])))
+                altre_consuntivazioni=currc1.fetchall()
+            except Exception as e:
+                logger.error(vv[11])
+                logger.error('''{0} {1} {2} {3} {4}'''.format(vv[1], vv[2].strftime('%Y-%m-%d'), vv[11], int(vv[0]), int(vv[12])))
+                logger.error(query_check)
+                logger.error(e)
+                exit()
+                                
+            # se ci fosse un punteggio superiore o una consuntivazione del RUT (serve fino a quando il backoffice è di WingSOFT non servirà più dopo)
+            # non passo i dati a ekovision
+            if len(altre_consuntivazioni)>0:
+                logger.warning('''Tappa {} del {} già consuntivata con punteggio maggiore. Non passo il dato a Ekovision'''.format(vv[11], vv[2].strftime('%Y-%m-%d')))
+            else:
+                # devo passare i dati a ekovision quindi procedo con il resto dello script
                 try:
-                    currc1.execute(query_check, (vv[1], vv[2].strftime('%Y-%m-%d'), vv[11], int(vv[0]), int(vv[12])))
-                    altre_consuntivazioni=currc1.fetchall()
+                    # se nota asta fosse nulla
+                    if vv[4]==None:
+                        curr.execute(query_aste, (vv[2], vv[1], vv[2], vv[2], vv[3]))
+                    else:
+                        curr.execute(query_aste, (vv[2], vv[1], vv[2], vv[2], vv[3], vv[4]))
+                    lista_aste=curr.fetchall()
                 except Exception as e:
-                    logger.error(vv[11])
-                    logger.error('''{0} {1} {2} {3} {4}'''.format(vv[1], vv[2].strftime('%Y-%m-%d'), vv[11], int(vv[0]), int(vv[12])))
-                    logger.error(query_check)
+                    logger.error('NON TROVO LE ASTE SUL SIT')
+                    logger.error(query_aste)
+                    logger.error('Codice percorso = {}'.format(vv[1]))
+                    logger.error('Data rif = {}'.format(vv[2]))
+                    logger.error('Id Via = {}'.format(vv[3]))
+                    logger.error('Nota = {}'.format(vv[4]))
                     logger.error(e)
+                    error_log_mail(errorfile, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
                     exit()
-                                    
-                # se ci fosse un punteggio superiore o una consuntivazione del RUT (serve fino a quando il backoffice è di WingSOFT non servirà più dopo)
-                # non passo i dati a ekovision
-                if len(altre_consuntivazioni)>0:
-                    logger.warning('''Tappa {} del {} già consuntivata con punteggio maggiore. Non passo il dato a Ekovision'''.format(vv[11], vv[2].strftime('%Y-%m-%d')))
-                else: 
+                for aa in lista_aste:
+                    #logger.debug(aa[0])       
+                    # controllo sulla consuntivazione pregressa
+                
+                 
                     if aa[2]==33:
                         logger.debug('CONSUNTIVAZIONI BOTTICELLA')
                         # lavaggio con botticella devo cercare le componenti per quell'asta percorso
@@ -541,7 +633,8 @@ def main():
                     logger.error(e)
                 
                 
-                    
+                
+                   
                 if check_creazione_scheda ==1: 
                     logger.info('Forzo la pre-consuntivizione delle tappe non fatte perchè di fatto questo percorso non era previsto, quindi tutto ciò che non ho consuntivato è non previsto')   
                     # nei casi di creazione schede devo anche forzare la pre-consuntivazione delle tappe non fatte che altrimenti su Ekovision risulterebbero tutte da fare 
@@ -567,7 +660,7 @@ def main():
                         and t.id_tappa_raggr::varchar not in (
                             select tappa from spazzamento.effettuati e1 
                             where e1.idpercorso = %s 
-                            and e1.datalav=to_date(%s 'YYYYMMDD')
+                            and e1.datalav=to_date(%s, 'YYYYMMDD')
                         ) '''
                     try:
                         currc.execute(query_hub, (date_distinct[k], 
@@ -578,8 +671,11 @@ def main():
                                                 date_distinct[k]))
                         lista_x_via2=currc.fetchall()
                     except Exception as e:
-                        logger.error(query_effettuati_totem)
+                        logger.error(query_hub)
                         logger.error(e)
+                        lista_x_via2=[]
+
+                    
 
                     for vv2 in lista_x_via2:
                         query_aste='''select ap.id_asta, p.id_turno, p.id_servizio, ap.id_asta_percorso, coalesce(ap.ripasso_fittizio,0) as ripasso_fittizio
@@ -785,23 +881,30 @@ def main():
     
     
     if check_ekovision==200 and len(lista_x_via)>0:
+        """insert_max_id='''INSERT INTO spazzamento.invio_consuntivazioni_ekovision
+        (max_id, data_ora, datalav)
+        VALUES
+        (%s, now(),to_date(%s,'YYYYMMDD'))'''
+        """
         insert_max_id='''INSERT INTO spazzamento.invio_consuntivazioni_ekovision
         (max_id, data_ora)
         VALUES
         (%s, now())'''
         try:
+            #currc.execute(insert_max_id, (max_id,max_datalav,))
             currc.execute(insert_max_id, (max_id,))
             connc.commit()
         except Exception as e: 
             logger.error(insert_max_id)
             logger.error(max_id)
+            #logger.error(max_datalav)
             logger.error(e)
             
         
            
     
     # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
     logger.info("chiudo le connessioni in maniera definitiva")
     
     currc.close()

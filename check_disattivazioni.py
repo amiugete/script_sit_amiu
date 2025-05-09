@@ -65,8 +65,8 @@ logger = logging.getLogger()
 
 # Create handlers
 c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-f_handler = logging.StreamHandler()
-#f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+#f_handler = logging.StreamHandler()
+f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.ERROR)

@@ -31,7 +31,7 @@ parentdir = os.path.dirname(currentdir)
 sys.path.append(parentdir)
 from credenziali import *
 
-from preconsuntivazione import *
+from preconsuntivazione import tappa_prevista
 
 import requests
 from requests.exceptions import HTTPError
@@ -269,7 +269,7 @@ def main():
                     logger.error(' - Data: {}'.format(vv[1]))
                     #logger.error('Id Scheda: {}'.format(id_scheda[k]))
                     # check se c_handller contiene almeno una riga 
-                    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                     logger.info("chiudo le connessioni in maniera definitiva")
                     #curr.close()
                     #conn.close()
@@ -379,7 +379,7 @@ def main():
     
     
     # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
     logger.info("chiudo le connessioni in maniera definitiva")
     curr.close()
     conn.close()

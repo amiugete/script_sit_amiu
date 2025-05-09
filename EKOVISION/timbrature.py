@@ -5,13 +5,11 @@
 # Roberto Marzocchi
 
 '''
-Lo script della gestione e invio dei dati delle timbrature
+Lo script gestisce e invia i dati delle timbrature a Ekovision
 
-DA esipertbo (dblink su UO) minvio i dati sul db dwh per creare un progressivo e gestire le date/ora di aggiornamento
+DA esipertbo (dblink su UO) mi nvio i dati sul db dwh per creare un progressivo e gestire le date/ora di aggiornamento
 
 Da dwh spedisco i dati in modo incrementale a Ekovision
-
-
 
 '''
 
@@ -130,7 +128,7 @@ def makeDictFactory(cursor):
 def main():
       
 
-
+    logger.info('Il PID corrente è {0}'.format(os.getpid()))
     # preparo gli array 
     
     cod_ris=[]
@@ -192,7 +190,7 @@ from personale_ekovision.invio_timbrature_ekovision ite'''
     except Exception as e:
         logger.error(select_x_invio)
         logger.error(e)
-        error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+        error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
         exit()
     
     for d in data:
@@ -206,10 +204,10 @@ from personale_ekovision.invio_timbrature_ekovision ite'''
     query_timbrature='''SELECT ID_PERSONA,
         CLTIMBRA AS "DATA", lpad(to_char(MTTIMBRA), 4,'0') AS "ORARIO",
         trim(CDVERSOT) AS VERSO,
-        trim(FLMANUAL) AS NOTE 
+        trim(FLMANUAL) AS NOTE, MATRICOLA, AZIENDA
         FROM esipertbo.v_timbr_eko@sipedb a
         WHERE (cltimbra > :dd) 
-        OR (trim(FLMANUAL) IS NOT NULL AND cltimbra > to_char(trunc((sysdate - interval '2' MONTH), 'MONTH'), 'YYYYMMDD'))
+        OR (trim(FLMANUAL) IS NOT NULL AND cltimbra > to_char(trunc((sysdate - interval '50' DAY), 'MONTH'), 'YYYYMMDD'))
         ORDER BY 2,3 '''
     
     
@@ -242,16 +240,20 @@ from personale_ekovision.invio_timbrature_ekovision ite'''
             logger.error('Data = {}'.format(tt["DATA"]))
             logger.error('Ora = {}'.format(tt["ORARIO"]))
             logger.error(e)
-            error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+            error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
             exit()
         
         if len(check_t_e)==0:
             #insert
+               
             query_insert= '''INSERT INTO personale_ekovision.ris_timbrature
-(cod_ris, "data", orario, verso, note, data_ultima_modifica)
-VALUES ( %s, %s, %s, %s, %s, now() ) '''
+(cod_ris, "data", orario, verso, note, data_ultima_modifica, cod_dipendente)
+VALUES ( %s, %s, %s, %s, %s, now(),
+concat(%s,'_',%s))'''
+
             try:
-                curr1.execute(query_insert, (int(tt["ID_PERSONA"]), int(tt["DATA"]), tt["ORARIO"],tt["VERSO"], tt["NOTE"] ))     
+                curr1.execute(query_insert, (int(tt["ID_PERSONA"]), int(tt["DATA"]), tt["ORARIO"],tt["VERSO"], tt["NOTE"], 
+                                            tt['MATRICOLA'], tt["AZIENDA"]))      
             except Exception as e:
                 logger.error(query_insert)
                 logger.error('Codice persona = {}'.format(int(tt["ID_PERSONA"])))
@@ -259,24 +261,32 @@ VALUES ( %s, %s, %s, %s, %s, now() ) '''
                 logger.error('Ora = {}'.format(tt["ORARIO"]))
                 logger.error('Verso = {}'.format(tt["VERSO"]))
                 logger.error('Nota = {}'.format(tt["NOTE"]))
+                logger.error('Matricola = {}'.format(tt["MATRICOLA"]))
+                logger.error('Azienda = {}'.format(tt["AZIENDA"]))
                 logger.error(e)
-                error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                 exit()
         else:
             for tp in  check_t_e: # tp sta per timbratura su PostgreSQL
                 if tp[4]!=tt["VERSO"] or tp[5]!= tt["NOTE"] : # allora faccio update
                     query_update='''UPDATE personale_ekovision.ris_timbrature
-SET cod_ris=%s, "data"=%s, orario=%s, verso=%s, note=%s, data_ultima_modifica=now()
+SET cod_ris=%s, "data"=%s, orario=%s, verso=%s, note=%s, data_ultima_modifica=now(),
+cod_dipendente=concat(%s,'_',%s)
 WHERE progr=%s ; '''
+
                     try:
-                        curr1.execute(query_update, (int(tt["ID_PERSONA"]), int(tt["DATA"]), tt["ORARIO"],tt["VERSO"], tt["NOTE"], tp[2]))     
+                        curr1.execute(query_update, (int(tt["ID_PERSONA"]), int(tt["DATA"]),
+                                                     tt["ORARIO"],tt["VERSO"], tt["NOTE"], tp[2], 
+                                                     tt['MATRICOLA'], tt["AZIENDA"])) 
                     except Exception as e:
                         logger.error(query_insert)
                         logger.error('Codice persona = {}'.format(int(tt["ID_PERSONA"])))
                         logger.error('Data = {}'.format(int(tt["DATA"])))
                         logger.error('Ora = {}'.format(tt["ORARIO"]))
+                        logger.error('Matricola = {}'.format(tt["MATRICOLA"]))
+                        logger.error('Azienda = {}'.format(tt["AZIENDA"]))
                         logger.error(e)
-                        error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                        error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                         exit()
                 #altrimenti non faccio nulla    
     conn.commit()
@@ -289,12 +299,12 @@ WHERE progr=%s ; '''
     curr = conn.cursor()
     
     check_ekovision=0
-    select_x_invio='''select cod_ris, "data"::int, progr, orario,
+    select_x_invio='''select cod_dipendente as cod_ris, "data"::int, progr, orario,
 verso, 'D' as tipo_ris
 from personale_ekovision.ris_timbrature rt 
 where (progr > (select max(progr) from personale_ekovision.invio_timbrature_ekovision ite) 
 or data_ultima_modifica > (select max(data_ora) from personale_ekovision.invio_timbrature_ekovision ite))
-and cod_ris in (select id_persona from personale_ekovision.personale p )
+and cod_dipendente in (select cod_dipendente from personale_ekovision.personale p )
 order by progr''' 
     
     try:
@@ -303,7 +313,7 @@ order by progr'''
     except Exception as e:
         logger.error(select_x_invio)
         logger.error(e)
-        error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+        error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
         exit()
    
     for t_i in timbrature_x_invio:
@@ -343,7 +353,7 @@ order by progr'''
         
         k=0 
         while k < len(progr):
-            row=[int(cod_ris[k]), int(data_timbr[k]), int(progr[k]), orario[k],verso[k],
+            row=[cod_ris[k], int(data_timbr[k]), int(progr[k]), orario[k],verso[k],
                         tipo_ris[k] ]
             myFile.writerow(row)
             k+=1
@@ -392,7 +402,7 @@ order by progr'''
         conn.commit()   
     
     # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
     logger.info("chiudo le connessioni in maniera definitiva")
     
     logger.info("Chiusura cursori e connessioni")

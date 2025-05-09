@@ -129,7 +129,7 @@ def hex_to_rgba(hex):
 
 def main():
     # carico i mezzi sul DB PostgreSQL
-    logger.info('Connessione al db')
+    logger.info('Connessione al db {}'.format(db))
     conn = psycopg2.connect(dbname=db,
                         port=port,
                         user=user,
@@ -137,6 +137,15 @@ def main():
                         host=host)
 
     curr = conn.cursor()
+    
+    logger.info('Connessione al db {}'.format(db_test))
+    connt = psycopg2.connect(dbname=db_test,
+                        port=port,
+                        user=user,
+                        password=pwd,
+                        host=host)
+
+    currt = connt.cursor()
     #conn.autocommit = True
     
     
@@ -232,19 +241,25 @@ from elem.tipi_rifiuto where tipo_rifiuto > 1 order by tipo_rifiuto'''
         update_foto='''UPDATE elem.piazzole SET foto = 1 WHERE id_piazzola = %s and foto = 0'''
         try:
             curr.execute(update_foto, (files[k].split('.')[0],))
+            currt.execute(update_foto, (files[k].split('.')[0],))
         except Exception as e:
             logger.error(e)
         
         
         conn.commit()
+        connt.commit()
         k+=1
+    
+    
      
     curr.close()
     conn.close()
+    currt.close()
+    connt.close()
        
        
     # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
     
     
     

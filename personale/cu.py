@@ -99,10 +99,17 @@ f_handler.setFormatter(cc_format)
 def main():
     
     # PARAMETRI INIZIALI 
-    CF_AZIENDA='03818890109'
+    CFS_AZIENDE=['03818890109', '01266290996', '01426960991']
+    AZIENDE=['AMIU', 'BONIFICHE', 'SATER']
     file_processati='file_processati.csv'
     
-    intestazione='''CERTIFICAZIONE DI CUI ALL'ART. 4'''
+    # anomalie
+    a_anno=[]
+    a_CF=[]
+    a_file=[]
+    file_anomalie='file_anomalie.csv'
+    
+    intestazione='''CERTIFICAZIONE DI CUI ALL'ART'''
     
     mesi_italiano=['GENNAIO', 
                    'FEBBRAIO',
@@ -129,10 +136,21 @@ def main():
     
     
     filenames = []
+    cf_aziende_file=[]
+    folder_aziende=[]
     
-    for filename in os.listdir('{0}/input/cu'.format(path)):
-        if filename.lower().endswith('.pdf') and filename not in filenames_check:
-            filenames.append(os.path.join(filename))
+    a=0
+    while a<len(AZIENDE):
+        for filename in os.listdir('{0}/input/cu/{1}'.format(path, AZIENDE[a])):
+            if filename.lower().endswith('.pdf')and filename not in filenames_check:
+                filenames.append(os.path.join(filename))
+                cf_aziende_file.append(CFS_AZIENDE[a])
+                folder_aziende.append(AZIENDE[a])
+        a+=1
+        
+    
+    logger.debug(filenames)
+    folder_aziende    
             
     #filenames_check = []
     #open and read the file after the appending:
@@ -153,10 +171,10 @@ def main():
         logger.info('Processo il file PDF dal nome {0}, che ho trovato in questa cartella'.format(filenames[k]))
         
         # creating a pdf reader object 
-        reader = PdfReader('{0}/input/cu/{1}'.format(path, filenames[k])) 
+        reader = PdfReader('{0}/input/cu/{2}/{1}'.format(path, filenames[k], folder_aziende[k])) 
         
         # printing number of pages in pdf file 
-        logger.info('Il file PDF ha {0} pagine di cui scarto la prima'.format(len(reader.pages)))
+        logger.info('Il file PDF ha {0} pagine'.format(len(reader.pages)))
 
 
 
@@ -177,18 +195,32 @@ def main():
             
             # solo per il debug cerco di capire a quali righe leggo le informazioni corrette
             
-            logger.debug(len(lines)) 
-            '''j=0
-            while k<len(lines):
+            '''logger.debug(len(lines)) 
+            j=0
+            while j<len(lines):
                 logger.debug('{}, {}'.format(j,lines[j]))
                 j+=1         
-            
-            #exit()
             '''
             
             
-            if len(lines)>0 and intestazione in lines[0]:
+            #exit()
+            # controllo se c'è l'intestazione 
+            cc=0
+            check_intestazione =0
+            while cc <len(lines):
+                if intestazione in lines[cc]:
+                    check_intestazione=1
+                cc+=1
+
+
+            if len(lines)>33 and check_intestazione==1: # (intestazione in lines[0] or intestazione in lines[34]  or intesazione in lines):
                 logger.debug('sono nella prima pagina di una CU')   
+                
+                # per il debug
+                j=0
+                while j<len(lines):
+                    logger.debug('{}, {}'.format(j,lines[j]))
+                    j+=1         
                 
                 ultima_riga_divisa=lines[len(lines)-1].split('-')
                 try:
@@ -215,13 +247,33 @@ def main():
                      CF=lines[66].split()[0].strip()
                      
                 '''
-                anno=int(lines[61].strip())
+                #logger.debug(int(lines[len(lines)-2].split()[2].strip())-1)
                 
+                try:
+                    anno = int(lines[len(lines)-2].split()[2].strip())-1
+                except:
+                    try: 
+                        anno = int(lines[len(lines)-1].split()[2].strip())-1
+                    except Exception as e:
+                        logger.error(e)
+                        logger.error('''Non trovo l'anno''')
+                
+                
+                '''
+                try: 
+                    anno=int(lines[len(lines)-10].strip())
+                except:
+                    try: 
+                        anno=int(lines[len(lines)-11].strip())
+                    except:
+                        anno=int(lines[len(lines)-2].split()[2].strip())-1
+                '''
                 check_cf=0
-                CF=lines[66].split()[0].strip()
+                # lo leggo 4 righe sopra l'ultima riga
+                CF=lines[len(lines)-5].split()[0].strip()
                 # se è un dipendente faccio controllo che CF sia quello del dipendente.. (non vale per eredi)
                 if  len(ultima_riga_divisa)>1:
-                    if ultima_riga_divisa[1] in lines[66] and ultima_riga_divisa[2] in lines[66]:
+                    if ultima_riga_divisa[1] in lines[len(lines)-5] and ultima_riga_divisa[2] in lines[len(lines)-5]:
                         check_cf=1
                         #ok
                         
@@ -240,7 +292,16 @@ def main():
                 #inizializzo la scrittura del file
                 writer = PdfWriter()
                 #creo nuovo file
-                outputpdf='{0}/output/cu/{1}-{2}-{3}-12--CUD--{4}.pdf'.format(path,CF_AZIENDA, CF, anno, matricola)
+                path_cu='{0}/output/cu'.format(path)
+                path_anno='{0}/{1}'.format(path_cu, anno)
+                if not os.path.exists(path_anno):
+                    os.makedirs(path_anno)
+                outputpdf='{0}/{1}-{2}-{3}-12--CUD--{4}.pdf'.format(path_anno,cf_aziende_file[k], CF, anno, matricola)
+                if os.path.isfile(outputpdf):
+                    outputpdf='{0}/{1}-{2}-{3}--BLD--{4}_bis.pdf'.format(path_anno, cf_aziende_file[k], CF, anno, matricola)
+                    a_anno.append(anno)
+                    a_CF.append(CF)
+                    a_file.append(outputpdf)
                 count_doc+=1
             else:
                 # non creo nuovo file
@@ -267,5 +328,12 @@ def main():
         k+=1
 
 
+    aa=0
+    f2 = open('{}/{}'.format(path, file_anomalie), "a")
+    while aa<len(a_file):
+        f2.write('cu;{0};;{1};{2}\n'.format(a_anno[aa], a_CF[aa], a_file[aa]))
+        aa+=1
+    f2.close()
+    
 if __name__ == "__main__":
     main()       

@@ -107,6 +107,7 @@ from invio_messaggio import *
 
 
 def main():
+    logger.info('Il PID corrente è {0}'.format(os.getpid()))
     #################################################################
     logger.info("Recupero il token")
     token1=token()
@@ -211,6 +212,12 @@ def main():
             #print(jsonResponse)
         except HTTPError as http_err:
             logger.error(f'HTTP error occurred: {http_err}')
+            if response.status_code == 500:
+                logger.error('Errore 500. Avvisare tempestivamente Zamboni') 
+            elif response.status_code == 502:
+                logger.error('''Errore 502. E' andato in timeot il server. Il DB sembra messo male, se il problema persiste con le prossime chiamate avvisare Zamboni''')
+            else:
+                logger.error('''Non so che tipo di errore sia, se il problema persiste con le prossime chiamate avvisare Zamboni''')
             check=500
         except Exception as err:
             logger.error(f'Other error occurred: {err}')
@@ -373,7 +380,7 @@ def main():
     conn.close()
     
     # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
     
     #while i
     

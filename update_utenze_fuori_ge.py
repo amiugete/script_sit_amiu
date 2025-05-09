@@ -10,6 +10,7 @@ Lo script si occupa dell'aggiornamento delle utenze fuori GENOVA
 
 #from msilib import type_short
 import os, sys, re  # ,shutil,glob
+import inspect
 
 #import getopt  # per gestire gli input
 
@@ -34,13 +35,15 @@ from credenziali import *
 
 import logging
 
+filename = inspect.getframeinfo(inspect.currentframe()).filename
 path=os.path.dirname(sys.argv[0]) 
+path1 = os.path.dirname(os.path.dirname(os.path.abspath(filename)))
+nome=os.path.basename(__file__).replace('.py','')
 #tmpfolder=tempfile.gettempdir() # get the current temporary directory
-logfile='{}/log/preconsunsuntivazione.log'.format(path)
-errorfile='{}/log/error_preconsuntivazione.log'.format(path)
+logfile='{0}/log/{1}.log'.format(path,nome)
+errorfile='{0}/log/error_{1}.log'.format(path,nome)
 #if os.path.exists(logfile):
 #    os.remove(logfile)
-
 
 
 

@@ -82,8 +82,8 @@ logger = logging.getLogger()
 
 # Create handlers
 c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-f_handler = logging.StreamHandler()
-#f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+#f_handler = logging.StreamHandler()
+f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.ERROR)
@@ -153,6 +153,8 @@ def contenitori_piazzola(conn, logger, id_piazzola):
 
 
 def main():
+    logger.info('Il PID corrente è {0}'.format(os.getpid()))
+    
     #################################################################
     logger.info("Recupero il token")
     token1=token()
@@ -390,6 +392,12 @@ def main():
                         # da testare sempre prima senza fare i commit per verificare che sia tutto OK
                         conn.commit()
                         ########################################################################################
+                    else:
+                        try: 
+                            id_pdr_int=int(letture['data'][i][0]['id_pdr'])
+                            logger.error('Piazzola AMIU (id={0}) ma senza coordinate geografiche'.format(id_pdr_int))
+                        except Exception as e2:
+                            logger.info('Piazzola non AMIU (id={0}) senza coordinate geografiche'.format(letture['data'][i][0]['id_pdr']))    
                 except Exception as e:
                     logger.error("Postazione {0} - Errore {1}".format(letture['data'][i][0]['id_pdr'],e))    
                 
@@ -617,7 +625,7 @@ def main():
 
 
     # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
 
     logger.info("Chiudo definitivamente la connesione al DB")
     #curr.close()

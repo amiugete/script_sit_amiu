@@ -82,7 +82,7 @@ from invio_messaggio import *
 
 def main(argv):
 
-
+    logging.info('Il PID corrente è {0}'.format(os.getpid()))
     logging.info('Leggo gli input')
     try:
         opts, args = getopt.getopt(argv,"hm:a:e:",["mail=", "area=", "ecopunti="])
@@ -163,7 +163,7 @@ def main(argv):
     curr = conn.cursor()
 
     if check_eco==1:
-        query_area='''select replace(nome,' ', '_') as nome_area from etl.aree_ecopunti where id = %s'''
+        query_area='''select replace(nome,' ', '_') as nome_area from etl.aree_ecopunti_4326 where id = %s'''
     elif check_eco==2:
         query_area='''select replace(nome,' ', '_') as nome_area from etl.aree where id = %s'''
         
@@ -201,29 +201,30 @@ def main(argv):
         logging.error(e)
 
 
-    
-    nome_file0="{0}_{1}_elenco_civici_completo.xlsx".format(giorno_file, nome_area)
-    file_civici="{0}/ecopunti/{1}".format(path,nome_file0)
-    
-    
-    workbook0 = xlsxwriter.Workbook(file_civici)
-    w0 = workbook0.add_worksheet()
-
-    w0.write(0, 0, 'id') 
-    w0.write(0, 1, 'Nome_via')
-    w0.write(0, 2, 'Civico')
-    w0.write(0, 2, 'Note')
-    i=1
-    for vv in lista_civici2:
-        w0.write(i, 0, i) 
-        w0.write(i, 1, vv[0])
-        w0.write(i, 2, vv[1])
-        w0.write(i, 2, vv[2])
-        i+=1
+    try: 
+        nome_file0="{0}_{1}_elenco_civici_completo.xlsx".format(giorno_file, nome_area)
+        file_civici="{0}/ecopunti/{1}".format(path,nome_file0)
         
+        
+        workbook0 = xlsxwriter.Workbook(file_civici)
+        w0 = workbook0.add_worksheet()
 
-    workbook0.close()
+        w0.write(0, 0, 'id') 
+        w0.write(0, 1, 'Nome_via')
+        w0.write(0, 2, 'Civico')
+        w0.write(0, 2, 'Note')
+        i=1
+        for vv in lista_civici2:
+            w0.write(i, 0, i) 
+            w0.write(i, 1, vv[0])
+            w0.write(i, 2, vv[1])
+            w0.write(i, 2, vv[2])
+            i+=1
+            
 
+        workbook0.close()
+    except Exception as e:
+        logging.error(e)
 
 
     # connessione Oracle
@@ -235,7 +236,7 @@ def main(argv):
     con = cx_Oracle.connect(parametri_con)
     logging.info("Versione ORACLE: {}".format(con.version))
 
-    print(len(cod_civico))
+    logging.debug(len(cod_civico))
     #exit()
     # Array con i civici neri e rossi
     
@@ -350,13 +351,14 @@ and object_name = 'CIV_TMP' '''
     w.write(0, 13, 'UNITA_URBANISTICA') 
     w.write(0, 14, 'QUARTIERE') 
     w.write(0, 15, 'CIRCOSCRIZIONE')
-    w.write(0, 16, 'ABITAZIONE_DI_RESIDENZA') 
-    w.write(0, 17, 'NUM_OCCUPANTI') 
-    w.write(0, 18, 'DESCR_CATEGORIA')
-    w.write(0, 19, 'DESCR_UTILIZZO') 
-    w.write(0, 20, 'COD_INTERNO')
-    w.write(0, 21, 'Presenza dato su Saltax?')
-    w.write(0, 22, 'Chiave consegnata?')
+    w.write(0, 16, 'ZONA')
+    w.write(0, 17, 'ABITAZIONE_DI_RESIDENZA') 
+    w.write(0, 18, 'NUM_OCCUPANTI') 
+    w.write(0, 19, 'DESCR_CATEGORIA')
+    w.write(0, 20, 'DESCR_UTILIZZO') 
+    w.write(0, 21, 'COD_INTERNO')
+    w.write(0, 22, 'Presenza dato su Saltax?')
+    w.write(0, 23, 'Chiave consegnata?')
 
 
     logging.info('*****************************************************')
@@ -380,45 +382,50 @@ and object_name = 'CIV_TMP' '''
         FROM STRADE.UTENZE_TIA_DOMESTICHE
         WHERE COD_CIVICO in (SELECT COD_CIVICO FROM STRADE.CIV_TMP )
         '''
-    lista_domestiche = cur.execute(query)
-
-    i=1
-    for rr in lista_domestiche:
-        j=0
-        #logging.debug(len(rr))
-        while j<len(rr):
-            w.write(i, j, rr[j])
+    try:
+        lista_domestiche = cur.execute(query)
+    except Exception as e:
+        logging.error(e)
+    
+    try:    
+        i=1
+        for rr in lista_domestiche:
+            j=0
+            #logging.debug(len(rr))
+            while j<len(rr):
+                w.write(i, j, rr[j])
+                j+=1
+            query_saltax='''select * from ecopunti_xatlas_key 
+                where pper ={0} and cod_interno = '{1}'
+                and data_attivazione_utenza is not null 
+                and data_cessazione_utenza is null '''.format(rr[0],rr[19])
+            #print(query_saltax)
+            cur_saltax= conn_saltax.cursor()
+            cur_saltax.execute(query_saltax)
+            presente_saltax=cur_saltax.fetchall()
+            if len(presente_saltax)>0:
+                w.write(i, j, 'S')
+            else:
+                w.write(i, j, 'N')
             j+=1
-        query_saltax='''select * from ecopunti_xatlas_key 
-            where pper ={0} and cod_interno = '{1}'
-            and data_attivazione_utenza is not null 
-            and data_cessazione_utenza is null '''.format(rr[0],rr[19])
-        #print(query_saltax)
-        cur_saltax= conn_saltax.cursor()
-        cur_saltax.execute(query_saltax)
-        presente_saltax=cur_saltax.fetchall()
-        if len(presente_saltax)>0:
-            w.write(i, j, 'S')
-        else:
-            w.write(i, j, 'N')
-        j+=1
-        query_saltax1='''select * from ecopunti_xatlas_key 
-            where pper ={0} and cod_interno = '{1}'
-            and data_attivazione_utenza is not null 
-            and data_cessazione_utenza is null 
-            and data_consegna is not null'''.format(rr[0],rr[19])
-        #print(query_saltax1)
-        cur_saltax.execute(query_saltax1)
-        consegnato_saltax=cur_saltax.fetchall()
-        if len(consegnato_saltax)>0:
-            w.write(i, j, 'Chiave già consegnata')
-        cur_saltax.close()
-        j+=1
-        i+=1
+            query_saltax1='''select * from ecopunti_xatlas_key 
+                where pper ={0} and cod_interno = '{1}'
+                and data_attivazione_utenza is not null 
+                and data_cessazione_utenza is null 
+                and data_consegna is not null'''.format(rr[0],rr[19])
+            #print(query_saltax1)
+            cur_saltax.execute(query_saltax1)
+            consegnato_saltax=cur_saltax.fetchall()
+            if len(consegnato_saltax)>0:
+                w.write(i, j, 'Chiave già consegnata')
+            cur_saltax.close()
+            j+=1
+            i+=1
 
-    cur.close()
-    workbook.close()
-
+        cur.close()
+        workbook.close()
+    except Exception as e:
+        logging.error(e)
 
 
     # civici domestiche

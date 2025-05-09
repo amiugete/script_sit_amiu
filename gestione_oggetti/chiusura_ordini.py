@@ -211,8 +211,10 @@ def main():
             logger.error(e)
 
         stato=1
+        logger.debug(oo[0])
         for ii in lista_int:
-            if ii[0]!=3 and ii[0]!=4:
+            logger.debug(ii[0])
+            if ii[0] in [1,5]: # 1 Aperto # 5 preso in carico #2 abortito # 3 chiuso # 4 chiuso con riserva
                 stato=0 
         
         

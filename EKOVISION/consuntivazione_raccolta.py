@@ -182,6 +182,8 @@ def main():
     
             
     # ciclo su elenco vie / note consuntivate
+    
+    # questa sarebbe la query corretta ma Tocchi capisce poco quindi ne scriviamo un'altra che corregga i suoi casini
     query_effettuati_totem='''select distinct 
 	e.id, 
 	e.id_percorso,
@@ -190,6 +192,48 @@ def main():
 	t.num_elementi, 
     t.cronologia,
 	e.fatto,
+	/*trim(replace(e.causale, ' - (no in questa giornata)', '')) as descr_causale,
+	ct.id as causale,*/
+    case 
+		when (e.fatto=e.num_elementi and trim(replace(e.causale, ' - (no in questa giornata)', '')) = '') then 'COMPLETATO'
+		else trim(replace(e.causale, ' - (no in questa giornata)', '')) 
+	end as descr_causale
+	,
+	case 
+		when (e.fatto=e.num_elementi and trim(replace(e.causale, ' - (no in questa giornata)', '')) = '') then '100'
+		else ct.id 
+	end as causale,
+	concat('TOTEM Badge ', e.codice, ' - Matr. ', vpes.matricola::text, ' - ', vpes.cognome, ' ', vpes.nome) as sorgente_dati, 
+	e.inser as data_insert, 
+    e.id_tappa as tappa, 
+    e.nota_via as note_totem /* è il campo con le note*/,
+    mu.mail
+	from raccolta.cons_percorsi_raccolta_amiu t
+	join raccolta.effettuati_amiu e on e.id_tappa::bigint =  t.id_tappa::bigint
+ 	left join raccolta.effettuati_correzione_date ecd on e.id_percorso=ecd.id_percorso and e.datalav= ecd.datalav_errata 
+  	left join totem.v_personale_ekovision_step1 vpes on vpes.codice_badge::text = e.codice 
+	left join raccolta.causali_testi ct on trim(replace(e.causale, ' - (no in questa giornata)', '')) ilike trim(ct.descrizione)
+    left join servizi.mail_ut mu on mu.id_uo::int  = t.id_uo::int
+	where 
+	(trim(replace(e.causale, ' - (no in questa giornata)', '')) != '' or e.fatto >0) 
+	and datalav >= '2024-01-29'
+    and codice not in ('1111', '2222', '3333', '4444', '8888', '9998', '9999')
+    and e.id > (select coalesce(max(max_id),0) from raccolta.invio_consuntivazioni_ekovision ice)
+	order by 1'''
+    
+    # query che corregge le cavolate di Tocchi.. non guardo la colonna fatto ma solo la causale
+    query_effettuati_totem='''select distinct 
+	e.id, 
+	e.id_percorso,
+	coalesce(ecd.datalav_ok, e.datalav)::date as datalav,
+	t.id_piazzola, 
+	t.num_elementi, 
+    t.cronologia,
+    /*e.fatto,*/
+	case  
+		when trim(replace(e.causale, ' - (no in questa giornata)', '')) = '' then 0
+		else e.fatto 
+	end fatto, 
 	trim(replace(e.causale, ' - (no in questa giornata)', '')) as descr_causale,
 	ct.id as causale,
 	concat('TOTEM Badge ', e.codice, ' - Matr. ', vpes.matricola::text, ' - ', vpes.cognome, ' ', vpes.nome) as sorgente_dati, 
@@ -204,11 +248,14 @@ def main():
 	left join raccolta.causali_testi ct on trim(replace(e.causale, ' - (no in questa giornata)', '')) ilike trim(ct.descrizione)
     left join servizi.mail_ut mu on mu.id_uo::int  = t.id_uo::int
 	where 
-	trim(replace(e.causale, ' - (no in questa giornata)', '')) != '' 
+	(trim(replace(e.causale, ' - (no in questa giornata)', '')) != '' /*or e.fatto >0*/) 
 	and datalav >= '2024-01-29'
     and codice not in ('1111', '2222', '3333', '4444', '8888', '9998', '9999')
     and e.id > (select coalesce(max(max_id),0) from raccolta.invio_consuntivazioni_ekovision ice)
 	order by 1'''
+ 
+    
+    
     
     # prima di tutto faccio un controllo che non ci siano causali che non so gestire e nel caso fermo tutto il passaggio dati e lancio allarme
     query_check='''select distinct causale, descr_causale from (
@@ -547,7 +594,7 @@ def main():
                     logger.error(' - Data: {}'.format(date_distinct[k]))
                     #logger.error('Id Scheda: {}'.format(id_scheda[k]))
                     # check se c_handller contiene almeno una riga 
-                    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                     logger.info("chiudo le connessioni in maniera definitiva")
                     currc.close()
                     #currc1.close()
@@ -713,7 +760,7 @@ def main():
            
 
     # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
     logger.info("chiudo le connessioni in maniera definitiva")
     
     currc.close()

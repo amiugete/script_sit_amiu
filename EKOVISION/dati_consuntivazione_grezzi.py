@@ -233,7 +233,8 @@ def main():
             #print(srv.listdir('./'))
             for filename in srv.listdir('./'):
                 #logger.debug(filename)
-                select_file='''SELECT * FROM UNIOPE.EKOVISION_LETTURA_CONSUNT WHERE FILENAME=:f1'''
+                select_file='''SELECT * FROM UNIOPE.EKOVISION_LETTURA_CONSUNT 
+                WHERE FILENAME=:f1 and da_riprocessare IS NULL'''
 
                 try:
                     cur.execute(select_file, (filename,))
@@ -423,16 +424,22 @@ def main():
                                             # Preparo i dati da inserire 
                                             
                                             # causale
-                                            if int(data[i]['cons_works'][t]['flg_exec'].strip())==1:
+                                            # il primo if era dopo ma l'ho sposato sopra (28/11/2024 sarebbero da riprocessare un po di dati)
+                                            if int(data[i]['flg_segn_srv_non_effett'].strip())==1:
+                                                causale=int(data[i]['cod_caus_srv_non_eseg_ext'].strip())
+                                                qualita=0
+                                            elif int(data[i]['cons_works'][t]['flg_exec'].strip())==1:
                                                 if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC' or data[i]['cons_works'][t]['tipo_srv_comp']=='SPAZZ':
                                                     causale=100
                                                 elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
                                                     causale=110
                                                 if data[i]['cons_works'][t]['tipo_srv_comp']=='SPAZZ':
                                                     qualita=int(data[i]['cons_works'][t]['cod_std_qualita'].strip())
-                                            elif int(data[i]['flg_segn_srv_non_effett'].strip())==1:
-                                                causale=int(data[i]['cod_caus_srv_non_eseg_ext'].strip())
-                                                qualita=0
+                                            #lo sposto prima perchè ci sono alcuni casi in cui int(data[i]['cons_works'][t]['flg_exec'].strip())==1 
+                                            # anche se il servizio non è stato effettuato
+                                            # elif int(data[i]['flg_segn_srv_non_effett'].strip())==1:
+                                            #    causale=int(data[i]['cod_caus_srv_non_eseg_ext'].strip())
+                                            #    qualita=0
                                             # se il servizio non fosse stato completato
                                             else :
                                                 try:
@@ -655,16 +662,33 @@ def main():
                         f.close()
                         #srv.rename("./"+ filename, "./json_error/" + filename)
                         #error_log_mail(errorfile, 'assterritorio@amiu.genova.it; andrea.volpi@ekovision.it; francesco.venturi@ekovision.it', os.path.basename(__file__), logger)
+                    
                        
-                    insert_log='''INSERT INTO UNIOPE.EKOVISION_LETTURA_CONSUNT (FILENAME, ERROR) VALUES(:c1, :c2)'''
+                    insert_log='''INSERT INTO UNIOPE.EKOVISION_LETTURA_CONSUNT (FILENAME, ERROR) SELECT :c1, :c2
+                    FROM DUAL 
+                    WHERE NOT EXISTS (SELECT 1 FROM UNIOPE.EKOVISION_LETTURA_CONSUNT WHERE FILENAME = :c3)'''
                     try:
                         cur.execute(insert_log, (
-                            filename, check
+                            filename, check, filename
                         ))
                     except Exception as e:
                         logger.error(insert_log)
-                        logger.error('1:{}, 2:{}'.format(
-                            filename, check
+                        logger.error('1:{}, 2:{} 3:{}'.format(
+                            filename, check, filename
+                        ))
+                        logger.error(e)
+                    
+                    update_log = '''UPDATE UNIOPE.EKOVISION_LETTURA_CONSUNT 
+                    SET DA_RIPROCESSARE = NULL 
+                    WHERE FILENAME = :c1 '''
+                    try:
+                        cur.execute(update_log, (
+                            filename,
+                        ))
+                    except Exception as e:
+                        logger.error(update_log)
+                        logger.error('1:{}'.format(
+                            filename
                         ))
                         logger.error(e)
                     con.commit()
@@ -676,8 +700,8 @@ def main():
                     
                     
                     
-                else: 
-                    logger.info('Non scarico il file {} perchè già letto e processato'.format(filename))
+                #else: 
+                #    logger.info('Non scarico il file {} perchè già letto e processato'.format(filename))
         
         
         

@@ -595,7 +595,7 @@ def main():
             VALUES(%s,%s,%s,%s,%s,%s,
             %s,%s,%s,%s,%s,%s,
             %s,%s,%s,%s,%s,%s,
-            %s,%s);'''
+            %s,%s) ON CONFLICT (id_elemento) DO NOTHING'''
 
         for ee in id_e:
             curr_p1.execute(insert_elementi,(ee[0],ee[1],ee[2],ee[3],ee[4],ee[5],ee[6],ee[7],ee[8],ee[9],ee[10],ee[11],ee[12],ee[13],ee[14],ee[15],ee[16],ee[17],ee[18],ee[19]))

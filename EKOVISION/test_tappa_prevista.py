@@ -28,7 +28,8 @@ currentdir = os.path.dirname(os.path.realpath(__file__))
 parentdir = os.path.dirname(currentdir)
 sys.path.append(parentdir)
 from credenziali import *
-from preconsuntivazione import *
+
+from preconsuntivazione import tappa_prevista
 
 
 

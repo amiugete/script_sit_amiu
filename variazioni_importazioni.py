@@ -64,9 +64,10 @@ path     = os.path.dirname(os.path.abspath(filename))
 
 
 path=os.path.dirname(sys.argv[0]) 
+nome=os.path.basename(__file__).replace('.py','')
 #tmpfolder=tempfile.gettempdir() # get the current temporary directory
-logfile='{}/log/variazioni_importazioni.log'.format(path)
-errorfile='{}/log/error_variazioni_importazioni.log'.format(path)
+logfile='{0}/log/{1}.log'.format(path,nome)
+errorfile='{0}/log/error_{1}.log'.format(path,nome)
 #if os.path.exists(logfile):
 #    os.remove(logfile)
 
@@ -162,6 +163,7 @@ def cfr_tappe(tappe_sit, tappe_uo, logger):
 
 
 def main():
+    logger.info('Il PID corrente è {0}'.format(os.getpid()))
     # carico i mezzi sul DB PostgreSQL
     logger.info('Connessione al db')
     conn = psycopg2.connect(dbname=db,
@@ -214,10 +216,13 @@ def main():
     holiday_list_pulita.append(festa_patronale)
     
     # aggiungo giorno in cui non sono passate le variazioni
-    fp = datetime.datetime(oggi.year, 2, 19)
-    giorno_variazioni_saltate=datetime.date(fp.year, fp.month, fp.day)
-    holiday_list_pulita.append(giorno_variazioni_saltate)
+    #fp = datetime.datetime(oggi.year, 2, 19)
+    #giorno_variazioni_saltate=datetime.date(fp.year, fp.month, fp.day)
+    #holiday_list_pulita.append(giorno_variazioni_saltate)
     
+    
+    # tutto questo controllo non lo faccio più. Lo script gira anche sabato / domenica e festivi
+    '''
     if num_giorno==0:
         num=3
         # controllo se venerdì era festivo
@@ -268,14 +273,40 @@ def main():
                 if altroieri in holiday_list_pulita:
                     num=3
                     
-    
+    '''
+    num=1
     logging.debug('num = {}'.format(num))
                     
-                    
+    #exit()               
                     
     
     #check_error=0 # va messo sotto 
     
+    
+    # inserisco i percorsi clonati 
+    insert_cloni='''insert into util.sys_history
+("type", "action", description, datetime, id_user, id_percorso)
+(
+select 'PERCORSO' as type, 
+'UPDATE' as action,
+description, 
+datetime, 
+id_user,
+left(trim(replace(replace(replace(description, 'Percorso', ''), id_percorso::text, ''), ': clonato come percorso', '')),6)::int as id_percorso_ok
+from util.sys_history sh 
+where description ilike '%clonato come percorso%'
+and sh.datetime > (current_date - INTEGER '{0}')
+and left(trim(replace(replace(replace(description, 'Percorso', ''), id_percorso::text, ''), ': clonato come percorso', '')),6) ~ '^[0-9]*$' 
+)'''.format(num)
+    
+    try:
+        curr.execute(insert_cloni)
+    except Exception as e:
+        logger.error(e)
+        
+    conn.commit()    
+    curr.close()
+    curr = conn.cursor()
     
     '''******************************************************************************************************
     NON SONO COMPRESI I PERCORSI STAGIONALI per cui vanno re-importate le variazioni in fase di attivazione 
@@ -320,7 +351,7 @@ def main():
         and pu.responsabile = 'S'
         and p.id_categoria_uso in (3)
         and (p.data_dismissione is null or p.data_dismissione > current_date )
-        and p.data_attivazione <= current_date::date
+        and coalesce(p.data_attivazione, current_date::date) <= current_date::date
         UNION 
         select p2.cod_percorso , p2.descrizione, s2.descrizione as servizio, u2.descrizione  as ut, 
         p2.id_percorso
@@ -363,13 +394,15 @@ def main():
     
 
 
+
     try:
         curr.execute(query)
         lista_variazioni=curr.fetchall()
     except Exception as e:
         logger.error(e)
 
-
+    #logger.debug(lista_variazioni)
+    #exit()
     #inizializzo gli array
     cod_percorso=[]
     descrizione=[]
@@ -378,6 +411,7 @@ def main():
     stato_importazione=[]
     invio_mail=[]
 
+    check_uo=0
            
     for vv in lista_variazioni:
         check_error=0
@@ -494,7 +528,45 @@ def main():
             if(c_p[0])>0:
                 check1=1
             else:
-                stato_importazione.append('ERRORE: Non ci sono testate su UO')
+                # controllo se è un percorso che si attiverà più avanti
+                cur.close()
+                cur = con.cursor()
+                query_o1bis='''SELECT count(*) FROM ANAGR_SER_PER_UO aspu 
+        WHERE ID_PERCORSO = :cod_perc
+        AND DTA_ATTIVAZIONE > TO_DATE (:data1, 'DD/MM/YYYY')  '''
+
+                try:
+                    cur.execute(query_o1bis, (vv[0], oggi1))
+                    cc_pp1bis=cur.fetchall()
+                except Exception as e:
+                    logger.error(query_o1bis)
+                    logger.error(e)
+                for c_p1bis in cc_pp1bis:
+                    #logger.debug(c_p1bis[0])
+                    if(c_p1bis[0])>0:
+                        stato_importazione.append('''WARNING: Percorso che deve ancora attivarsi. Riproverò l'importazione nei prossimi giorni.''')
+                        # faccio insert con utente procedure 
+                        curr3=conn.cursor()
+                        insert_log='''INSERT INTO util.sys_history ("type", "action", description, datetime, id_user,  id_percorso) 
+                                                (
+                                                    select distinct 'PERCORSO', 'UPDATE', 'Forzatura re-importazione UO (percorso non ancora attivo)',
+                                                    now(),  0, foo.id_percorso 
+                                                    from (
+                                                        select id_percorso from elem.percorsi p  
+                                                        where id_categoria_uso = 3 and cod_percorso = %s
+                                                        ) foo
+                                                )'''    
+                        try:
+                            curr3.execute(insert_log, (vv[0],))
+                        except Exception as e:
+                            logger.error(insert_log)
+                            logger.error('cod percorso: {}'.format(vv[0]))
+                            logger.error(e)
+                        conn.commit()
+                        curr3.close
+                    else:    
+                        stato_importazione.append('ERRORE: Non ci sono testate su UO')
+                        check_uo+=1
         logger.debug('Check1={}'.format(check1))        
         cur.close()
         
@@ -814,8 +886,13 @@ def main():
                     cur = con.cursor()
                     cur1 = con.cursor()
                     cur2 = con.cursor()
+                    
+                    # ciclo sulle piazzole o macro tappe
+                    logger.debug('Ora inserisco le tappe - Inizio ciclo')
                     for tappa in sit1:
-                        
+                        logger.debug(tappa[0])
+                        logger.debug(tappa[5])
+                        logger.debug(tappa[10])
                         
                         query_insert0='''INSERT INTO UNIOPE.CONS_MACRO_TAPPA
                         (ID_MACRO_TAPPA, RIFERIMENTO, QTA_TOT_SPAZZAMENTO, FREQUENZA, RIPASSO, ID_PIAZZOLA, ID_ASTA, LUNG_TRATTAMENTO, NOTA_VIA)
@@ -915,9 +992,9 @@ def main():
                                 logger.error(query_sit2, vv[4], tappa[5], tappa[14], tappa[10] )
                                 logger.error(e)
                         
-                        
+                        logger.debug('Ora inserisco gli elementi')
                         for elementi in sit2:
-                            
+                            logger.debug(elementi[4])
                             # per prima cosa cerco se esiste già un elemento e faccio update o insert del tipo elemento
                             query_sel_el='''SELECT TIPO_ELEMENTO, ID_ELEMENTO FROM UNIOPE.CONS_ELEMENTI WHERE ID_ELEMENTO = :t1
                             '''
@@ -975,6 +1052,7 @@ def main():
                                     check_error=1
                             else:
                                 try:
+                                    logger.debug('Faccio insert elemento {}'.format(elementi[4]))
                                     cur2.execute(query_insert3, (tappa[0], elementi[0], elementi[1], elementi[2], elementi[3], str(elementi[4]), elementi[5]))
                                     #macro_tappe.append(tappa[2])
                                 except Exception as e:
@@ -1248,14 +1326,14 @@ codice_modello_servizio,
 coalesce((select distinct ordine from anagrafe_percorsi.v_percorsi_elementi_tratti 
 where codice_modello_servizio = tab.codice_modello_servizio 
 and codice = tab.codice
-and ripasso = tab.ripasso and data_fine is null ),1)
+and ripasso = tab.ripasso and data_fine is null limit 1),1)
 as ordine,
 objecy_type, 
   codice, quantita, lato_servizio, percent_trattamento,
 coalesce((select distinct frequenza from anagrafe_percorsi.v_percorsi_elementi_tratti 
 where codice_modello_servizio = tab.codice_modello_servizio 
 and codice = tab.codice
-and ripasso = tab.ripasso and data_fine is null),0)
+and ripasso = tab.ripasso and data_fine is null limit 1),0)
 as 
   frequenza, 
   numero_passaggi, nota,
@@ -1349,6 +1427,26 @@ from (
     curr.close()
     
     
+    # registro quanto successo per i controlli successivi 
+    
+    insert_query="""INSERT INTO anagrafe_percorsi.log_trasferimenti_giornalieri 
+    (giorno, check_error_uo, check_error_ekovision) 
+    VALUES(to_date(%s, 'YYYYMMDD'), %s, %s)
+    ON CONFLICT (giorno) DO UPDATE 
+  SET data_ora_aggiornamento= now(), 
+      check_error_uo = %s, 
+      check_error_ekovision = %s"""
+    curr.close()
+    logger.info('Log su SIT degli invii')
+    curr = conn.cursor()  
+    
+    try:
+        curr.execute(insert_query,(giorno_file, check_error, check_ekovision, check_error, check_ekovision))
+    except Exception as e:
+        logger.error(e)
+        
+    
+    
        
     if len(cod_percorso)>0:
         logger.info('Oggi ci sono {} variazioni. Creo nuovo file'.format(len(cod_percorso)))
@@ -1423,6 +1521,10 @@ from (
     <br> check_error= {0}
     <br> check_ekovision= {1}
     '''.format(check_error, check_ekovision)
+    if check_uo==0:
+        riepilogo_controlli = '{}<br> check_uo=0'.format(riepilogo_controlli)
+    else:
+        riepilogo_controlli = '{}<font color="red"><br> check_uo={}</font> (num percorsi in errore)'.format(riepilogo_controlli, check_uo)
        
     body = """Report giornaliero delle variazioni {0}.<br><br>
     
@@ -1636,7 +1738,7 @@ from (
     conn.close()
 
     # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
 
 if __name__ == "__main__":
     main()

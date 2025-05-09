@@ -6,6 +6,9 @@
 
 '''
 Script per fare update delle aste delle piazzole
+Associare una piazzola ad un'asta diversa
+
+MODIFICARE GLI INPUT NEL MAIN PRIMA DI LANCIARE LO SCRIPT
 '''
 
 
@@ -99,6 +102,7 @@ def update_asta_piazzola(piazzola, asta_old, asta_new, ambiente):
 
         descrizione_update = 'Percorso {0} codice {1} aggiornato da script python update_asta_piazzola.py'.format(id_percorso, cod_percorso)
 
+        # aggiorno tabella storico per ogni percorso che passa dalla piazzola
         insert_history='''INSERT INTO util.sys_history ("type","action","description","datetime","id_piazzola","id_percorso", "id_user") VALUES
 	 ('PERCORSO','UPDATE_ELEM', %s, now(), %s, %s, -1);'''
         curr2= conn.cursor()
@@ -107,6 +111,7 @@ def update_asta_piazzola(piazzola, asta_old, asta_new, ambiente):
         except Exception as e:
             logging.error(e)
 
+        # per ogni percorso che passa dalla piazzola verifico se l'asta nuova da associare fa già parte del percorso
         curr2.close()
         query2='''select * from elem.aste_percorso ap where id_percorso = %s and id_asta=%s'''
         curr2= conn.cursor()
@@ -118,10 +123,11 @@ def update_asta_piazzola(piazzola, asta_old, asta_new, ambiente):
             logging.error(e)
             
         ''' Procedo in due modi diversi'''
+        # caso1 la query2 ritorna 0 perchè l'asta nuova non fa già parte del percorso[u]
         if len(lista_aste_percorsi)==0:
             logging.info("Non c'è la nuova asta {0}, nel percorso {1} (id={2}), la aggiungo".format(asta_new, cod_percorso, id_percorso))
             curr3= conn.cursor()
-             #update num_seq
+             #update num_seq ????????????????????????
             update =  '''update elem.aste_percorso 
             set num_seq=num_seq+1 
             where id_percorso=%s and num_seq >=(select min(num_seq) FROM elem.aste_percorso where id_percorso = %s and id_asta=%s);'''
@@ -131,6 +137,7 @@ def update_asta_piazzola(piazzola, asta_old, asta_new, ambiente):
             except Exception as e:
                 logging.error(e)
             
+            # inserisco la riga relativa alla nuova asta 
             insert= '''insert into elem.aste_percorso (id_asta, num_seq, x_cod_percorso, lato_servizio, percent_trattamento, tipo, frequenza, 
             carico_scarico, id_percorso, metri_trasf, tempo_trasf, senso_perc, lung_trattamento, nota, data_inserimento) SELECT %s, min(num_seq), x_cod_percorso,
             lato_servizio, percent_trattamento, tipo, frequenza, 
@@ -146,6 +153,7 @@ def update_asta_piazzola(piazzola, asta_old, asta_new, ambiente):
                 logging.error(e)
             
             curr3.close()    
+            
             
             
             curr3= conn.cursor()
@@ -164,10 +172,11 @@ def update_asta_piazzola(piazzola, asta_old, asta_new, ambiente):
             
             
             ''' 
-            Se 0 Cambio il tipo della vecchia asta da servizio a trasferimento
+            Cambio il tipo della vecchia asta da servizio a trasferimento
             '''
             curr3= conn.cursor()
             
+            #verifico che sulla vecchia asta non insista un'altra piazzola
             test_eap='''select count(*) from elem.elementi_aste_percorso eap where id_asta_percorso in (
                             select id_asta_percorso from elem.aste_percorso ap where id_percorso = %s and id_asta=%s 
                         )'''
@@ -180,6 +189,8 @@ def update_asta_piazzola(piazzola, asta_old, asta_new, ambiente):
             for tt in lista_test:
                 check_test=tt[0]
             
+            # se la verifica sopra ritorna 0 modifico il tipo asta da servizio a trasferimento,
+            #altrimenti mantengo il tipo servizio dal momenrto che da quell'asta passa 
             if check_test == 0:
                 update_ap='''update elem.aste_percorso
                 set tipo = 'trasferimento' 
@@ -197,7 +208,7 @@ def update_asta_piazzola(piazzola, asta_old, asta_new, ambiente):
             curr3.close()
             
             
-            
+        #caso2 la query2 (riga 114) ritorna val>0 perchè l'asta nuova fa già parte del percorso[u]    
         elif len(lista_aste_percorsi)>0:
             logging.info("La nuova asta {0} c'è già nel percorso {1}, faccio semplicemente update".format(asta_new, cod_percorso))
             c=0
@@ -220,7 +231,8 @@ def update_asta_piazzola(piazzola, asta_old, asta_new, ambiente):
             print("Da capire come gestire")      
         '''
         curr2.close()
-        
+    
+    # aggiorno la piazzola sostituendo il vecchio id_asta con quello nuovo 
     update_piazzola = '''update elem.piazzole p
         set id_asta= %s
         where id_piazzola in (%s);'''
@@ -231,7 +243,7 @@ def update_asta_piazzola(piazzola, asta_old, asta_new, ambiente):
     except Exception as e:
         logging.error(e)
         
-        
+    # aggiorno gli elementi della piazzola sostituendo il vecchio id_asta con quello nuovo    
     update_elementi = '''update elem.elementi 
     set id_asta= %s
     where id_piazzola in (%s);'''
@@ -259,9 +271,10 @@ def main():
     logging.info('''Dominio ={0}, Utente={1}'''.format(domain, user))
     ############################################
     #INPUT (da rendere dinamici per  fare WS)
-    piazzola = 43730
-    asta_old = 950300100
-    asta_new = 950300006
+    # IN CASO DI RICHIESTE MODIFICARE MANUALMENTE GLI INPUT SOTTO CON I DATI FORNITI NELLA RICHIESTA
+    piazzola = 23577
+    asta_old = 2529420009
+    asta_new = 2529420007
     ambiente = 'sit' # sit_test, #sit_prog
     #############################################
     update_asta_piazzola(piazzola, asta_old, asta_new, ambiente)

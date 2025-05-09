@@ -298,12 +298,12 @@ def main():
                                         (ID_SCHEDA, DATA_PIANIF_INIZIALE, DATA_ESECUZIONE_PREVISTA, CODICE_SERV_PRED,
                                         COD_CAUS_SRV_NON_ESEG_EXT, COD_CAUS_SRV_NON_COMPL_EXT, 
                                         FLG_SEGN_SRV_NON_EFFETT, FLG_SEGN_SRV_NON_COMPL,
-                                        NOMEFILE, NR_RIGA, RECORD_VALIDO
+                                        NOMEFILE, NR_RIGA, RECORD_VALIDO, ID
                                         ) 
                                         VALUES
                                         (:s1, :s2, :s3, :s4, :s5, :s6, :s7, :s8, :s9,
                                         (select (max(NR_RIGA)+1) from UNIOPE.SCHEDE_ESEGUITE_EKOVISION),
-                                        :s10)'''
+                                        :s10, SEE_ID_seq.nextval)'''
                                     if check_update == 0 and check_scheda == 1: 
                                         rvalido='N'
                                     else:
@@ -469,14 +469,18 @@ def main():
                                                 logger.error(e) 
                                             if len(cp)==0:
                                                 query_insert='''INSERT INTO UNIOPE.CONSUNT_MACRO_TAPPA
-                                                (ID_MACRO_TAPPA, QTA_ELEM_NON_VUOTATI, CAUSALE_ELEM, NOTA, DATA_CONS, ID_PERCORSO, ID_VIA, TIPO_ELEMENTO, ID_SERVIZIO, INS_DATE, MOD_DATE, ORIGINE_DATO)
+                                                (ID_MACRO_TAPPA, QTA_ELEM_NON_VUOTATI, CAUSALE_ELEM, NOTA,
+                                                DATA_CONS, ID_PERCORSO, ID_VIA, TIPO_ELEMENTO, ID_SERVIZIO, INS_DATE,
+                                                MOD_DATE, ORIGINE_DATO)
                                                 /* costruisco la data entry con causale che voglio
                                                 --102 PERCORSO NON PREVISTO
                                                 -- 83 PERCORSO ESEGUITO IN ALTRA DATA */
                                                 SELECT DISTINCT cmt.ID_MACRO_TAPPA,
                                                 /*----------------------------------------------------------------
-                                                -- gli elementi non vuotati dovrebbero essere > 0 e allora bisognerevve fare un count*/
-                                                0 AS QTA_ELEM_NON_VUOTATI,
+                                                -- gli elementi non vuotati dovrebbero essere > 0 e allora bisognerevve fare un count
+                                                0 AS QTA_ELEM_NON_VUOTATI,*/
+                                                (SELECT count(DISTINCT ID_ELEMENTO) FROM UNIOPE.CONS_MICRO_TAPPA cmt0
+                                                WHERE cmt0.ID_MACRO_TAPPA = cmt.ID_MACRO_TAPPA),
                                                 /*----------------------------------------------------------------*/
                                                 :causale AS CAUSALE_ELEM,
                                                 NULL AS NOTA, 
@@ -537,8 +541,13 @@ def main():
                                             else:
                                                 update_query='''UPDATE CONSUNT_MACRO_TAPPA cmt 
                                                 SET 
-                                                QTA_ELEM_NON_VUOTATI = 0,
-                                                CAUSALE_ELEM= :causale
+                                                QTA_ELEM_NON_VUOTATI = 
+                                                /* in questo caso conto gli elementi su mappa */
+                                                (SELECT count(DISTINCT ID_ELEMENTO) 
+                                                FROM UNIOPE.CONS_MICRO_TAPPA cmt0
+                                                WHERE cmt0.ID_MACRO_TAPPA = cmt.ID_MACRO_TAPPA),
+                                                CAUSALE_ELEM = :causale, 
+                                                ORIGINE_DATO = 'Ekovision non eseguito'
                                                 WHERE cmt.ID_MACRO_TAPPA IN 
                                                 (
                                                 SELECT ID_TAPPA  FROM CONS_PERCORSI_VIE_TAPPE cpvt 
@@ -618,7 +627,7 @@ def main():
                                                 AND id_servizio NOT IN (9)) 
                                                 AS ID_SERVIZIO,
                                                 SYSDATE AS INS_DATE, 
-                                                'Ekovision'
+                                                'EKOVISION'
                                                 FROM CONSUNT_SPAZZAMENTO cs 
                                                 WHERE cs.ID_TAPPA IN 
                                                 (
@@ -778,7 +787,7 @@ def main():
                                                     
                                             #elif (len(persone_su_uo)==0):
                                             query_insert='''INSERT INTO UNIOPE.HIST_SERVIZI 
-                                            (DTA_SERVIZIO, ID_SER_PER_UO, ID_PERSONA,
+                                            (DTA_SERVIZIO, ID_SER_PER_UO, COD_DIPENDENTE,
                                             PROG_SERVIZIO, ID_UO_LAVORO, DURATA,
                                             ID_TURNO, SPORTELLO) 
                                             VALUES(to_date(:h1,'YYYYMMDD'), :h2, :h3,
@@ -792,7 +801,7 @@ def main():
                                                             )
                                             except Exception as e:
                                                 logger.error(query_insert)
-                                                logger.error('1:{}, 2:{}, 3{}, 4:{}, 5:{}, 6:{}, 7:{}'.format(data[i]['data_esecuzione_prevista'], 
+                                                logger.error('1:{}, 2:{}, 3:{}, 4:{}, 5:{}, 6:{}, 7:{}'.format(data[i]['data_esecuzione_prevista'], 
                                                                         id_ser_per_uo, idpersona,
                                                                         id_ut_ok, durata, 
                                                                         id_turno, sportello))
@@ -819,6 +828,12 @@ def main():
                                     
                                     # popolamento pesi
                                     c=0 # conferimenti
+                                    
+                                    # per delete utilizzo degli array
+                                    
+                                    
+                                    pesi_id=[]
+                                    
                                     while c<len(data[i]['cons_conferimenti']):
                                         # con la funzione strip e usando lo spazio come separatore fra sportelli 
                                         # non dovrebbero servire condizioni che distinguano il primo sportello dagli altri
@@ -842,6 +857,9 @@ def main():
                                         
                                         
                                         
+                                        
+                                        pesi_id.append(data[i]['cons_conferimenti'][c]['id'])
+                                        
                                         #altrimenti
                                         
                                         # ID_UO_TITOLARE, COD_CER, DESCR_RIFIUTO vanno in qualche modo recuperati
@@ -850,22 +868,24 @@ def main():
                                         #logger.debug(peso_lordo)
                                         if peso_lordo > 0:
                                             
+                                            id_pesata='{}'.format(data[i]['cons_conferimenti'][c]['id'])
+                                            
                                             select_query='''SELECT * FROM TB_PESI_PERCORSI tpp 
                                             WHERE PROVENIENZA = 'RIMESSA'
                                             AND DATA_PERCORSO = to_date(:c1, 'YYYYMMDD') 
                                             AND ID_SER_PER_UO = :c2
-                                            AND NOTE = :c3'''
+                                            AND NOTE = :c3 '''
                                             
                                             
                                             try:
                                                 cur.execute(select_query, (data[i]['data_esecuzione_prevista'], id_ser_per_uo,
-                                                                    data[i]['cons_conferimenti'][c]['id'])
+                                                                    id_pesata)
                                                         )
                                                 #cur1.rowfactory = makeDictFactory(cur1)
                                                 conferimenti_su_uo=cur.fetchall()
                                             except Exception as e:
                                                 logger.error(select_query)
-                                                logger.error('1:{}, 2:{}, 3{}'.format(data[i]['data_esecuzione_prevista'], id_ser_per_uo,
+                                                logger.error('1:{}, 2:{}, 3: {}'.format(data[i]['data_esecuzione_prevista'], id_ser_per_uo,
                                                                     data[i]['cons_conferimenti'][c]['id']))
                                                 logger.error(e)
                                             
@@ -972,8 +992,8 @@ def main():
                                                                         data[i]['data_esecuzione_prevista'],
                                                                         id_ser_per_uo,
                                                                         id_ser_per_uo,
-                                                                        int(data[i]['cons_conferimenti'][c]['id']
-                                                                        ))
+                                                                        id_pesata
+                                                                        )
                                                             )
                                                 except Exception as e:
                                                     logger.error(insert_query)
@@ -991,7 +1011,7 @@ def main():
                                                                         data[i]['data_esecuzione_prevista'],
                                                                         id_ser_per_uo,
                                                                         id_ser_per_uo,
-                                                                        data[i]['cons_conferimenti'][c]['id']))
+                                                                        id_pesata))
                                                     logger.error(e)
                                                     exit()
                                                 
@@ -1007,7 +1027,7 @@ def main():
                                                 WHERE PROVENIENZA = 'RIMESSA'
                                                 AND DATA_PERCORSO = to_date(:c4, 'YYYYMMDD') 
                                                 AND ID_SER_PER_UO = :c5
-                                                AND NOTE = :c6'''
+                                                AND NOTE = :c6 '''
                                                 try:
                                                     cur.execute(update_query, (
                                                                         peso_netto,
@@ -1015,7 +1035,7 @@ def main():
                                                                         uni_cod_ecos,
                                                                         data[i]['data_esecuzione_prevista'],
                                                                         id_ser_per_uo,
-                                                                        data[i]['cons_conferimenti'][c]['id'])
+                                                                        id_pesata)
                                                             )
                                                 except Exception as e:
                                                     logger.error(update_query)
@@ -1024,7 +1044,7 @@ def main():
                                                                         uni_cod_ecos,
                                                                         data[i]['data_esecuzione_prevista'],
                                                                         id_ser_per_uo,
-                                                                        data[i]['cons_conferimenti'][c]['id']))
+                                                                        id_pesata))
                                                     logger.error(e)
                                             else:
                                                 logger.error('Ci sono troppi conferimenti con ID {}'.format(data[i]['cons_conferimenti'][c]['id']))
@@ -1037,6 +1057,10 @@ def main():
                                             logger.info('Peso proveniente da ECOS. Non lo processo')
                                         c+=1    
                                         
+                                        
+                                        
+                                        
+                                        
                                     
                                     
                                     
@@ -1044,7 +1068,55 @@ def main():
                                     cur.close()
                                     cur = con.cursor()
                                     
+                                    # ora controllo quanti pesi ci sono 
                                     
+                                    if len(pesi_id) > 0:
+                                        select_queryt='''SELECT * FROM TB_PESI_PERCORSI tpp 
+                                            WHERE /* PROVENIENZA = 'RIMESSA'
+                                            AND*/ DATA_PERCORSO = to_date(:c1, 'YYYYMMDD') 
+                                            AND ID_SER_PER_UO = :c2
+                                            '''
+                                            
+                                            
+                                        try:
+                                            cur.execute(select_queryt, (data[i]['data_esecuzione_prevista'], id_ser_per_uo)
+                                                    )
+                                            #cur1.rowfactory = makeDictFactory(cur1)
+                                            conferimenti_su_uo_test=cur.fetchall()
+                                        except Exception as e:
+                                            logger.error(select_queryt)
+                                            logger.error('1:{}, 2:{}'.format(data[i]['data_esecuzione_prevista'], id_ser_per_uo))
+                                            logger.error(e)
+                                        
+                                        if len(conferimenti_su_uo_test) != len(pesi_id):
+                                            logger.warning('Conferimenti su UO={} - Conferimenti Ekovision={} Devo cancellare dei pesi dalla scheda'.format(
+                                                len(conferimenti_su_uo_test), len(pesi_id)
+                                            ))
+                                            delete_query0= '''DELETE FROM TB_PESI_PERCORSI tpp 
+                                            WHERE PROVENIENZA = 'RIMESSA'
+                                            AND DATA_PERCORSO = to_date(:c1, 'YYYYMMDD') 
+                                            AND ID_SER_PER_UO = :c2
+                                            AND NOTE NOT IN ('''
+                                            tt=0
+                                            while tt<len(pesi_id):
+                                                if tt==0:
+                                                    delete_query = '{} {}'.format(delete_query0, pesi_id[tt])
+                                                else:
+                                                    delete_query = '{}, {}'.format(delete_query, pesi_id[tt])
+                                                tt+=1
+                                            
+                                            delete_query= '''{})'''.format(delete_query)
+                                            logger.debug(delete_query)
+                                            try:
+                                                cur.execute(delete_query, (data[i]['data_esecuzione_prevista'], id_ser_per_uo))
+                                            except Exception as e:
+                                                logger.error(delete_query)
+                                                logger.error('1:{}, 2:{}'.format(data[i]['data_esecuzione_prevista'], id_ser_per_uo))
+                                                
+                                    
+                                    con.commit()
+                                    cur.close()
+                                    cur = con.cursor()
                                     
                                     if len(data[i]['cons_works'])==0:
                                         logger.warning('Il percorso {0} in data_pianif_iniziale {1} (id_scheda = {2}) non ha nessuna tappa'.format(
@@ -1059,6 +1131,7 @@ def main():
                                         ))
                                     elif (len(data[i]['cons_works'])>0 and data[i]['cod_caus_srv_non_eseg_ext']==''):
                                         # consuntivazione 
+                                        logger.debug('Consuntivazione tappa per tappa ({} tappe)'.format(len(data[i]['cons_works'])))
                                         t=0
                                         check_tappe_non_trovate=0
                                         check_tappe_multiple=0
@@ -1073,8 +1146,8 @@ def main():
                                         ripasso=0
                                         ripasso_sit=0
                                         while t<len(data[i]['cons_works']):
-                                            #if int(data[i]['id_scheda'])==116601:
-                                            #    logger.debug(t)      
+                                            '''if int(data[i]['id_scheda'])==494918:
+                                                logger.debug(t) '''     
                                             if data[i]['cons_works'][t]['tipo_srv_comp']=='SPAZZ':
                                                 #logger.debug('Consuntivazione spazzamento')
                                                 # SU SIT cerco info sul tratto
@@ -1405,6 +1478,7 @@ def main():
                                                 tipo_servizio='RACC'
                                                 #logger.debug(int(data[i]['cons_works'][t]['cod_componente']))
                                                 if int(data[i]['cons_works'][t]['pos'])>0 and int(data[i]['cons_works'][t]['flg_non_previsto'].strip())==0:
+                                                    #logger.debug(int(data[i]['cons_works'][t]['cod_componente']))
                                                     if int(data[i]['cons_works'][t]['cod_componente'].strip()) in elenco_elementi:
                                                         ripasso_sit=elenco_elementi.count(int(data[i]['cons_works'][t]['cod_componente'].strip()))
                                                     else:
@@ -1816,6 +1890,7 @@ def main():
                                                     #se trovo una tappa
                                                     
                                                     else:
+                                                        #logger.debug('Tappa trovata')
                                                         # conto gli elementi
                                                         #for tt in tappe:  
                                                         if len(elenco_tappe)==0:
@@ -1829,10 +1904,12 @@ def main():
                                                             nota_consuntivazione=''
                                                             ##########################################
                                                             if int(data[i]['cons_works'][t]['flg_exec'].strip())==1:
+                                                                #logger.debug('Componente eseguita')
                                                                 count_fatti=1
                                                                 if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC':
                                                                     causale=100
                                                                 elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
+                                                                    logger.debug('Anche lavaggio')
                                                                     causale=110
                                                             else:
                                                                 if causale_non_es != None:
@@ -1856,7 +1933,12 @@ def main():
                                                             # stessa tappa di prima 
                                                             count_elementi+=1
                                                             if int(data[i]['cons_works'][t]['flg_exec'].strip())==1:
+                                                                #logger.debug('Componente eseguita')
                                                                 count_fatti+=1
+                                                                if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC':
+                                                                    causale=100
+                                                                elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
+                                                                    causale=110
                                                             else:
                                                                 if causale_non_es != None:
                                                                     causale=causale_non_es
@@ -1886,11 +1968,12 @@ def main():
                                                             elenco_tipi.append(int(tipo_elemento))
                                                             count_elementi=1
                                                             if int(data[i]['cons_works'][t]['flg_exec'].strip())==1:
+                                                                #logger.debug('Componente eseguita')
                                                                 count_fatti=1
                                                                 if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC':
                                                                     causale=100
                                                                 elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
-                                                                    casuale=110
+                                                                    causale=110
                                                             else:
                                                                 if causale_non_es != None:
                                                                     causale=causale_non_es
@@ -1916,11 +1999,15 @@ def main():
                                                             ##########################################
                                                         else:
                                                             logger.error('Non capisco perchè finisca qua')
+                                                        
+                                                        #logger.debug(t)
+                                                        #logger.debug(data[i]['cons_works'][t]['tipo_srv_comp'])
+                                                        #logger.debug(causale)
                                                                 
                                                     
                                                     
                                                 
-                                                    
+                                                        #logger.debug('Qua invece ci arrivo con causale {}'.format(causale))
                                                         # devo fare gli insert
                                                         query_select=''' 
                                                         SELECT * 
@@ -2094,6 +2181,22 @@ def main():
                             logger.error('Entrare in filezilla e spostare il file a mano')
                             error_log_mail(errorfile, 'AssTerritorio@amiu.genova.it, Riccardo.Piana@amiu.genova.it', os.path.basename(__file__), logger)
                             exit() 
+                        
+                        # se il file era già stato processato lo indico come da riprocessare
+                        update_log = '''UPDATE UNIOPE.EKOVISION_LETTURA_CONSUNT 
+                            SET DA_RIPROCESSARE = 1 
+                            WHERE FILENAME = :c1 '''
+                        try:
+                            cur.execute(update_log, (
+                                filename,
+                            ))
+                        except Exception as e:
+                            logger.error(update_log)
+                            logger.error('1:{}'.format(
+                                filename
+                            ))
+                            logger.error(e)
+                        con.commit()
                     except Exception as e:
                         logger.error(e)
                         logger.error('Problema processamemto file {}'.format(filename))

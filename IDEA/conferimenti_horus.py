@@ -107,6 +107,7 @@ from email.mime.text import MIMEText
 from invio_messaggio import *
 
 def main():
+    logger.info('Il PID corrente è {0}'.format(os.getpid()))
     #################################################################
     logger.info("Recupero il token")
     token1=token()
@@ -391,7 +392,7 @@ def main():
     conn.close()
 
     # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)    
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)    
     
     #while i
     
