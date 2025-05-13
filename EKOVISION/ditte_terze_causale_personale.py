@@ -282,7 +282,7 @@ and id_squadra = 44"""
                         if len(letture2['schede_lavoro'][0]['risorse_umane'])> 0:
                             logger.debug(letture2['schede_lavoro'][0]['risorse_umane'][0]['id_giustificativo'])
                             
-                            if letture2['schede_lavoro'][0]['risorse_umane'][0]['id_giustificativo'] !='3':
+                            if int(letture2['schede_lavoro'][0]['risorse_umane'][0]['id_giustificativo']) != 3:
                                 check_inserimento=1
                                 letture2['schede_lavoro'][0]['risorse_umane'][0]['id_giustificativo']='3'
  
@@ -291,11 +291,12 @@ and id_squadra = 44"""
                     except Exception as e: 
                         logger.warning('Scheda {} - non trovo risorse umane'.format(id_scheda))   
                     
-                    
+                    logger.debug('Check_inserimento = {}'.format(check_inserimento))
+                    #exit()    
                     # controllo se è da fare (per evitare di rifarlo)
                     if check_inserimento==1:
                         logger.info('Inserisco il giustificativo sulla scheda {}'.format(id_scheda))
-                        
+                    
                         
                         # la P sta per il personale     
                         params2={'obj':'schede_lavoro',
