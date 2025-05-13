@@ -85,7 +85,7 @@ f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.ERROR)
-f_handler.setLevel(logging.DEBUG)
+f_handler.setLevel(logging.INFO)
 
 
 # Add handlers to the logger
@@ -241,7 +241,7 @@ case
 	else 'altro'
 end tipologia,
 s.descrizione as servizio,
-u.descrizione as ut,
+string_agg(u.descrizione, ',') as ut,
 t.descrizione as turno, 
 a.nome as mezzo, p.stagionalita,
 fo.descrizione_long,
@@ -260,6 +260,19 @@ on a.cdaog3 = p.famiglia_mezzo
 left join etl.frequenze_ok fo 
 on fo.cod_frequenza = p.frequenza 
 where p.cod_percorso= %s and p.id_categoria_uso in (3,6)
+group by 
+p.cod_percorso, p.versione, p.descrizione, 
+case 
+	when s.riempimento = 1 then 'racc'
+	when s.riempimento = 0 then 'spazz'
+	else 'altro'
+end,
+s.descrizione,
+t.descrizione , 
+a.nome,
+p.stagionalita,
+fo.descrizione_long,
+data_attivazione
     '''
     
     try:
@@ -300,6 +313,12 @@ where p.cod_percorso= %s and p.id_categoria_uso in (3,6)
         file_report="{0}/report/{1}.xlsx".format(path,nome_file)
     
     
+    if os.path.exists(file_report):
+        logger.debug('Rimuovo il file')
+        os.remove(file_report)
+
+        
+        
     workbook = xlsxwriter.Workbook(file_report)
     w = workbook.add_worksheet()
 
@@ -398,8 +417,10 @@ where p.cod_percorso= %s and p.id_categoria_uso in (3,6)
     
 
 
+
     k=0       
     for dd in dettagli_percorso:
+        logger.info('''Inizio a scrivere l'intestazione''')
         w.write('B1', dd[0], cell_format_grande) # codice percorso
         if check_s==0: 
             w.write('D1', dd[1], cell_format) # versione

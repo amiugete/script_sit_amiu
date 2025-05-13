@@ -364,11 +364,11 @@ def main():
                 
             # prima di lanciare la query faccio questo check
             query_check='''select *  
-                    from spazzamento.effettuati e 
+                    from spazzamento.v_effettuati e 
                     where idpercorso = %s
                     and to_char(datalav, 'YYYY-MM-DD') = %s
                     and tappa=%s
-                    and id <> %s 
+                    and substr(e.id,3)::int <> %s 
                     and ((punteggio::int > %s) or left(codice,2) ilike 'ut')
                     '''
                 
@@ -657,8 +657,8 @@ def main():
                         where t.id_percorso = %s
                         and t.data_inizio <= to_date(%s, 'YYYYMMDD')
                         and t.data_fine > to_date(%s, 'YYYYMMDD')
-                        and t.id_tappa_raggr::varchar not in (
-                            select tappa from spazzamento.effettuati e1 
+                        and t.id_tappa_raggr not in (
+                            select tappa from spazzamento.v_effettuati e1 
                             where e1.idpercorso = %s 
                             and e1.datalav=to_date(%s, 'YYYYMMDD')
                         ) '''

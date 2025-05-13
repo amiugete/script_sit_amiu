@@ -5,7 +5,7 @@
 # Roberto Marzocchi
 
 '''
-Controlla i servizi disattivati nell'ultima settimana e crea un elenco delle schede da cancellare a mano 
+Controlla i servizi attivati nell'ultima settimana e crea le schede 
 
 
 '''
@@ -173,10 +173,10 @@ join etl.frequenze_ok fo on fo.cod_frequenza = vspe.freq_testata
 where data_fine_validita > now()::date 
 and data_inizio_validita >= (now()::date - interval '%s' day)
 and data_inizio_validita <  (now()::date + interval '%s' day)
-and (select distinct cod_percorso from anagrafe_percorsi.v_servizi_per_ekovision vspe2 
+/*and (select distinct cod_percorso from anagrafe_percorsi.v_servizi_per_ekovision vspe2 
 		where vspe2.cod_percorso = a.cod_percorso 
 		and vspe2.data_fine_validita >= (now()::date - interval '%s' day )
-		and vspe2.data_fine_validita <  (now()::date + interval '%s' day) ) is null
+		and vspe2.data_fine_validita <  (now()::date + interval '%s' day) ) is null*/
 order by data_inizio_validita"""
     testo_mail=''
     

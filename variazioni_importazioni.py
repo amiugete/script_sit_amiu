@@ -422,6 +422,10 @@ and left(trim(replace(replace(replace(description, 'Percorso', ''), id_percorso:
         ut.append(vv[3])
         
         ########################################################################################################
+        # INSERISCO LA DATA DI ULTIMA MODIFICA NELLA TABELLA anagrafe_percorsi.date_modifica_itinerari
+        # tengo solo la data di ultima modifica che sovrascrive la precedente
+        
+        
         # cerco se il percorso esiste per gestire la nuova tabella anagrafe_percorsi.date_modifica_itinerari
         curr1 = conn.cursor()
         sel_date = '''select * from anagrafe_percorsi.date_modifica_itinerari where cod_percorso = %s'''  
@@ -456,7 +460,8 @@ and left(trim(replace(replace(replace(description, 'Percorso', ''), id_percorso:
         curr1.close() 
         
         
-        
+        """
+        NON SERVE PIU' (serviva per la vecchia procedura di importazione della UO che ormai è dismessa)
         ########################################################################################################
         # CAMBIO DATA ATTIVAZIONE SU SIT
         curr1 = conn.cursor()       
@@ -476,7 +481,7 @@ and left(trim(replace(replace(replace(description, 'Percorso', ''), id_percorso:
 
         curr1.close()
         conn.commit()
-        
+        """
         
         
         # update delle NOTE elementi_aste_percorsi per i lavaggi con Botticella
@@ -589,7 +594,7 @@ and left(trim(replace(replace(replace(description, 'Percorso', ''), id_percorso:
             invio_mail_tmp=''
             for u_o in uu_oo:
                 logger.debug(u_o[1])
-                # le mail sono aggiornate a partire dall'HUB di GAVA 
+                # le mail sono aggiornate a partire dal SIT  
                 if invio_mail_tmp!='':
                     invio_mail_tmp='{}, {}'.format(invio_mail_tmp,u_o[1])
                 else: 
