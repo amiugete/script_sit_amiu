@@ -5,7 +5,12 @@
 # Roberto Marzocchi
 
 '''
-Data una query specifica che restituisce un elenco di ID_SCHEDE forzo il salvataggio della scheda Ekovision per fare in modo che i dati vengano riprocessati da AMIU
+INPUT 
+- una query specifica che restituisce un elenco di ID_SCHEDE 
+- elenco ID_SCHEDE
+
+
+forzo il salvataggio della scheda Ekovision per fare in modo che i dati vengano riprocessati da AMIU
 
 
 '''

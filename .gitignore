@@ -16,6 +16,9 @@ EKOVISION/log/*.log
 EKOVISION/eko_output/*.json
 EKOVISION/eko_output2/*.json
 EKOVISION/inaz_output/*.csv
+EKOVISION/anomalie_output/*.csv
+
+
 
 
 dati_consuntivazione_posteriori/log/*.log

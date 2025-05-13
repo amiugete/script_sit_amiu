@@ -260,7 +260,7 @@ and (data_fine_validita + interval '1' day) >= %s"""
         # messaggio='Test invio messaggio'
 
 
-            subject = "ELIMINAZIONE SCHEDE LAVORO - Percorsi dismessi sulla UO per cui va eliminata la scheda di lavoro"
+            subject = "ELIMINAZIONE SCHEDE LAVORO - Percorsi dismessi per cui va eliminata la scheda di lavoro"
             
             ##sender_email = user_mail
             receiver_email='assterritorio@amiu.genova.it'
