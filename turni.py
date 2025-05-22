@@ -102,13 +102,17 @@ def main():
     codice=[]
     fascia=[]
     desc=[]
-
+    valido=[]
+    
     query='''SELECT
     ID_TURNO, CODICE_TURNO, DESCRIZIONE, FASCIA_TURNO, DESCR_ORARIO,
-    INIZIO_ORA, FINE_ORA, INIZIO_MINUTI, FINE_MINUTI
+    INIZIO_ORA, FINE_ORA, INIZIO_MINUTI, FINE_MINUTI, 
+    CASE 
+    	WHEN DTA_DISATTIVAZIONE > SYSDATE THEN 1
+    	ELSE 0
+    END AS valido
     FROM ANAGR_TURNI at2 
-    WHERE DTA_DISATTIVAZIONE > SYSDATE 
-    ORDER BY ID_TURNO '''
+    ORDER BY ID_TURNO'''
     try:
         cur.execute(query)
         lista_turni=cur.fetchall()
@@ -129,6 +133,7 @@ def main():
         m_e.append(t_uo[8])
         codice.append(t_uo[1])
         fascia.append(t_uo[3])
+        valido.append(int(t_uo[9]))
 
     # query_pg='''select id_turno, descrizione, cod_turno 
     # from id_turnoelem.turni t 
@@ -199,18 +204,21 @@ def main():
                 cod_turno='{}  {}:{}/{}:{}'.format(codice[i], int(h_s[i]), m_s[i], int(h_e[i]), m_e[i])
         '''
         logging.debug('I:{} - Descrizione: {} - Codice: {} '.format(id_uo[i], f, cod_turno ))
-        
+        if valido[i]== 1:
+            valid='t'
+        else :
+            valid='f'
         if id_uo[i] in id_sit:
             update = '''UPDATE elem.turni
-                SET descrizione=%s, cod_turno=%s, inizio_ora=%s, fine_ora=%s, inizio_minuti=%s, fine_minuti=%s
+                SET descrizione=%s, cod_turno=%s, inizio_ora=%s, fine_ora=%s, inizio_minuti=%s, fine_minuti=%s, valido = %s
                 WHERE id_turno=%s;
                 '''
-            curr.execute(update, (f,cod_turno, h_s[i], h_e[i], m_s[i], m_e[i],id_uo[i],))
+            curr.execute(update, (f,cod_turno, h_s[i], h_e[i], m_s[i], m_e[i],valid,id_uo[i],))
         else:    
             insert='''INSERT INTO elem.turni
-            (id_turno, descrizione, cod_turno, inizio_ora, fine_ora, inizio_minuti, fine_minuti)
-            VALUES(%s, %s, %s, %s, %s, %s, %s);'''
-            curr.execute(insert, (id_uo[i],f,cod_turno, h_s[i], h_e[i], m_s[i], m_e[i],)) 
+            (id_turno, descrizione, cod_turno, inizio_ora, fine_ora, inizio_minuti, fine_minuti, valido)
+            VALUES(%s, %s, %s, %s, %s, %s, %s, %s);'''
+            curr.execute(insert, (id_uo[i],f,cod_turno, h_s[i], h_e[i], m_s[i], m_e[i],valid,)) 
             # sarebbe da inviare una mail per aggiunta su Ekovision       
         i+=1
 
