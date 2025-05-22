@@ -9,7 +9,8 @@ Routine per:
 1) lo scarico dei civici di Genova dal geoportale comunale tramite WS WFS,
 2) importazione sul DB di SIT
 3) calcolo coordinate 
-4) update/insert sul DB strade
+4) aggiorno tabelle geo.civici_rossi e geo.civici_neri
+5) update/insert sul DB strade
 '''
 
 
@@ -66,18 +67,50 @@ filename = inspect.getframeinfo(inspect.currentframe()).filename
 path     = os.path.dirname(os.path.abspath(filename))
 
 
-giorno_file=datetime.datetime.today().strftime('%Y%m%d')
+nome=os.path.basename(__file__).replace('.py','')
+giorno_file=datetime.datetime.today().strftime('%Y%m%d_%H%M%S')
+
+# inizializzo i nomi dei file di log (per capire cosa stia succedendo)
+logfile='{0}/log/{2}_{1}.log'.format(path,nome, giorno_file)
+errorfile='{0}/log/{2}_error_{1}.log'.format(path,nome, giorno_file)
 
 
-logfile='{}/log/{}_civici.log'.format(path, giorno_file)
 
+
+
+
+
+# Create a custom logger
 logging.basicConfig(
-    handlers=[logging.FileHandler(filename=logfile, encoding='utf-8', mode='a')],
-    format='%(asctime)s\t%(levelname)s\t%(message)s',
-    #filemode='w', # overwrite or append
-    #fileencoding='utf-8',
-    #filename=logfile,
-    level=logging.INFO)
+    level=logging.DEBUG,
+    handlers=[
+    ]
+)
+
+logger = logging.getLogger()
+
+# Create handlers
+c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
+#f_handler = logging.StreamHandler()
+f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+
+
+c_handler.setLevel(logging.ERROR)
+f_handler.setLevel(logging.DEBUG)
+
+
+# Add handlers to the logger
+logger.addHandler(c_handler)
+logger.addHandler(f_handler)
+
+
+cc_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
+
+c_handler.setFormatter(cc_format)
+f_handler.setFormatter(cc_format)
+
+
+
 
 debug=0 # da usare per saltare il download in fase di debug su Oracle (1 salta)
 
@@ -88,7 +121,7 @@ def main():
 
 
     # carico i mezzi sul DB PostgreSQL
-    logging.info('Connessione al db SIT')
+    logger.info('Connessione al db SIT')
     conn = psycopg2.connect(dbname=db,
                         port=port,
                         user=user,
@@ -99,12 +132,12 @@ def main():
     conn.autocommit = True
     
     # connessione Oracle
-    logging.info('Connessione al db STRADE')
+    logger.info('Connessione al db STRADE')
     cx_Oracle.init_oracle_client() # necessario configurare il client oracle correttamente
     parametri_con='{}/{}@//{}:{}/{}'.format(user_strade,pwd_strade, host_uo,port_uo,service_uo)
-    logging.debug(parametri_con)
+    logger.debug(parametri_con)
     con = cx_Oracle.connect(parametri_con)
-    logging.info("Versione ORACLE: {}".format(con.version))
+    logger.info("Versione ORACLE: {}".format(con.version))
     cur = con.cursor()
 
     epsg= 4326
@@ -125,12 +158,12 @@ order by 1'''.format(epsg)
         curr3.execute(query1)
         lista_municipi=curr3.fetchall()
     except Exception as e:
-        logging.error(e)
+        logger.error(e)
 
 
     if debug==0: # solo se debug = 0 non faccio download
         for uu in lista_municipi:
-            logging.info('Inserimento civici municipio {}'.format(uu[1]))
+            logger.info('Inserimento civici municipio {}'.format(uu[1]))
 
             endpoint='''https://mappe.comune.genova.it/geoserver/wfs?service=wfs&version=2.0.0'''
             url_ge='''https://mappe.comune.genova.it/geoserver/wfs'''
@@ -149,7 +182,7 @@ order by 1'''.format(epsg)
             
             #url_dw='''{0}&request=GetFeature&typeNames={1}&cql_filter=NOME_MUNICIPIO+ILIKE+'{2}'&outputFormat=json'''.format(endpoint,layer,uu[1])
             #print(url_dw)
-            logging.info('m {} di {}'.format(uu[0], len(lista_municipi)))
+            logger.info('m {} di {}'.format(uu[0], len(lista_municipi)))
             nomefile='{0}/civici/{1}.geojson'.format(path,uu[1].replace(' ', '_'))
             #testfile = urllib.URLopener()
             #testfile.retrieve(url_dw, nomefile)
@@ -193,9 +226,9 @@ order by 1'''.format(epsg)
                     #text = message.as_string()
 
                     # Now send or store the message
-                    logging.info("Richiamo la funzione per inviare mail")
+                    logger.info("Richiamo la funzione per inviare mail")
                     invio=invio_messaggio(message)
-                    logging.info(invio) 
+                    logger.info(invio) 
                     
                 for feature in gj['features']:
                     ''' "SEZIONE_ELETTORALE":507,
@@ -242,7 +275,7 @@ order by 1'''.format(epsg)
                         curr1.execute(select,(cod_civico,))
                         lista_civici=curr1.fetchall()
                     except Exception as e:
-                        logging.error(e)
+                        logger.error(e)
                     if len(lista_civici)==1:
                         #update
                         update='''UPDATE etl.civici_comune set 
@@ -264,12 +297,12 @@ order by 1'''.format(epsg)
                         #insert
                         try:
                             insert='''insert into etl.civici_comune (cod_strada, numero, lettera,colore, testo,
-                        uso, id_municipio, codice_indirizzo_comune, geoloc, cod_civico, sez_censimento,) VALUES ( %s,%s,%s,%s,%s,
+                        uso, id_municipio, codice_indirizzo_comune, geoloc, cod_civico, sez_censimento) VALUES ( %s,%s,%s,%s,%s,
                         %s,%s,%s,ST_SetSRID(ST_GeomFromGeoJSON(%s),3003),%s, %s)'''
                             curr1.execute(insert,(codvia, numero, lettera,colore, testo,uso, id_municipio, codice_indirizzo_comune, geom, cod_civico,sez_censimento,))
                         except Exception as e:
-                            logging.error(e)
-                            logging.error('cod_civico={}, geom={}'.format(cod_civico,geom))
+                            logger.error(e)
+                            logger.error('cod_civico={}, geom={}'.format(cod_civico,geom))
                     
                             
                             
@@ -277,7 +310,66 @@ order by 1'''.format(epsg)
                 
 
             curr1.close()
+            
         
+    
+    # aggiorno tabelle geo
+    
+    
+    curr = conn.cursor()
+    query_upsert_neri='''INSERT INTO geo.civici_neri (geoloc, cod_strada, numero, lettera, colore, testo, cod_civico, ins_date, mod_date)
+select geoloc, 
+cod_strada::text, 
+numero::int::text, 
+lettera, 
+1 as colore, 
+testo, cod_civico, now() as ins_date, 
+null as mod_date
+from etl.civici_comune cc
+where colore is null  
+ON CONFLICT (cod_civico) 
+DO UPDATE  SET geoloc=EXCLUDED.geoloc,
+cod_strada=EXCLUDED.cod_strada, 
+numero=EXCLUDED.numero, 
+lettera=EXCLUDED.lettera, 
+colore=1, 
+testo=EXCLUDED.testo, 
+cod_civico=EXCLUDED.cod_civico, 
+ins_date=EXCLUDED.ins_date, 
+mod_date=now()'''
+    try:
+        curr.execute(query_upsert_neri)
+    except Exception as e:
+        logger.error(query_upsert_neri)
+        logger.error(e)
+    curr.close()
+    curr = conn.cursor()
+    query_upsert_neri='''INSERT INTO geo.civici_rossi (geoloc, cod_strada, numero, lettera, colore, testo, cod_civico, ins_date, mod_date)
+select geoloc, 
+cod_strada::text, 
+numero::int::text, 
+lettera, 
+1 as colore, 
+testo, cod_civico, now() as ins_date, 
+null as mod_date
+from etl.civici_comune cc
+where colore = 'R'  
+ON CONFLICT (cod_civico) 
+DO UPDATE  SET geoloc=EXCLUDED.geoloc,
+cod_strada=EXCLUDED.cod_strada, 
+numero=EXCLUDED.numero, 
+lettera=EXCLUDED.lettera, 
+colore=2, 
+testo=EXCLUDED.testo, 
+cod_civico=EXCLUDED.cod_civico, 
+ins_date=EXCLUDED.ins_date, 
+mod_date=now()'''
+    curr.close()
+    
+    
+    
+    
+    # aggiorno strade    
     civici_GE= '''select cod_civico,
 cod_strada as id_via,
 numero as numero_civico, 
@@ -294,8 +386,8 @@ from etl.civici_comune cc'''
         curr.execute(civici_GE)
         lista_civici=curr.fetchall()
     except Exception as e:
-        logging.error(e)
-    logging.info ('Copio i dati su Oracle')
+        logger.error(e)
+    logger.info ('Copio i dati su Oracle')
     cur.execute('TRUNCATE TABLE CIVICI_DA_COMUNE')
     con.commit()
     for cc in lista_civici:
@@ -324,7 +416,7 @@ from etl.civici_comune cc'''
         cur.execute(insert_o, [cc[0], cc[1], cc[2], lc_temp, col_temp, cc[5], cc[6], cc[7], cc[8]])
     con.commit() 
     #cur.commit() 
-    logging.info("Fine copia dati su DB Oracle")      
+    logger.info("Fine copia dati su DB Oracle")      
         
          
             
@@ -333,8 +425,13 @@ from etl.civici_comune cc'''
        
         
     curr.close()
+    conn.close()
+    
+    cur.close()
+    con.close()
 
-
+    # check se c_handller contiene almeno una riga 
+    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
 
 
 
