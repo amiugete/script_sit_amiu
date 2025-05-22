@@ -192,6 +192,7 @@ def main(argv):
 	FROM etl.base_ecopunti be 
     JOIN topo.vie v 
     ON v.id_via::integer = be.cod_strada::integer
+    order by 1,2
     '''
 
     try:
@@ -212,13 +213,13 @@ def main(argv):
         w0.write(0, 0, 'id') 
         w0.write(0, 1, 'Nome_via')
         w0.write(0, 2, 'Civico')
-        w0.write(0, 2, 'Note')
+        w0.write(0, 3, 'Note')
         i=1
         for vv in lista_civici2:
             w0.write(i, 0, i) 
             w0.write(i, 1, vv[0])
             w0.write(i, 2, vv[1])
-            w0.write(i, 2, vv[2])
+            w0.write(i, 3, vv[2])
             i+=1
             
 
