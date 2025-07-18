@@ -32,7 +32,7 @@ parentdir = os.path.dirname(currentdir)
 sys.path.append(parentdir)
 from credenziali import *
 
-from preconsuntivazione import tappa_prevista
+from tappa_prevista import tappa_prevista
 
 import requests
 from requests.exceptions import HTTPError
@@ -106,6 +106,27 @@ from invio_messaggio import *
 
 
 
+def esiste_versione(cursor, codice, giorno):
+    ''''Dato un codice e un giorno (in formato YYYYMMDD)'''
+    
+    query_check='''select * FROM anagrafe_percorsi.v_servizi_per_ekovision
+where cod_percorso = %s
+and to_date(%s, 'YYYYMMDD') between data_inizio_validita and data_fine_validita '''
+
+    
+    try:
+        #cur.execute(query, (new_freq, id_servizio, new_freq))
+        cursor.execute(query_check, (codice, giorno))
+        esiste_versione_result=cursor.fetchall()
+    except Exception as e:
+        check_error=1
+        logger.error(e)
+
+
+    if len(esiste_versione_result) > 0: 
+        return 1
+    else:
+        return 0
 
 
 def main():
@@ -189,7 +210,7 @@ order by data_inizio_validita"""
         logger.error(e)
 
     percorso_con_problemi=[]
-           
+    curr1 = conn.cursor()       
     for vv in lista_variazioni:
         check_error=0
         #logger.debug(vv[0])
@@ -207,7 +228,13 @@ order by data_inizio_validita"""
             day_check=oggi + timedelta(gg)
             day= day_check.strftime('%Y%m%d')
             
-            if tappa_prevista(day_check, vv[4])==1:
+            
+            
+            #### controllo 
+            #   - la frequenza (tappa_prevista)
+            #   - se esiste una versione quel giorno per quel percorso (esiste_versione)
+            
+            if tappa_prevista(day_check, vv[4])==1 and esiste_versione(curr1, vv[0], day)==1:
                 #logger.debug(day)
                 # se il percorso è previsto in quel giorno controllo che ci sia la scheda di lavoro corrispondente
                 
@@ -265,6 +292,7 @@ order by data_inizio_validita"""
                             
                             
                         curr.close()
+                        curr1 = conn.cursor() 
                         logger.info('Chiusura e Ri-Connessione al db {}'.format(nome_db))
                         conn.close()
                         
@@ -274,6 +302,7 @@ order by data_inizio_validita"""
                                             password=pwd,
                                             host=host)
                         curr = conn.cursor()
+                        curr1 = conn.cursor() 
                         
                         query_select_ruid='''select lpad((max(id)+1)::text, 7,'0') 
                         from anagrafe_percorsi.creazione_schede_lavoro csl'''
@@ -439,6 +468,7 @@ order by data_inizio_validita"""
     error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
     logger.info("chiudo le connessioni in maniera definitiva")
     curr.close()
+    curr1.close()
     conn.close()
 
 

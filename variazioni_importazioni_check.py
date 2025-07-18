@@ -29,7 +29,7 @@ from workalendar.europe import Italy
 
 from credenziali import *
 
-import report_settimanali_percorsi_ok 
+#import report_settimanali_percorsi_ok 
 
 
 #import requests
@@ -166,12 +166,16 @@ def main():
     logger2.info('Il PID corrente è {0}'.format(os.getpid()))
     # carico i mezzi sul DB PostgreSQL
     logger2.info('Connessione al db')
-    conn = psycopg2.connect(dbname=db,
+    try: 
+        conn = psycopg2.connect(dbname=db,
                         port=port,
                         user=user,
                         password=pwd,
                         host=host)
-
+    except Exception as e:
+        logger2.errror(e)
+        error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger2)
+        exit()
     curr = conn.cursor()
     #conn.autocommit = True
     
@@ -200,7 +204,9 @@ def main():
         curr.execute(select_query, (giorno_file,))
         errori=curr.fetchall()
     except Exception as e:
-        logger2.error(e)        
+        logger2.error(e)
+        error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger2)
+        exit()        
     
     
     run_script=0

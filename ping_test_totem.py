@@ -6,7 +6,9 @@
 # Roberto Marzocchi
 
 '''
-Lo script si occupa della consuntivazione spazzamento:
+Lo script si occupa di controllare se i totem sono effettivamente raggiungibili
+
+E' in aggiunta all'hobbit
 
 
 
@@ -127,7 +129,7 @@ def main():
     
     currc= connc.cursor()
     
-    select_query='''SELECT descrizione, ip_address FROM totem.ip_totem'''
+    select_query='''SELECT descrizione, ip_address FROM totem.ip_totem where manutenzione = 'f' '''
     
     try:
         currc.execute(select_query)

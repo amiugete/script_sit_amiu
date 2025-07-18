@@ -17,6 +17,7 @@ Se ci sono delle frequenze di aste / piazzole < frequenze della testata del perc
 #from msilib import type_short
 import os, sys, re  # ,shutil,glob
 
+import inspect
 #import getopt  # per gestire gli input
 
 #import pymssql
@@ -33,6 +34,7 @@ import cx_Oracle
 currentdir = os.path.dirname(os.path.realpath(__file__))
 parentdir = os.path.dirname(currentdir)
 sys.path.append(parentdir)
+
 from credenziali import *
 
 
@@ -45,13 +47,13 @@ import pysftp
 
 import logging
 
+filename = inspect.getframeinfo(inspect.currentframe()).filename
 path=os.path.dirname(sys.argv[0]) 
+path1 = os.path.dirname(os.path.dirname(os.path.abspath(filename)))
+nome=os.path.basename(__file__).replace('.py','')
 #tmpfolder=tempfile.gettempdir() # get the current temporary directory
-logfile='{}/log/preconsunsuntivazione.log'.format(path)
-errorfile='{}/log/error_preconsuntivazione.log'.format(path)
-#if os.path.exists(logfile):
-#    os.remove(logfile)
-
+logfile='{0}/log/{1}.log'.format(path,nome)
+errorfile='{0}/log/error_{1}.log'.format(path,nome)
 
 
 
@@ -104,33 +106,8 @@ from invio_messaggio import *
 import csv
 
 
+from tappa_prevista import tappa_prevista
 
-def tappa_prevista(day,frequenza_binaria):
-    '''
-    Data una data e una frequenza dice se la tappa è prevista sulla base di quella frequenza o no
-    '''
-    # settimanale
-    if frequenza_binaria[0]=='S':
-        if int(frequenza_binaria[day.weekday()+1])==1:
-            return 1
-        elif int(frequenza_binaria[day.weekday()+1])==0:
-            return -1
-        else:
-            return 404
-    # mensile (da finire)
-    elif frequenza_binaria[0]=='M':
-        # calcolo la settimana (week_number) e il giorno della settimana (day of week --> dow)
-        if (day.day % 7)==0:
-            week_number = ((day.day) // 7)
-        else:     
-            week_number = ((day.day) // 7) + 1
-        dow=day.weekday()+1
-        string='{0}{1}'.format(week_number,dow)
-        # verifico se il giorno sia previsto o meno
-        if string in frequenza_binaria:
-            return 1
-        else: 
-            return -1
     
      
 

@@ -5,11 +5,19 @@
 # Roberto Marzocchi
 
 '''
-calcolo fascia turno
+
+
 '''
 
 #from msilib import type_short
 import os, sys, re  # ,shutil,glob
+import inspect
+
+import requests
+from requests.exceptions import HTTPError
+
+import json
+
 
 #import getopt  # per gestire gli input
 
@@ -17,6 +25,7 @@ import os, sys, re  # ,shutil,glob
 
 from datetime import date, datetime, timedelta
 
+import locale
 
 import xlsxwriter
 
@@ -29,27 +38,33 @@ parentdir = os.path.dirname(currentdir)
 sys.path.append(parentdir)
 from credenziali import *
 
-from tappa_prevista import tappa_prevista
-
 
 
 # per mandare file a EKOVISION
 import pysftp
 
 
-import requests
-from requests.exceptions import HTTPError
-
-import json
+#import requests
 
 import logging
 
+
+from tappa_prevista import *
+
+from crea_dizionario_da_query import *
+
+
+
+filename = inspect.getframeinfo(inspect.currentframe()).filename
 path=os.path.dirname(sys.argv[0]) 
+path1 = os.path.dirname(os.path.dirname(os.path.abspath(filename)))
+nome=os.path.basename(__file__).replace('.py','')
 #tmpfolder=tempfile.gettempdir() # get the current temporary directory
-logfile='{}/log/test_tappa_prevista.log'.format(path)
-errorfile='{}/log/error_test_tappa_prevista.log'.format(path)
+logfile='{0}/log/{1}.log'.format(path,nome)
+errorfile='{0}/log/error_{1}.log'.format(path,nome)
 #if os.path.exists(logfile):
 #    os.remove(logfile)
+
 
 
 
@@ -67,8 +82,8 @@ logger = logging.getLogger()
 
 # Create handlers
 c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-f_handler = logging.StreamHandler()
-#f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+#f_handler = logging.StreamHandler()
+f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.ERROR)
@@ -103,23 +118,52 @@ import csv
 
 
 
-        
+    
      
 
 def main():
       
+    logger.info("START READ WS")
+    api_url='{}atrif/api/v1/tobin/auth/login'.format(url_ws_treg)
+    payload_treg = {"username": user_ws_treg, "password": pwd_ws_treg, }
+    logger.debug(payload_treg)
+    response = requests.post(api_url, json=payload_treg)
+    logger.debug(response)
+    #response.json()
+    logger.info("Status code: {0}".format(response.status_code))
+    try:      
+        response.raise_for_status()
+        # access JSOn content
+        #jsonResponse = response.json()
+        #print("Entire JSON response")
+        #print(jsonResponse)
+    except HTTPError as http_err:
+        logger.error(f'HTTP error occurred: {http_err}')
+        check=500
+    except Exception as err:
+        logger.error(f'Other error occurred: {err}')
+        logger.error(response.json())
+        check=500
+    token=response.text
+    logger.debug(token)
 
-    day=datetime.strptime('2024-03-14', '%Y-%m-%d')
-    if (day.day % 7)==0:
-        week_number = ((day.day) // 7)
-    else:     
-        week_number = ((day.day) // 7) + 1
-    dow=day.weekday()+1
-    logger.debug(week_number)
-    logger.debug(dow)
-    f= tappa_prevista(day,'M13_14_33_34_43_44')
+    
+    #response = requests.get(url_bucher, params={'starttime':starttime, 'endtime': endtime}, headers={'Authorization: EIP {}'.format(token)})
 
-    logger.info(f)
+    
+    
+    
+
+
+
+
+
+
+
+
+
+
+
 
 
 

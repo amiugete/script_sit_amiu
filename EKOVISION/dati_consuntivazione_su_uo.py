@@ -50,7 +50,6 @@ import pysftp
 import json
 
 
-
 filename = inspect.getframeinfo(inspect.currentframe()).filename
 #path = os.path.dirname(os.path.abspath(filename))
 path1 = os.path.dirname(os.path.dirname(os.path.abspath(filename)))
@@ -166,7 +165,9 @@ def main():
     
     cur = con.cursor()
     
-    
+    cur.execute("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYYMMDD'")
+    cur.execute("ALTER SESSION SET NLS_LANGUAGE = 'ITALIAN'")
+    cur.execute("ALTER SESSION SET NLS_TERRITORY = 'ITALY'")
     
     try: 
         cnopts = pysftp.CnOpts()
@@ -539,7 +540,7 @@ def main():
                                                     logger.error(e)                                          
                                             
                                             else:
-                                                update_query='''UPDATE CONSUNT_MACRO_TAPPA cmt 
+                                                update_query='''UPDATE UNIOPE.CONSUNT_MACRO_TAPPA cmt 
                                                 SET 
                                                 QTA_ELEM_NON_VUOTATI = 
                                                 /* in questo caso conto gli elementi su mappa */
@@ -695,7 +696,7 @@ def main():
                                             logger.info('Data percorso progettata {}'.format(data[i]['data_pianif_iniziale']))
                                             logger.info('Data percorso effettiva {}'.format(data[i]['data_esecuzione_prevista']))                                    
                                             logger.info('Cod percorso {}'.format(data[i]['codice_serv_pred']))
-                                            #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                            #error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                             #exit()
                                     
                                         
@@ -742,7 +743,7 @@ def main():
                                                 logger.error('Data percorso progettata {}'.format(data[i]['data_pianif_iniziale']))
                                                 logger.error('Data percorso effettiva {}'.format(data[i]['data_esecuzione_prevista']))                                    
                                                 logger.error('Cod percorso {}'.format(data[i]['codice_serv_pred']))
-                                                error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                                 exit()
                                                 
                                             idpersona=data[i]['cons_ris_umane'][p]['cod_dipendente']
@@ -813,7 +814,7 @@ def main():
                                                 logger.error('Data percorso progettata {}'.format(data[i]['data_pianif_iniziale']))
                                                 logger.error('Data percorso effettiva {}'.format(data[i]['data_esecuzione_prevista']))  
                                                 logger.error('Cod percorso {}'.format(data[i]['codice_serv_pred']))
-                                                error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                                 exit()
                                             """    
                                         else: 
@@ -866,7 +867,23 @@ def main():
                                         
                                         # se il peso lordo è 0 vuol dire che il peso proviene da ECOS quindi non serve nemmeno provare a re-inserirlo (solo perdita di tempo)
                                         #logger.debug(peso_lordo)
-                                        if peso_lordo > 0:
+                                        
+                                        if peso_netto > 40000: 
+                                            messaggio = '''Il percorso {} del {} ha un peso di {}kg anomalo (> 40'000 kg) quindi non è stato inserito il peso sulla tabella TB_PESI_PERCORSI della UO.<br>Verificare il dato su Ekovision ed eventualmente contattare il Responsabile del dato.'''.format(data[i]['codice_serv_pred'],
+                                                                        data[i]['data_esecuzione_prevista'],
+                                                                        peso_netto)
+                                            logger.warning(messaggio)
+                                            if peso_lordo > 0:
+                                                messaggio= '{} <br><br>Peso inserito a mano dalla rimessa'.format(messaggio)
+                                                warning_message_mail(messaggio, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
+
+                                            else:
+                                                messaggio= '{} <br> Peso inserito tramite ECOS e lettura foglio pesata'.format(messaggio)
+                                                #warning_message_mail(messaggio, 'assterritorio@amiu.genova.it, Matteo.Scarfo@amiu.genova.it, Giuseppe.Morchio@amiu.genova.it', os.path.basename(__file__), logger)
+                                                warning_message_mail(messaggio, 'assterritorio@amiu.genova.it, Matteo.Scarfo@amiu.genova.it, Giuseppe.Morchio@amiu.genova.it', os.path.basename(__file__), logger)
+                                            
+                                        
+                                        if peso_lordo > 0 and peso_netto <= 40000:
                                             
                                             id_pesata='{}'.format(data[i]['cons_conferimenti'][c]['id'])
                                             
@@ -874,13 +891,13 @@ def main():
                                             WHERE PROVENIENZA = 'RIMESSA'
                                             AND DATA_PERCORSO = to_date(:c1, 'YYYYMMDD') 
                                             AND ID_SER_PER_UO = :c2
-                                            AND NOTE = :c3 '''
+                                            AND NOTE = :c3
+                                            '''
                                             
                                             
                                             try:
                                                 cur.execute(select_query, (data[i]['data_esecuzione_prevista'], id_ser_per_uo,
-                                                                    id_pesata)
-                                                        )
+                                                                    id_pesata))
                                                 #cur1.rowfactory = makeDictFactory(cur1)
                                                 conferimenti_su_uo=cur.fetchall()
                                             except Exception as e:
@@ -935,7 +952,7 @@ def main():
                                                 DATA_CONFERIMENTO, ORA_CONFERIMENTO,
                                                 PESO, DESTINAZIONE, PROVENIENZA, INS_DATE, 
                                                 ID_UO_TITOLARE, 
-                                                COD_CER, DESCR_RIFIUTO, NOTE) 
+                                                COD_CER, DESCR_RIFIUTO, NOTE, ID_SCHEDA_EKOVISION) 
                                                 VALUES
                                                 (:c1, to_date(:c2, 'YYYYMMDD'), 
                                                 to_date(:c3, 'YYYYMMDD'), 
@@ -973,7 +990,7 @@ def main():
                                                     FROM ANAGR_SER_PER_UO 
                                                     WHERE ID_SER_PER_UO=:c13
                                                     )),
-                                                :c14)'''
+                                                :c14, :c15)'''
                                                 
                                                 
                                                 
@@ -992,12 +1009,13 @@ def main():
                                                                         data[i]['data_esecuzione_prevista'],
                                                                         id_ser_per_uo,
                                                                         id_ser_per_uo,
-                                                                        id_pesata
+                                                                        id_pesata, 
+                                                                        int(data[i]['id_scheda'])
                                                                         )
                                                             )
                                                 except Exception as e:
                                                     logger.error(insert_query)
-                                                    logger.error('1:{}, 2:{}, 3:{}, 4:{}, 5:{}, 6:{}, 7:{}, 8:{}, 9:{}, 10{}, 11:{}, 12:{}, 13:{}, 14:{}'.format(
+                                                    logger.error('1:{}, 2:{}, 3:{}, 4:{}, 5:{}, 6:{}, 7:{}, 8:{}, 9:{}, 10:{}, 11:{}, 12:{}, 13:{}, 14:{}, 15:{}'.format(
                                                                         id_ser_per_uo,
                                                                         data[i]['data_esecuzione_prevista'],
                                                                         data_conferimento,
@@ -1011,8 +1029,10 @@ def main():
                                                                         data[i]['data_esecuzione_prevista'],
                                                                         id_ser_per_uo,
                                                                         id_ser_per_uo,
-                                                                        id_pesata))
+                                                                        id_pesata, 
+                                                                        int(data[i]['id_scheda'])))
                                                     logger.error(e)
+                                                    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                                     exit()
                                                 
                                             elif len(conferimenti_su_uo)==1:
@@ -1023,16 +1043,18 @@ def main():
                                                 FROM ANAGR_DESTINAZIONI ad 
                                                 WHERE IMP_COD_ECOS =:c2 
                                                 AND UNI_COD_ECOS =:c3),
-                                                INS_DATE=sysdate
+                                                INS_DATE=sysdate, 
+                                                ID_SCHEDA_EKOVISION = :c4
                                                 WHERE PROVENIENZA = 'RIMESSA'
-                                                AND DATA_PERCORSO = to_date(:c4, 'YYYYMMDD') 
-                                                AND ID_SER_PER_UO = :c5
-                                                AND NOTE = :c6 '''
+                                                AND DATA_PERCORSO = to_date(:c5, 'YYYYMMDD') 
+                                                AND ID_SER_PER_UO = :c6
+                                                AND NOTE = :c7 '''
                                                 try:
                                                     cur.execute(update_query, (
                                                                         peso_netto,
                                                                         imp_cod_ecos,
                                                                         uni_cod_ecos,
+                                                                        int(data[i]['id_scheda']),
                                                                         data[i]['data_esecuzione_prevista'],
                                                                         id_ser_per_uo,
                                                                         id_pesata)
@@ -1051,7 +1073,7 @@ def main():
                                                 logger.error('Data percorso progettata {}'.format(data[i]['data_pianif_iniziale']))
                                                 logger.error('Data percorso effettiva {}'.format(data[i]['data_esecuzione_prevista']))  
                                                 logger.error('Cod percorso {}'.format(data[i]['codice_serv_pred']))
-                                                error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                                 exit()
                                         else:
                                             logger.info('Peso proveniente da ECOS. Non lo processo')
@@ -1074,12 +1096,13 @@ def main():
                                         select_queryt='''SELECT * FROM TB_PESI_PERCORSI tpp 
                                             WHERE /* PROVENIENZA = 'RIMESSA'
                                             AND*/ DATA_PERCORSO = to_date(:c1, 'YYYYMMDD') 
-                                            AND ID_SER_PER_UO = :c2
+                                            AND ID_SER_PER_UO = :c2 AND ID_SCHEDA_EKOVISION = :c3
                                             '''
                                             
                                             
                                         try:
-                                            cur.execute(select_queryt, (data[i]['data_esecuzione_prevista'], id_ser_per_uo)
+                                            cur.execute(select_queryt, (data[i]['data_esecuzione_prevista'], id_ser_per_uo,
+                                                                        int(data[i]['id_scheda']))
                                                     )
                                             #cur1.rowfactory = makeDictFactory(cur1)
                                             conferimenti_su_uo_test=cur.fetchall()
@@ -1096,6 +1119,7 @@ def main():
                                             WHERE PROVENIENZA = 'RIMESSA'
                                             AND DATA_PERCORSO = to_date(:c1, 'YYYYMMDD') 
                                             AND ID_SER_PER_UO = :c2
+                                            AND ID_SCHEDA_EKOVISION = :c3
                                             AND NOTE NOT IN ('''
                                             tt=0
                                             while tt<len(pesi_id):
@@ -1106,12 +1130,12 @@ def main():
                                                 tt+=1
                                             
                                             delete_query= '''{})'''.format(delete_query)
-                                            logger.debug(delete_query)
+                                            #logger.debug(delete_query)
                                             try:
-                                                cur.execute(delete_query, (data[i]['data_esecuzione_prevista'], id_ser_per_uo))
+                                                cur.execute(delete_query, (data[i]['data_esecuzione_prevista'], id_ser_per_uo, int(data[i]['id_scheda'])))
                                             except Exception as e:
                                                 logger.error(delete_query)
-                                                logger.error('1:{}, 2:{}'.format(data[i]['data_esecuzione_prevista'], id_ser_per_uo))
+                                                logger.error('1:{}, 2:{}, 3:{}'.format(data[i]['data_esecuzione_prevista'], id_ser_per_uo, int(data[i]['id_scheda'])))
                                                 
                                     
                                     con.commit()
@@ -1265,7 +1289,7 @@ def main():
                                                                                             data[i]['data_pianif_iniziale'],
                                                                                             int(data[i]['cons_works'][t]['pos'])
                                                                                             ))                                              
-                                                            #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                            #error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                                             #exit()                                       
                                                         ct+=1
                                                     
@@ -1279,7 +1303,7 @@ def main():
                                                                                             ripasso_sit,
                                                                                             data[i]['data_pianif_iniziale']
                                                                                             ))
-                                                        #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                        #error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                                         #exit()    
                                                     
                                                     if nota_via is None:
@@ -1321,6 +1345,7 @@ def main():
                                                                                     data[i]['codice_serv_pred']
                                                         ))
                                                         logger.error(e)
+                                                        error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                                         exit()
                                                 
                                                     ct=0
@@ -1336,7 +1361,7 @@ def main():
                                                                                     int(data[i]['cons_works'][t]['cod_tratto'].strip()),
                                                                                     nota_via, ordine,
                                                                                     data[i]['data_pianif_iniziale']))
-                                                            #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                            #error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                                             #exit()                                       
                                                         ct+=1
                                                         if ct == 0:
@@ -1348,7 +1373,7 @@ def main():
                                                                                         int(data[i]['cons_works'][t]['cod_tratto'].strip()),
                                                                                         nota_via, ordine,
                                                                                         data[i]['data_pianif_iniziale']))
-                                                            #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                            #error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                                             #exit()
                                                         
                                                         else:     
@@ -1364,6 +1389,9 @@ def main():
                                                                         causale=int(data[i]['cons_works'][t]['cod_giustificativo_ext'].strip())
                                                                     except Exception as e:
                                                                         logger.warning(e)
+                                                                        #logger.warning('i={}'.format(i))
+                                                                        #logger.warning('t={}'-format(t))
+                                                                        logger.warning(data[i]['cons_works'][t]['cod_giustificativo_ext'].strip())
                                                                         logger.warning('Scheda {} - Posizione: {} Manca la causale quindi lo do per fatto'.format(
                                                                             int(data[i]['id_scheda']),
                                                                             int(data[i]['cons_works'][t]['pos'])
@@ -1435,7 +1463,7 @@ def main():
                                                                     #logger.error('Data percorso progettata {}'.format(data[i]['data_pianif_iniziale']))
                                                                     #logger.error('Data percorso effettiva {}'.format(data[i]['data_esecuzione_prevista']))  
                                                                     #logger.error('Cod percorso {}'.format(data[i]['codice_serv_pred']))
-                                                                    #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                                    #error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                                                     #exit()        
                                                                 
                                                             elif len(consuntivazioni_uo)==1:
@@ -1468,7 +1496,7 @@ def main():
                                                                 logger.error('Data percorso progettata {}'.format(data[i]['data_pianif_iniziale']))
                                                                 logger.error('Data percorso effettiva {}'.format(data[i]['data_esecuzione_prevista']))  
                                                                 logger.error('Cod percorso {}'.format(data[i]['codice_serv_pred']))
-                                                                error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                                error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                                                 exit()
                                                 
                                                 
@@ -1574,7 +1602,7 @@ def main():
                                                                                                 int(data[i]['cons_works'][t]['cod_componente'].strip()),
                                                                                                 ripasso_sit,
                                                                                                 data[i]['data_pianif_iniziale']))
-                                                                #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                                #error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                                                 #exit()  
                                                             ct+=1                                     
                                                             
@@ -1589,14 +1617,16 @@ def main():
                                                                                                 int(data[i]['cons_works'][t]['cod_componente'].strip()),
                                                                                                 ripasso_sit,
                                                                                                 data[i]['data_pianif_iniziale']))
-                                                                #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                                #error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                                                 #exit() 
                                                     
                                                         # cerco la tappa su UO
-                                                        query_id_tappa='''SELECT DISTINCT ID_TAPPA, DTA_IMPORT, DATA_PREVISTA, cmt.ID_PIAZZOLA, cmt2.ID_ELEMENTO 
+                                                        query_id_tappa='''SELECT DISTINCT ID_TAPPA, DTA_IMPORT, DATA_PREVISTA, 
+                                                            cmt.ID_PIAZZOLA, cmt2.ID_ELEMENTO, ce.TIPO_ELEMENTO
                                                             FROM CONS_PERCORSI_VIE_TAPPE cpvt 
                                                             JOIN CONS_MACRO_TAPPA cmt ON cmt.ID_MACRO_TAPPA = cpvt.ID_TAPPA
                                                             JOIN CONS_MICRO_TAPPA cmt2 ON cmt2.ID_MACRO_TAPPA=cmt.ID_MACRO_TAPPA
+                                                            JOIN CONS_ELEMENTI ce ON ce.ID_ELEMENTO = cmt2.ID_ELEMENTO
                                                             WHERE ID_PERCORSO = :t1
                                                             /*AND cmt.ID_PIAZZOLA = :t2*/
                                                             AND cmt.RIPASSO = :t3
@@ -1626,6 +1656,7 @@ def main():
                                                                                                     data[i]['codice_serv_pred']
                                                                                                     ))
                                                             logger.error(e)
+                                                            error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                                             exit()
                                                     
                                                     
@@ -1686,10 +1717,12 @@ def main():
                                                             logger.error(e)
                                                     
                                                     
-                                                        query_id_tappa='''SELECT ID_TAPPA, DTA_IMPORT, DATA_PREVISTA, cmt.ID_PIAZZOLA, cmt2.ID_ELEMENTO 
+                                                        query_id_tappa='''SELECT ID_TAPPA, DTA_IMPORT, DATA_PREVISTA, cmt.ID_PIAZZOLA, cmt2.ID_ELEMENTO, 
+                                                            ce.TIPO_ELEMENTO 
                                                             FROM CONS_PERCORSI_VIE_TAPPE cpvt 
                                                             JOIN CONS_MACRO_TAPPA cmt ON cmt.ID_MACRO_TAPPA = cpvt.ID_TAPPA
                                                             LEFT JOIN CONS_MICRO_TAPPA cmt2 ON cmt2.ID_MACRO_TAPPA=cmt.ID_MACRO_TAPPA
+                                                            LEFT JOIN CONS_ELEMENTI ce ON ce.ID_ELEMENTO = cmt2.ID_ELEMENTO
                                                             WHERE ID_PERCORSO = :t1
                                                             AND cmt.ID_ASTA = :t2
                                                             AND trim(COALESCE(cmt.NOTA_VIA, 'ND')) LIKE trim(COALESCE(:t3, 'ND'))
@@ -1716,6 +1749,7 @@ def main():
                                                                             data[i]['codice_serv_pred']
                                                                                                     ))
                                                             logger.error(e)
+                                                            error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                                             exit()
                                                         #ct=0
                                                         # qua devo ancora scriverlo..
@@ -1730,6 +1764,7 @@ def main():
                                                     for ttu in tappe_uo:
                                                         #logger.debug(ttu[0])
                                                         id_tappa=ttu[0]
+                                                        tipo_elemento=ttu[5]
                                                         #elenco_tappe.append(ttu[0])
                                                         ct+=1
                                                         #logger.debug('Sono qua')                                           
@@ -1753,7 +1788,7 @@ def main():
                                                                             data[i]['codice_serv_pred']
                                                                                                     ))
 
-                                                            #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                            #error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                                             #exit()                                       
                                                     
                                                     
@@ -1882,7 +1917,7 @@ def main():
                                                                         data[i]['data_pianif_iniziale'], 
                                                                         data[i]['codice_serv_pred']
                                                                                                 ))
-                                                        #error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                        #error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                                         #exit()
                                                     
                                             
@@ -1916,7 +1951,7 @@ def main():
                                                                     causale=causale_non_es
                                                                 else:
                                                                     try:
-                                                                        causale=int(data[i]['cons_works'][t-1]['cod_giustificativo_ext'].strip())
+                                                                        causale=int(data[i]['cons_works'][t]['cod_giustificativo_ext'].strip())
                                                                         count_fatti=0
                                                                     except Exception as e:
                                                                         logger.warning(e)
@@ -1944,7 +1979,7 @@ def main():
                                                                     causale=causale_non_es
                                                                 else:
                                                                     try:
-                                                                        causale=int(data[i]['cons_works'][t-1]['cod_giustificativo_ext'].strip())
+                                                                        causale=int(data[i]['cons_works'][t]['cod_giustificativo_ext'].strip())
                                                                     except Exception as e:
                                                                         logger.warning(e)
                                                                         logger.warning('Scheda {} - Posizione: {} Manca la causale quindi lo do per fatto'.format(
@@ -1979,7 +2014,7 @@ def main():
                                                                     causale=causale_non_es
                                                                 else:
                                                                     try:
-                                                                        causale=int(data[i]['cons_works'][t-1]['cod_giustificativo_ext'].strip())
+                                                                        causale=int(data[i]['cons_works'][t]['cod_giustificativo_ext'].strip())
                                                                         count_fatti=0
                                                                     except Exception as e:
                                                                         logger.warning(e)
@@ -2006,7 +2041,7 @@ def main():
                                                                 
                                                     
                                                     
-                                                
+
                                                         #logger.debug('Qua invece ci arrivo con causale {}'.format(causale))
                                                         # devo fare gli insert
                                                         query_select=''' 
@@ -2122,7 +2157,7 @@ def main():
                                                             logger.error('Data percorso progettata {}'.format(data[i]['data_pianif_iniziale']))
                                                             logger.error('Data percorso effettiva {}'.format(data[i]['data_esecuzione_prevista']))  
                                                             logger.error('Cod percorso {}'.format(data[i]['codice_serv_pred']))
-                                                            error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                            error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                                             exit()
                                                                 
                         
@@ -2134,7 +2169,7 @@ def main():
                                                 logger.error('PROBLEMA CONSUNTIVAZIONE')
                                                 logger.error('File:{}'.format(filename))
                                                 logger.error('Mi sono fermato alla riga {}'.format(i))
-                                                error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                                 exit()
                                             t+=1
                                             con.commit()
@@ -2250,7 +2285,7 @@ def main():
     
     
     # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
     
     
     logger.info("chiudo le connessioni in maniera definitiva")

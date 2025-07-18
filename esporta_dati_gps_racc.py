@@ -144,7 +144,8 @@ def main():
         logger.info('Inizio AGGIORNAMENTO vista etl.{0}'.format(mv))
 
         ### REFRESH VISTA MATERIALIZZATA POSIZIONE LAST 30 DD ###
-        query_refresh = 'REFRESH MATERIALIZED VIEW CONCURRENTLY etl.{0};'.format(mv)
+        #query_refresh = 'REFRESH MATERIALIZED VIEW CONCURRENTLY etl.{0};'.format(mv)
+        query_refresh = 'REFRESH MATERIALIZED VIEW etl.{0};'.format(mv)
         try:
             curr.execute(query_refresh)
             logger.info('La vista etl.{0} è stata aggiornata correttamente'.format(mv))
@@ -153,10 +154,11 @@ def main():
             logger.error(e)
         conn.commit()
 
-        logger.info('Inizio aggiornamento tabella {} su amiugis'.format(mv));
-        
-        
-        
+
+
+
+        logger.info('Inizio aggiornamento tabella {} su amiugis'.format(mv))
+              
         conn_web = psycopg2.connect(dbname=db_web,
                             port=port,
                             user=user_webroot,
@@ -171,7 +173,6 @@ def main():
         except Exception as e:
             logger.error(query_dblink)
             logger.error(e)
-        
         
         
         query_dblink1='''drop table if exists gps.{0}'''.format(mv) 
@@ -189,6 +190,11 @@ def main():
         data_ora timestamp, tipo_evento varchar,
         svuotamento integer, "data" date, geom geometry(point,4326))'''.format(mv)
 
+
+        # faccio commit
+        conn_web.commit()
+        
+        
         try:
             curr_web.execute(query_dblink2)
         except Exception as e:
@@ -213,6 +219,10 @@ def main():
         except Exception as e:
             logger.error(query_dblink4)
             logger.error(e)
+        
+        
+        # faccio commit
+        conn_web.commit()
             
         query_dblink5='''select dblink_disconnect('conn_dblink{0}')'''.format(mv)
         
@@ -232,10 +242,14 @@ def main():
             logger.error(e)            
         
         
+        # nella query devo escudere eventuali punti a cavallo fra 2 comuni lo faccio con il group by e l'having
         query_dblink6='''create table gps.{0}_pref as 
-        SELECT r.id, r.tipo_mezzo, r.sportello, r.data_ora, r.tipo_evento, r.svuotamento, r."data", r.geom, c.prefisso_utenti 
+        SELECT r.id, r.tipo_mezzo, r.sportello, r.data_ora, r.tipo_evento, r.svuotamento, r."data", r.geom, 
+        max(c.prefisso_utenti) as prefisso_utenti 
         FROM gps.{0} r
-        join gps.v_confini_comuni_area_pref c on st_intersects(r.geom, c.geom)'''.format(mv)
+        join gps.v_confini_comuni_area_pref c on st_intersects(c.geom, r.geom)
+        group by r.id, r.tipo_mezzo, r.sportello, r.data_ora, r.tipo_evento, r.svuotamento, r."data", r.geom
+        having count(c.prefisso_utenti)=1'''.format(mv)
 
         try:
             curr_web.execute(query_dblink6)
@@ -243,7 +257,10 @@ def main():
             logger.error(query_dblink6)
             logger.error(e)
             
-            
+        # faccio commit
+        conn_web.commit()    
+        
+        
         query_dblink7='''ALTER TABLE gps.{0}_pref 
         ADD CONSTRAINT {0}_pref_pk PRIMARY KEY (id)'''.format(mv)
 
@@ -253,6 +270,8 @@ def main():
             logger.error(query_dblink7)
             logger.error(e)
 
+        
+        
         query_dblink7='''CREATE INDEX {0}_pref_geom_idx
         ON gps.{0}_pref
         USING GIST (geom)'''.format(mv)
@@ -262,6 +281,9 @@ def main():
         except Exception as e:
             logger.error(query_dblink7)
             logger.error(e)
+        
+        # faccio commit
+        conn_web.commit()
         
         
         query_drop='''drop table if exists gps.{0}'''.format(mv) 

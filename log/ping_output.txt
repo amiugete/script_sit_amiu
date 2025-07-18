@@ -1,9 +1,9 @@
-PING 192.168.33.35 (192.168.33.35) 56(84) bytes of data.
-64 bytes from 192.168.33.35: icmp_seq=1 ttl=61 time=3.48 ms
-64 bytes from 192.168.33.35: icmp_seq=2 ttl=61 time=17.5 ms
-64 bytes from 192.168.33.35: icmp_seq=3 ttl=61 time=3.75 ms
-64 bytes from 192.168.33.35: icmp_seq=4 ttl=61 time=11.9 ms
+PING 172.17.1.25 (172.17.1.25) 56(84) bytes of data.
+64 bytes from 172.17.1.25: icmp_seq=1 ttl=61 time=21.6 ms
+64 bytes from 172.17.1.25: icmp_seq=2 ttl=61 time=5.22 ms
+64 bytes from 172.17.1.25: icmp_seq=3 ttl=61 time=52.4 ms
+64 bytes from 172.17.1.25: icmp_seq=4 ttl=61 time=13.3 ms
 
---- 192.168.33.35 ping statistics ---
+--- 172.17.1.25 ping statistics ---
 4 packets transmitted, 4 received, 0% packet loss, time 3005ms
-rtt min/avg/max/mdev = 3.475/9.149/17.518/5.888 ms
+rtt min/avg/max/mdev = 5.219/23.132/52.357/17.843 ms

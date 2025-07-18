@@ -141,7 +141,7 @@ def main():
     logger.info("Mi connetto al WS GET {}". format(url_bucher))
     
     
-    
+    #exit()
     
 
     ms = datetime.datetime.now()

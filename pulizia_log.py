@@ -47,6 +47,10 @@ errorfile='{0}/log/error_{1}.log'.format(path,nome)
 
 
 
+# recupero la home
+home_directory = os.path.expanduser("~")
+
+
 
 
 # Create a custom logger
@@ -80,9 +84,14 @@ f_handler.setFormatter(cc_format)
 
 
 
+
+
 now = time.time()
 
 
+
+
+# VARIE
 logpath=logfile='{}/log'.format(path)
 
 variazioni='{}/variazioni'.format(path)
@@ -105,21 +114,31 @@ json_ekovision='{}/EKOVISION/eko_output'.format(path)
 
 csv_ekovision_personale='{}/EKOVISION/inaz_output'.format(path)
 
+
+
+# PERSONALE (Bruzzone/Rimunucci)
 personale_ca_o='{}/personale/output/cartellini'.format(path)
 personale_ce_o='{}/personale/output/cedolini'.format(path)
 personale_cu_o='{}/personale/output/cu'.format(path)
 
+
+
+# report vari
 report='{}/report'.format(path)
+
+# cartella backup DB
+backup_db= '{}/backup_db_new'.format(home_directory)
+
 
 cartelle_da_pulire=[logpath, variazioni, idea, ecopunti, utenze, 
                     consuntivazioni, preconsuntivazioni, timbrature, assenze, json_ekovision,
                     personale_ca_o, personale_ce_o, personale_cu_o, csv_ekovision_personale, report,
-                    eko_pesi]
+                    eko_pesi, backup_db]
 
 giorni_pulizia = [ 14, 14, 7, 14, 14,
           7, 7, 7, 7, 1,
           1, 1, 1, 7, 7,
-          7]
+          7, 7]
 
 c=0
 while c < len(cartelle_da_pulire):
@@ -128,19 +147,24 @@ while c < len(cartelle_da_pulire):
         if f not in ('README.md'):
             f = os.path.join(cartelle_da_pulire[c], f)
             if os.stat(f).st_mtime < now - giorni_pulizia[c] * 86400: 
+                logger.debug(f)
                 if os.path.isfile(f):
                     #print(f)
                     os.remove(os.path.join(path, f))
                 if os.path.isdir(f):
-                    logger.debug('Guardo la sottocartella {}'.format(f))
+                    logger.info('Guardo la sottocartella {}'.format(f))
+                    logger.info(os.listdir(f))
                     for ff in os.listdir(f):
                         if ff not in ('README.md'):
                             ff = os.path.join(f, ff)
                             if os.stat(ff).st_mtime < now - giorni_pulizia[c] * 86400: 
                                 if os.path.isfile(ff):
                                     #print(f)
-                                    os.remove(os.path.join(path, ff))    
-                            
+                                    os.remove(os.path.join(path, ff)) 
+            if os.path.isdir(f):
+                if len(os.listdir(f))==0:
+                    logger.info('Directory {} vuota. La rimuovo'.format(f))
+                    os.rmdir(f)                
                               
     logger.debug('Sono arrivato qua')
     c+=1

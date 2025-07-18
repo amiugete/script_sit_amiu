@@ -209,7 +209,7 @@ def warning_message_mail(message, receiver_email, script_name, logger_name):
     message["To"] = receiver_email
     #message["CC"] = 'roberto.marzocchi@amiu.genova.it'
     message["Subject"] = subject
-    #message["Bcc"] = debug_email  # Recommended for mass emails
+    message["Bcc"] = mail_cc_assterritorio  # Recommended for mass emails
     message.preamble = subject
 
                     

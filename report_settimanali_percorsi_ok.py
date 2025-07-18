@@ -85,7 +85,7 @@ f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.ERROR)
-f_handler.setLevel(logging.INFO)
+f_handler.setLevel(logging.DEBUG)
 
 
 # Add handlers to the logger
@@ -281,12 +281,14 @@ data_attivazione
     except Exception as e:
         logger.error(e)
         sent_log_by_mail(filename,logfile)
-        print('''Manca l'input''')
+        #print('''Manca l'input''')
         exit()
 
 
     k=0       
+    logger.debug('la lunghezza della lista dettagli_percorso è: {}'.format(len(dettagli_percorso)))
     for dd in dettagli_percorso:
+        logger.debug('il codice_percorso in dettagli_percorso è: {}'.format(dd[0]))
         tipologia=dd[3]
         
     logger.info(tipologia)

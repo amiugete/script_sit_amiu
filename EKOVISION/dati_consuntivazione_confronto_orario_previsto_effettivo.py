@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# AMIU copyleft 2023
-# Roberto Marzocchi
+# AMIU copyleft 2025
+# Roberto Marzocchi, Roberta Fagandini
 
 '''
 INPUT 
@@ -12,7 +12,7 @@ INPUT
 
 
 OUTPUT 
-elenco anomalie
+elenco anomalie / correzione 
 
 - orario effettivo scheda != max orario effettivo persone
 
@@ -119,6 +119,7 @@ from invio_messaggio import *
 # libreria per scrivere file csv
 import csv
 
+import uuid
 
 
     
@@ -126,17 +127,6 @@ import csv
 
 def main():
       
-
-
-    
-
-    
-    test= {"name": "école '& c/o aaa", 
-        "location": "New York"}
-    
-    json_data = json.dumps(test , ensure_ascii=False).encode('utf-8')
-    
-    print(json_data)
     
     #exit()
     
@@ -173,7 +163,7 @@ def main():
     
      
     
-    # tutte le schede dal 1 gennaio 2024
+    # tutte le schede dal 1 gennaio 2025
     # togliere id scheda
     
     select_schede= """SELECT ID_SCHEDA, CODICE_SERV_PRED, 
@@ -181,8 +171,8 @@ DATA_ESECUZIONE_PREVISTA,
 ORARIO_ESECUZIONE 
 FROM SCHEDE_ESEGUITE_EKOVISION see 
 WHERE RECORD_VALIDO = 'S'
-AND DATA_ESECUZIONE_PREVISTA >= 20240101
-and ID_SCHEDA = 154813 
+AND DATA_ESECUZIONE_PREVISTA >= 20250101
+and ID_SCHEDA = 571125  
 ORDER BY 1"""
     
     try:
@@ -198,10 +188,12 @@ ORDER BY 1"""
     
     ################################
     # ATTENZIONE ORA è su TEST (da cambiare 2 volte l'URL (lettura e scrittura) 
-    
+    #154813
     
     #check_schede=[ [576939]] 
     
+    
+    check_schede=[ [576939]] 
     
     id_schede_problemi=[]
     orario_effettivo_sbagliato=[]
@@ -217,18 +209,19 @@ ORDER BY 1"""
         params2={'obj':'schede_lavoro',
                 'act' : 'r',
                 'id': '{}'.format(id_scheda[0]),
+                'flg_esponi_consunt': 1
                 }
         
-        response2 = requests.post(eko_url, params=params2, data=data, headers=headers)
+        response2 = requests.post(eko_url_test, params=params2, data=data, headers=headers)
         #letture2 = response2.json()
         #try: 
         letture2 = response2.json()
         
         
-        ora_ini_serv=letture2['schede_lavoro'][0]['ora_inizio']
-        ora_ini_serv2=letture2['schede_lavoro'][0]['ora_inizio_2']
-        ora_fine_serv=letture2['schede_lavoro'][0]['ora_fine']
-        ora_fine_serv2=letture2['schede_lavoro'][0]['ora_fine_2']
+        ora_ini_serv=letture2['schede_lavoro'][0]['servizi'][0]['ora_inizio']
+        ora_ini_serv2=letture2['schede_lavoro'][0]['servizi'][0]['ora_inizio_2']
+        ora_fine_serv=letture2['schede_lavoro'][0]['servizi'][0]['ora_fine']
+        ora_fine_serv2=letture2['schede_lavoro'][0]['servizi'][0]['ora_fine_2']
         
         
         logger.debug('Orari servizio')
@@ -236,7 +229,9 @@ ORDER BY 1"""
         logger.debug(ora_ini_serv)
         logger.debug(ora_fine_serv)
         
-        p=0
+        
+        
+        # gli array conterranno sia gli orari delle persone che dei mezzi
         ora_ini_p=[]
         ora_ini_p2=[]
         ora_fine_p=[]
@@ -244,24 +239,68 @@ ORDER BY 1"""
         
         logger.debug('Orari persone')
         #logger.debug(letture2['schede_lavoro'][0]['risorse_umane'])
-        
+        p=0
         while p < len(letture2['schede_lavoro'][0]['risorse_umane']):
             ora_ini_p.append(letture2['schede_lavoro'][0]['risorse_umane'][p]['ora_inizio'])
             ora_ini_p2.append(letture2['schede_lavoro'][0]['risorse_umane'][p]['ora_inizio_2'])
             ora_fine_p.append(letture2['schede_lavoro'][0]['risorse_umane'][p]['ora_fine'])
             ora_fine_p2.append(letture2['schede_lavoro'][0]['risorse_umane'][p]['ora_fine_2'])
             p+=1
-            
+        
+        p=0
+        while p < len(letture2['schede_lavoro'][0]['risorse_tecniche']):
+            ora_ini_p.append(letture2['schede_lavoro'][0]['risorse_tecniche'][p]['ora_inizio'])
+            ora_ini_p2.append(letture2['schede_lavoro'][0]['risorse_tecniche'][p]['ora_inizio_2'])
+            ora_fine_p.append(letture2['schede_lavoro'][0]['risorse_tecniche'][p]['ora_fine'])
+            ora_fine_p2.append(letture2['schede_lavoro'][0]['risorse_tecniche'][p]['ora_fine_2'])
+            p+=1    
         
         logger.debug(min(ora_ini_p))
         logger.debug(ora_fine_p)
         logger.debug(max(ora_fine_p))
         
         if min(ora_ini_p) != ora_ini_serv  or min(ora_ini_p2) != ora_ini_serv2 or max(ora_fine_p) != ora_fine_serv  or max(ora_fine_p2) != ora_fine_serv2:
-            logger.warning('Anomlia')
+            logger.warning('Anomalia')
             id_schede_problemi.append(id_scheda[0])
             orario_effettivo_sbagliato.append('{} - {} / {} - {}'.format(ora_ini_serv, ora_fine_serv, ora_ini_serv2, ora_fine_serv2))
             orario_effettivo_ok.append('{} - {} / {} - {}'.format(min(ora_ini_p), max(ora_fine_p), min(ora_ini_p2), max(ora_fine_p2))) 
+
+            letture2['schede_lavoro'][0]['servizi'][0]['ora_inizio']=min(ora_ini_p)
+            letture2['schede_lavoro'][0]['servizi'][0]['ora_inizio_2']=min(ora_ini_p2)
+            letture2['schede_lavoro'][0]['servizi'][0]['ora_fine']=min(ora_fine_p)
+            letture2['schede_lavoro'][0]['servizi'][0]['ora_fine_2']=min(ora_fine_p2)
+            
+            del letture2["status"]  
+            del letture2['schede_lavoro'][0]['trips']  
+            del letture2['schede_lavoro'][0]['risorse_tecniche']
+            del letture2['schede_lavoro'][0]['risorse_umane']   
+            del letture2['schede_lavoro'][0]['filtri_rfid']        
+            #logger.info(letture2)
+    
+
+            #letture2['schede_lavoro'][0]['flg_imposta_chiuso']='1'
+
+    
+            logger.info('Provo a salvare nuovamente la scheda')
+            logger.info(letture2)
+            
+            guid = uuid.uuid4()
+            params2={'obj':'schede_lavoro',
+                    'act' : 'w',
+                    'ruid': '{}'.format(str(guid)),
+                    'json': json.dumps(letture2, ensure_ascii=False).encode('utf-8')
+                    }
+            #exit()
+            response2 = requests.post(eko_url_test, params=params2, data=data, headers=headers)
+            result2 = response2.json()
+            if result2['status']=='error':
+                logger.error('Id_scheda = {}'.format(id_scheda))
+                logger.error(result2)
+            else :
+                logger.info(result2['status'])
+            
+            
+        
         else: 
             logger.debug('tutto ok')
         #exit()

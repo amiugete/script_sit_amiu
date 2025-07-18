@@ -126,19 +126,7 @@ def main():
     api_url='{}/svuotamenti'.format(url_idea)
     headers1 = {'''Authorization: Token {0}'''.format(token1)}
     
-    # per ora re-importo tutto, poi sarà da sistematre 
-    '''query_truncate="TRUNCATE TABLE idea.conferimenti_horus CONTINUE IDENTITY RESTRICT;"
-    try:
-        curr.execute(query_truncate)
-    except Exception as e:
-        logger.error(e)
-    ########################################################################################
-    # da testare sempre prima senza fare i commit per verificare che sia tutto OK
-    conn.commit()
-    ########################################################################################
-    curr.close()
-    curr = conn.cursor()
-    '''
+
     #print(headers1)
     #exit()
     p=1
@@ -176,10 +164,7 @@ def main():
     
     
     query_select='''select 
-        case 
-            when max(modificato) is null then '2023-01-01'
-            else max(modificato)
-        end
+        coalesce(max(modificato), to_date('20230101', 'YYYYMMDD'))
         from idea.svuotamenti s '''
         
     try:

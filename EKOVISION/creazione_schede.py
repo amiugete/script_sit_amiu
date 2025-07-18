@@ -31,7 +31,7 @@ parentdir = os.path.dirname(currentdir)
 sys.path.append(parentdir)
 from credenziali import *
 
-from preconsuntivazione import tappa_prevista
+from tappa_prevista import tappa_prevista
 
 import requests
 from requests.exceptions import HTTPError

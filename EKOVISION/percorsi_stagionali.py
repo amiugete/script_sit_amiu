@@ -185,7 +185,8 @@ def main():
     cur = con.cursor()
     
     
-    select_stagionali = '''select p.id_percorso, p.cod_percorso, p.descrizione, u.descrizione as ut, 
+    select_stagionali = '''select p.id_percorso, p.cod_percorso, p.descrizione, p.stagionalita,
+    p.ddmm_switch_on, p.ddmm_switch_off, u.descrizione as ut, 
     s.descrizione as servizio, to_char(data_attivazione, 'DD/MM/YYYY') as data_attivazione, 
     case 
     when data_dismissione is null then '01/12/2099'
@@ -199,7 +200,7 @@ def main():
     left join topo.ut u on u.id_ut = pu.id_ut and pu.responsabile = 'S'
     left join anagrafe_percorsi.elenco_percorsi ep on ep.cod_percorso = p.cod_percorso and ep.data_inizio_validita = p.data_attivazione
     join elem.servizi s on s.id_servizio= p.id_servizio
-    where stagionalita is not null and data_attivazione > now() 
+    where p.stagionalita is not null and data_attivazione > now() 
     and ep.cod_percorso is null
     and id_categoria_uso = 6
     order by p.data_attivazione '''
@@ -218,11 +219,11 @@ def main():
     
     insert_percorso1 = '''INSERT INTO anagrafe_percorsi.elenco_percorsi (cod_percorso, descrizione, id_tipo, freq_testata,
         id_turno, durata, codice_cer, versione_testata,
-        data_inizio_validita, data_fine_validita, freq_settimane, ekovision)
+        data_inizio_validita, data_fine_validita, freq_settimane, ekovision, stagionalita, ddmm_switch_on, ddmm_switch_off)
         (
             select cod_percorso, descrizione, id_tipo, freq_testata, id_turno, durata, codice_cer,
             versione_testata+1, 
-            %s, %s, freq_settimane, ekovision	
+            to_date(%s,'DD/MM/YYYY') , to_date(%s,'DD/MM/YYYY'), freq_settimane, ekovision, stagionalita, ddmm_switch_on, ddmm_switch_off
             from anagrafe_percorsi.elenco_percorsi ep 
             where cod_percorso = %s
             and versione_testata = (select max(ep1.versione_testata) from anagrafe_percorsi.elenco_percorsi ep1 where ep1.cod_percorso = ep.cod_percorso)
@@ -235,7 +236,7 @@ def main():
     freq_testata, versione_uo, data_inizio_validita, data_fine_validita) 
     (
         select %s, cod_percorso, descrizione, id_tipo,
-        freq_testata, versione_uo+1, %s, %s 
+        freq_testata, versione_uo+1, to_date(%s,'DD/MM/YYYY'), to_date(%s,'DD/MM/YYYY')
         from anagrafe_percorsi.elenco_percorsi_old ep where cod_percorso = %s
         and versione_uo = (select max(ep1.versione_uo) 
         from anagrafe_percorsi.elenco_percorsi_old ep1 where ep1.cod_percorso = ep.cod_percorso)
@@ -250,7 +251,7 @@ def main():
     (
         select cod_percorso, id_ut, id_squadra, responsabile, solo_visualizzazione,
         rimessa, id_turno, durata,
-        %s, %s, cdaog3 
+        to_date(%s,'DD/MM/YYYY'), to_date(%s,'DD/MM/YYYY'), cdaog3 
         from anagrafe_percorsi.percorsi_ut pu where cod_percorso = %s
         and data_disattivazione = (select max(data_disattivazione) from anagrafe_percorsi.percorsi_ut pu1
         where pu1.cod_percorso = pu.cod_percorso)
@@ -260,20 +261,20 @@ def main():
     
     insert_percorso4 = '''INSERT INTO anagrafe_percorsi.date_percorsi_sit_uo 
         (id_percorso_sit, cod_percorso, data_inizio_validita, data_fine_validita)
-        VALUES(%s, %s, %s, %s)'''
+        VALUES(%s, %s, to_date(%s,'DD/MM/YYYY'), to_date(%s,'DD/MM/YYYY'))'''
     
     for ls in lista_stagionali:
         # id_percorso  ls[0]
         # cod_percorso ls[1]
-        # data attivazione ls[5]
-        # data disattivazione ls[6]
+        # data attivazione ls[8]
+        # data disattivazione ls[9]
         
         
         
         # INSERT INTO anagrafe_percorsi.elenco_percorsi
         curr1 = conn.cursor()
         try:
-            curr1.execute(insert_percorso1, (ls[5], ls[6], ls[1]))
+            curr1.execute(insert_percorso1, (ls[8], ls[9], ls[1]))
         except Exception as e:
             logger.error(insert_percorso1)
             logger.error(e)
@@ -285,7 +286,7 @@ def main():
         # INSERT INTO anagrafe_percorsi.elenco_percorsi_old 
         curr1 = conn.cursor()
         try:
-            curr1.execute(insert_percorso2, (ls[0], ls[5], ls[6], ls[1]))
+            curr1.execute(insert_percorso2, (ls[0], ls[8], ls[9], ls[1]))
         except Exception as e:
             logger.error(insert_percorso2)
             logger.error(e)
@@ -298,7 +299,7 @@ def main():
         # INSERT INTO anagrafe_percorsi.percorsi_ut 
         curr1 = conn.cursor()
         try:
-            curr1.execute(insert_percorso3, (ls[5], ls[6], ls[1]))
+            curr1.execute(insert_percorso3, (ls[8], ls[9], ls[1]))
         except Exception as e:
             logger.error(insert_percorso3)
             logger.error(e)
@@ -310,7 +311,7 @@ def main():
         # INSERT INTO anagrafe_percorsi.elenco_percorsi_old 
         curr1 = conn.cursor()
         try:
-            curr1.execute(insert_percorso4, (ls[0], ls[1], ls[5], ls[6]))
+            curr1.execute(insert_percorso4, (ls[0], ls[1], ls[8], ls[9]))
         except Exception as e:
             logger.error(insert_percorso2)
             logger.error(e)
@@ -324,11 +325,11 @@ def main():
         # lanciare procedura o funzione della UO 
     
         try:
-            logger.debug(ls[5])
+            logger.debug(ls[8])
             #exit()
             #strptime
             ret=cur.callproc('UNIOPE.ATTIVA_PERCORSI_STAGIONALI',
-                    [ls[1],datetime.strptime(ls[5], '%d/%m/%Y'), datetime.strptime(ls[6], '%d/%m/%Y')])
+                    [ls[1],datetime.strptime(ls[8], '%d/%m/%Y'), datetime.strptime(ls[9], '%d/%m/%Y')])
             logger.debug(ret)
         except Exception as e:
             logger.error(e) 

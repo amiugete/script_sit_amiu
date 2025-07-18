@@ -5,7 +5,12 @@
 # Roberto Marzocchi
 
 '''
-Controlla i servizi disattivati nell'ultima settimana e crea un elenco delle schede da cancellare a mano 
+Lo script si occupa della pulizia dell'elenco percorsi generato dai JOB spoon realizzati per Ekovision
+
+In particolare fa: 
+
+- controllo ed eliminazione percorsi duplicati (non dovrebbe più servire a valle di una modifica al job)
+- versionamento dei percorsi come da istruzioni 
 
 
 '''
@@ -13,15 +18,17 @@ Controlla i servizi disattivati nell'ultima settimana e crea un elenco delle sch
 #from msilib import type_short
 import os, sys, re  # ,shutil,glob
 
-import inspect, os.path
+import requests
+from requests.exceptions import HTTPError
+
+import json
+
+
 #import getopt  # per gestire gli input
 
 #import pymssql
 
 from datetime import date, datetime, timedelta
-#import datetime
-import holidays
-from workalendar.europe import Italy
 
 
 import xlsxwriter
@@ -35,30 +42,25 @@ parentdir = os.path.dirname(currentdir)
 sys.path.append(parentdir)
 from credenziali import *
 
-from tappa_prevista import tappa_prevista
 
-import requests
-from requests.exceptions import HTTPError
 
-import json
+# per mandare file a EKOVISION
+import pysftp
+
+
+#import requests
 
 import logging
 
-#path=os.path.dirname(sys.argv[0]) 
 
-
-
-filename = inspect.getframeinfo(inspect.currentframe()).filename
-#path = os.path.dirname(os.path.abspath(filename))
-path1 = os.path.dirname(os.path.dirname(os.path.abspath(filename)))
 path=os.path.dirname(sys.argv[0]) 
-path1 = os.path.dirname(os.path.dirname(os.path.abspath(filename)))
 nome=os.path.basename(__file__).replace('.py','')
 #tmpfolder=tempfile.gettempdir() # get the current temporary directory
 logfile='{0}/log/{1}.log'.format(path,nome)
 errorfile='{0}/log/error_{1}.log'.format(path,nome)
 #if os.path.exists(logfile):
 #    os.remove(logfile)
+
 
 
 
@@ -107,13 +109,29 @@ from email.mime.image import MIMEImage
 from email.mime.text import MIMEText
 from invio_messaggio import *
 
+# libreria per scrivere file csv
+import csv
 
 
 
-
+    
+     
 
 def main():
+      
+
+
     
+
+    
+    test= {"name": "école '& c/o aaa", 
+        "location": "New York"}
+    
+    json_data = json.dumps(test , ensure_ascii=False).encode('utf-8')
+    
+    #print(json_data)
+    
+    #exit()
     
     # Get today's date
     #presentday = datetime.now() # or presentday = datetime.today()
@@ -123,49 +141,47 @@ def main():
     logging.debug('Oggi {}'.format(oggi))
     
     
-    day_of_year = date((oggi.year), 1, 1)
-
-    end_date=date((oggi.year+1), 1, 1)
-    delta = timedelta(days=1)
+    check=0
+    
     
 
-    num_giorno=datetime.today().weekday()
-    giorno=datetime.today().strftime('%A')
-    logging.debug('Il giorno della settimana è {} o meglio {}'.format(num_giorno, giorno))
+    
+    id_scheda =  484922 #502441   #423341 OK #   423319 da problemi
+    
+    
+    
 
-    start_week = date.today() - timedelta(days=datetime.today().weekday())
-    logging.debug('Il primo giorno della settimana è {} '.format(start_week))
+    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
     
-    
-    # Mi connetto a SIT (PostgreSQL) per poi recuperare le mail
-    nome_db=db
-    logger.info('Connessione al db {}'.format(nome_db))
-    conn = psycopg2.connect(dbname=nome_db,
-                        port=port,
-                        user=user,
-                        password=pwd,
-                        host=host)
+    #headers = {'Content-type': 'application/json;'}
 
+    data={'user': eko_user, 
+        'password': eko_pass,
+        'o2asp' :  eko_o2asp
+        }
+    
+    
+    
+    logger.info('Provo a leggere i dettagli della scheda')
+    
+    
+    params2={'obj':'schede_lavoro',
+            'act' : 'r',
+            'id': '{}'.format(id_scheda),
+            }
+    
+    response2 = requests.post(eko_url, params=params2, data=data, headers=headers)
+    #letture2 = response2.json()
+    letture2 = response2.json()
+   
+    logger.info(letture2)
 
-    curr = conn.cursor()
-    
-    
-    while day_of_year < end_date:
-        print(day_of_year.strftime('%Y%m%d'))
-        
-        
-        day_of_year+=delta 
-        
     
     
     
     
     
-    # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
-    logger.info("chiudo le connessioni in maniera definitiva")
-    curr.close()
-    conn.close()
+    
 
 
 
