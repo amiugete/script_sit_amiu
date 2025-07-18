@@ -280,7 +280,7 @@ def main():
     #exit()               
                     
     
-    #check_error=0 # va messo sotto 
+    global_check_error=0 #check globale che viene incrementato ogni volta che viene riscontrato un errore 
     
     
     # inserisco i percorsi clonati 
@@ -402,6 +402,7 @@ and left(trim(replace(replace(replace(description, 'Percorso', ''), id_percorso:
         logger.error(e)
 
     #logger.debug(lista_variazioni)
+    #logger.debug(len(lista_variazioni))
     #exit()
     #inizializzo gli array
     cod_percorso=[]
@@ -412,1170 +413,1182 @@ and left(trim(replace(replace(replace(description, 'Percorso', ''), id_percorso:
     invio_mail=[]
 
     check_uo=0
-           
-    for vv in lista_variazioni:
-        check_error=0
-        logger.debug(vv[0])
-        cod_percorso.append(vv[0])
-        descrizione.append(vv[1])
-        servizio.append(vv[2])
-        ut.append(vv[3])
-        
-        ########################################################################################################
-        # INSERISCO LA DATA DI ULTIMA MODIFICA NELLA TABELLA anagrafe_percorsi.date_modifica_itinerari
-        # tengo solo la data di ultima modifica che sovrascrive la precedente
-        
-        
-        # cerco se il percorso esiste per gestire la nuova tabella anagrafe_percorsi.date_modifica_itinerari
-        curr1 = conn.cursor()
-        sel_date = '''select * from anagrafe_percorsi.date_modifica_itinerari where cod_percorso = %s'''  
-        try:
-            curr1.execute(sel_date, (vv[0],))
-            lista_date=curr1.fetchall()
-        except Exception as e:
-            logger.error(e)
-        
-        
-        if len(lista_date)==0:
-            # insert
-            curr2 = conn.cursor()
-            insert_q='''insert into anagrafe_percorsi.date_modifica_itinerari (cod_percorso, data_ultima_modifica)
-            values (%s, to_date(%s, 'YYYYMMDD'))'''
-            curr2.execute(insert_q, (vv[0],giorno_file))
-            conn.commit()
-            curr2.close()
-        else:
-            #UPDATE
-            for ld in lista_date:
-                logger.debug(ld[0])
-                logger.debug(ld[1])
-            curr2 = conn.cursor()
-            insert_q='''UPDATE anagrafe_percorsi.date_modifica_itinerari 
-            set data_ultima_modifica= to_date(%s, 'YYYYMMDD')
-            where cod_percorso = %s'''
-            curr2.execute(insert_q, (giorno_file, vv[0]))
-            conn.commit()
-            curr2.close()
+    
+    if len(lista_variazioni) > 0:
+
+        for vv in lista_variazioni:
+            check_error=0
+            logger.debug(vv[0])
+            cod_percorso.append(vv[0])
+            descrizione.append(vv[1])
+            servizio.append(vv[2])
+            ut.append(vv[3])
+            ########################################################################################################
+            # INSERISCO LA DATA DI ULTIMA MODIFICA NELLA TABELLA anagrafe_percorsi.date_modifica_itinerari
+            # tengo solo la data di ultima modifica che sovrascrive la precedente
             
-        curr1.close() 
-        
-        
-        """
-        NON SERVE PIU' (serviva per la vecchia procedura di importazione della UO che ormai è dismessa)
-        ########################################################################################################
-        # CAMBIO DATA ATTIVAZIONE SU SIT
-        curr1 = conn.cursor()       
-        insert_query='''
-            update elem.percorsi set data_attivazione = now()::date
-            where data_attivazione < now() and 
-            id_percorso=%s
-        '''
-        
-        try:
-            curr1.execute(insert_query, (int(vv[4]),))
-            #lista_variazioni=curr.fetchall()
-        except Exception as e:
-            logger.warning('Codice percorso = {}'.format(vv[0]))
-            logger.error(insert_query)
-            logger.error(e)                                            
-
-        curr1.close()
-        conn.commit()
-        """
-        
-        
-        # update delle NOTE elementi_aste_percorsi per i lavaggi con Botticella
-        curr1 = conn.cursor()
-        update_note='''
-            update elem.aste_percorso ap0
-            set nota = (select string_agg(e.riferimento, ',')
-                from elem.aste_percorso ap  
-                join elem.elementi_aste_percorso eap on eap.id_asta_percorso = ap.id_asta_percorso 
-                join elem.elementi e on eap.id_elemento = e.id_elemento 
-                where ap.id_asta_percorso = ap0.id_asta_percorso and ap.num_seq= ap0.num_seq
-                group by ap.id_asta_percorso, ap.nota
-            )
-            where id_percorso in 
-                (select id_percorso from elem.percorsi p where id_servizio =33 and id_categoria_uso in (3,6))
-        '''
-        
-        try:
-            curr1.execute(update_note)
-            #lista_variazioni=curr.fetchall()
-        except Exception as e:
-            logger.error(update_note)
-            logger.error(e)                                            
-
-        curr1.close()
-        conn.commit()
-        
-
-
-
-        # 1 - verifico se c'è una testata attiva su UO
-        cur = con.cursor()
-        check1=0
-        query_o1='''SELECT count(*) FROM ANAGR_SER_PER_UO aspu 
-        WHERE ID_PERCORSO = :cod_perc
-        AND DTA_ATTIVAZIONE <= TO_DATE (:data1, 'DD/MM/YYYY') 
-        AND DTA_DISATTIVAZIONE > TO_DATE (:data2, 'DD/MM/YYYY') '''
-
-        try:
-            cur.execute(query_o1, (vv[0], oggi1, oggi1))
-            cc_pp=cur.fetchall()
-        except Exception as e:
-            logger.error(query_o1)
-            logger.error(e)                                            
-
-
-        for c_p in cc_pp:
-            logger.debug(c_p[0])
-            if(c_p[0])>0:
-                check1=1
+            
+            # cerco se il percorso esiste per gestire la nuova tabella anagrafe_percorsi.date_modifica_itinerari
+            curr1 = conn.cursor()
+            sel_date = '''select * from anagrafe_percorsi.date_modifica_itinerari where cod_percorso = %s'''  
+            try:
+                curr1.execute(sel_date, (vv[0],))
+                lista_date=curr1.fetchall()
+            except Exception as e:
+                logger.error(e)
+            
+            
+            if len(lista_date)==0:
+                # insert
+                curr2 = conn.cursor()
+                insert_q='''insert into anagrafe_percorsi.date_modifica_itinerari (cod_percorso, data_ultima_modifica)
+                values (%s, to_date(%s, 'YYYYMMDD'))'''
+                curr2.execute(insert_q, (vv[0],giorno_file))
+                conn.commit()
+                curr2.close()
             else:
-                # controllo se è un percorso che si attiverà più avanti
-                cur.close()
+                #UPDATE
+                for ld in lista_date:
+                    logger.debug(ld[0])
+                    logger.debug(ld[1])
+                curr2 = conn.cursor()
+                insert_q='''UPDATE anagrafe_percorsi.date_modifica_itinerari 
+                set data_ultima_modifica= to_date(%s, 'YYYYMMDD')
+                where cod_percorso = %s'''
+                curr2.execute(insert_q, (giorno_file, vv[0]))
+                conn.commit()
+                curr2.close()
+                
+            curr1.close() 
+            
+            
+            """
+            NON SERVE PIU' (serviva per la vecchia procedura di importazione della UO che ormai è dismessa)
+            ########################################################################################################
+            # CAMBIO DATA ATTIVAZIONE SU SIT
+            curr1 = conn.cursor()       
+            insert_query='''
+                update elem.percorsi set data_attivazione = now()::date
+                where data_attivazione < now() and 
+                id_percorso=%s
+            '''
+            
+            try:
+                curr1.execute(insert_query, (int(vv[4]),))
+                #lista_variazioni=curr.fetchall()
+            except Exception as e:
+                logger.warning('Codice percorso = {}'.format(vv[0]))
+                logger.error(insert_query)
+                logger.error(e)                                            
+
+            curr1.close()
+            conn.commit()
+            """
+            
+            
+            # update delle NOTE elementi_aste_percorsi per i lavaggi con Botticella
+            curr1 = conn.cursor()
+            update_note='''
+                update elem.aste_percorso ap0
+                set nota = (select string_agg(e.riferimento, ',')
+                    from elem.aste_percorso ap  
+                    join elem.elementi_aste_percorso eap on eap.id_asta_percorso = ap.id_asta_percorso 
+                    join elem.elementi e on eap.id_elemento = e.id_elemento 
+                    where ap.id_asta_percorso = ap0.id_asta_percorso and ap.num_seq= ap0.num_seq
+                    group by ap.id_asta_percorso, ap.nota
+                )
+                where id_percorso in 
+                    (select id_percorso from elem.percorsi p where id_servizio =33 and id_categoria_uso in (3,6))
+            '''
+            
+            try:
+                curr1.execute(update_note)
+                #lista_variazioni=curr.fetchall()
+            except Exception as e:
+                logger.error(update_note)
+                logger.error(e)                                            
+
+            curr1.close()
+            conn.commit()
+            
+
+
+
+            # 1 - verifico se c'è una testata attiva su UO
+            cur = con.cursor()
+            check1=0
+            query_o1='''SELECT count(*) FROM ANAGR_SER_PER_UO aspu 
+            WHERE ID_PERCORSO = :cod_perc
+            AND DTA_ATTIVAZIONE <= TO_DATE (:data1, 'DD/MM/YYYY') 
+            AND DTA_DISATTIVAZIONE > TO_DATE (:data2, 'DD/MM/YYYY') '''
+
+            try:
+                cur.execute(query_o1, (vv[0], oggi1, oggi1))
+                cc_pp=cur.fetchall()
+            except Exception as e:
+                logger.error(query_o1)
+                logger.error(e)                                            
+
+
+            for c_p in cc_pp:
+                logger.debug(c_p[0])
+                if(c_p[0])>0:
+                    check1=1
+                else:
+                    # controllo se è un percorso che si attiverà più avanti
+                    cur.close()
+                    cur = con.cursor()
+                    query_o1bis='''SELECT count(*) FROM ANAGR_SER_PER_UO aspu 
+            WHERE ID_PERCORSO = :cod_perc
+            AND DTA_ATTIVAZIONE > TO_DATE (:data1, 'DD/MM/YYYY')  '''
+
+                    try:
+                        cur.execute(query_o1bis, (vv[0], oggi1))
+                        cc_pp1bis=cur.fetchall()
+                    except Exception as e:
+                        logger.error(query_o1bis)
+                        logger.error(e)
+                    for c_p1bis in cc_pp1bis:
+                        #logger.debug(c_p1bis[0])
+                        if(c_p1bis[0])>0:
+                            stato_importazione.append('''WARNING: Percorso che deve ancora attivarsi. Riproverò l'importazione nei prossimi giorni.''')
+                            # faccio insert con utente procedure 
+                            curr3=conn.cursor()
+                            insert_log='''INSERT INTO util.sys_history ("type", "action", description, datetime, id_user,  id_percorso) 
+                                                    (
+                                                        select distinct 'PERCORSO', 'UPDATE', 'Forzatura re-importazione UO (percorso non ancora attivo)',
+                                                        now(),  0, foo.id_percorso 
+                                                        from (
+                                                            select id_percorso from elem.percorsi p  
+                                                            where id_categoria_uso = 3 and cod_percorso = %s
+                                                            ) foo
+                                                    )'''    
+                            try:
+                                curr3.execute(insert_log, (vv[0],))
+                            except Exception as e:
+                                logger.error(insert_log)
+                                logger.error('cod percorso: {}'.format(vv[0]))
+                                logger.error(e)
+                            conn.commit()
+                            curr3.close
+                        else:    
+                            stato_importazione.append('ERRORE: Non ci sono testate su UO')
+                            check_uo+=1
+                            global_check_error+=1
+            logger.debug('Check1={}'.format(check1))        
+            cur.close()
+            
+            # recupero le mail cui inviare il report
+            if (check1==1): 
                 cur = con.cursor()
-                query_o1bis='''SELECT count(*) FROM ANAGR_SER_PER_UO aspu 
-        WHERE ID_PERCORSO = :cod_perc
-        AND DTA_ATTIVAZIONE > TO_DATE (:data1, 'DD/MM/YYYY')  '''
+                query_uo='''SELECT aspu.ID_UO, au.MAIL FROM ANAGR_SER_PER_UO aspu 
+                JOIN ANAGR_UO au ON au.ID_UO = aspu.ID_UO  
+                WHERE aspu.ID_PERCORSO = :cod_perc
+                AND aspu.DTA_ATTIVAZIONE <= TO_DATE (:data1, 'DD/MM/YYYY') 
+                AND aspu.DTA_DISATTIVAZIONE > TO_DATE (:data2, 'DD/MM/YYYY') '''
 
                 try:
-                    cur.execute(query_o1bis, (vv[0], oggi1))
-                    cc_pp1bis=cur.fetchall()
+                    cur.execute(query_uo, (vv[0], oggi1, oggi1))
+                    uu_oo=cur.fetchall()
                 except Exception as e:
-                    logger.error(query_o1bis)
+                    logger.error(query_uo)
+                    logger.error(e)                                            
+
+                invio_mail_tmp=''
+                for u_o in uu_oo:
+                    logger.debug(u_o[1])
+                    # le mail sono aggiornate a partire dal SIT  
+                    if invio_mail_tmp!='':
+                        invio_mail_tmp='{}, {}'.format(invio_mail_tmp,u_o[1])
+                    else: 
+                        invio_mail_tmp='{}'.format(u_o[1])
+                
+                invio_mail.append(invio_mail_tmp)
+                    
+                            
+                cur.close()
+            else:
+                invio_mail.append('')    
+            
+            # Se ho superato primo check verifico che il percorso non sia già importato
+            check2=0
+            if (check1==1):            
+                cur = con.cursor()
+                cod_perc=vv[0]
+                data1=oggi1
+                query_o2='''SELECT ID_PERCORSO, max(DATA_PREVISTA) AS DATA_PREVISTA
+                FROM CONS_PERCORSI_VIE_TAPPE cpvt  
+                WHERE ID_PERCORSO = :cod_perc AND TRUNC(DATA_PREVISTA) >= TO_DATE (:data1, 'DD/MM/YYYY')
+                GROUP BY ID_PERCORSO'''
+
+                try:
+                    cur.execute(query_o2, (cod_perc,data1))
+                    #logger.debug(query_o2,(cod_perc,data1))
+                    pp_dd=cur.fetchall()
+                except Exception as e:
+                    logger.error(query_o2, cod_perc,data1)
+                    logger.error(e)                                            
+
+                if len(pp_dd)>0:
+                    check2=0
+                    stato_importazione.append('WARNING: Percorso già importato con data odierna o successiva')
+                else:
+                    check2=1
+                
+                for p_d in pp_dd:
+                    logger.warning(p_d[0])
+                    logger.warning(p_d[1])
+
+                cur.close()
+            
+            logger.debug('Ora procedo con la verifica del tipo di percorso. Check1={}, Check2={}'.format(check1, check2))
+            
+            check3=0
+            # procedeo con la verifica del percorso
+            if (check1==1 and check2 == 1):
+                #logger.debug('Entro qua')
+                cur = con.cursor()
+                risp='?'
+                try:
+                    ret=cur.callproc('UNIOPE.CONTROLLAPERCORSO',
+                            [vv[0],oggi1,risp])
+                except Exception as e:
+                    #logger.error(query_o3)
                     logger.error(e)
-                for c_p1bis in cc_pp1bis:
-                    #logger.debug(c_p1bis[0])
-                    if(c_p1bis[0])>0:
-                        stato_importazione.append('''WARNING: Percorso che deve ancora attivarsi. Riproverò l'importazione nei prossimi giorni.''')
-                        # faccio insert con utente procedure 
-                        curr3=conn.cursor()
-                        insert_log='''INSERT INTO util.sys_history ("type", "action", description, datetime, id_user,  id_percorso) 
-                                                (
-                                                    select distinct 'PERCORSO', 'UPDATE', 'Forzatura re-importazione UO (percorso non ancora attivo)',
-                                                    now(),  0, foo.id_percorso 
-                                                    from (
-                                                        select id_percorso from elem.percorsi p  
-                                                        where id_categoria_uso = 3 and cod_percorso = %s
-                                                        ) foo
-                                                )'''    
-                        try:
-                            curr3.execute(insert_log, (vv[0],))
-                        except Exception as e:
-                            logger.error(insert_log)
-                            logger.error('cod percorso: {}'.format(vv[0]))
-                            logger.error(e)
-                        conn.commit()
-                        curr3.close
-                    else:    
-                        stato_importazione.append('ERRORE: Non ci sono testate su UO')
-                        check_uo+=1
-        logger.debug('Check1={}'.format(check1))        
-        cur.close()
-        
-        # recupero le mail cui inviare il report
-        if (check1==1): 
-            cur = con.cursor()
-            query_uo='''SELECT aspu.ID_UO, au.MAIL FROM ANAGR_SER_PER_UO aspu 
-            JOIN ANAGR_UO au ON au.ID_UO = aspu.ID_UO  
-            WHERE aspu.ID_PERCORSO = :cod_perc
-            AND aspu.DTA_ATTIVAZIONE <= TO_DATE (:data1, 'DD/MM/YYYY') 
-            AND aspu.DTA_DISATTIVAZIONE > TO_DATE (:data2, 'DD/MM/YYYY') '''
-
-            try:
-                cur.execute(query_uo, (vv[0], oggi1, oggi1))
-                uu_oo=cur.fetchall()
-            except Exception as e:
-                logger.error(query_uo)
-                logger.error(e)                                            
-
-            invio_mail_tmp=''
-            for u_o in uu_oo:
-                logger.debug(u_o[1])
-                # le mail sono aggiornate a partire dal SIT  
-                if invio_mail_tmp!='':
-                    invio_mail_tmp='{}, {}'.format(invio_mail_tmp,u_o[1])
-                else: 
-                    invio_mail_tmp='{}'.format(u_o[1])
-            
-            invio_mail.append(invio_mail_tmp)
                 
-                        
-            cur.close()
-        else:
-            invio_mail.append('')    
-        
-        # Se ho superato primo check verifico che il percorso non sia già importato
-        check2=0
-        if (check1==1):            
-            cur = con.cursor()
-            cod_perc=vv[0]
-            data1=oggi1
-            query_o2='''SELECT ID_PERCORSO, max(DATA_PREVISTA) AS DATA_PREVISTA
-            FROM CONS_PERCORSI_VIE_TAPPE cpvt  
-            WHERE ID_PERCORSO = :cod_perc AND TRUNC(DATA_PREVISTA) >= TO_DATE (:data1, 'DD/MM/YYYY')
-            GROUP BY ID_PERCORSO'''
-
-            try:
-                cur.execute(query_o2, (cod_perc,data1))
-                #logger.debug(query_o2,(cod_perc,data1))
-                pp_dd=cur.fetchall()
-            except Exception as e:
-                logger.error(query_o2, cod_perc,data1)
-                logger.error(e)                                            
-
-            if len(pp_dd)>0:
-                check2=0
-                stato_importazione.append('WARNING: Percorso già importato con data odierna o successiva')
-            else:
-                check2=1
-            
-            for p_d in pp_dd:
-                logger.warning(p_d[0])
-                logger.warning(p_d[1])
-
-            cur.close()
-        
-        logger.debug('Ora procedo con la verifica del tipo di percorso. Check1={}, Check2={}'.format(check1, check2))
-        
-        check3=0
-        # procedeo con la verifica del percorso
-        if (check1==1 and check2 == 1):
-            #logger.debug('Entro qua')
-            cur = con.cursor()
-            risp='?'
-            try:
-                ret=cur.callproc('UNIOPE.CONTROLLAPERCORSO',
-                         [vv[0],oggi1,risp])
-            except Exception as e:
-                #logger.error(query_o3)
-                logger.error(e)
-            
-            
-            
-            """query_o3='''CALL UNIOPE.CONTROLLAPERCORSO(:cod_perc,:data1,:nret);'''
-
-            try:
-                cur.execute(query_o3, (vv[0],oggi1, '?'))
-                risp=cur.fetchone()
-            except Exception as e:
-                logger.error(query_o3)
-                logger.error(e)      
-            """
-            try:    
-                controllo_percorso=int(ret[2])
-            except Exception as e:
-                #logger.error(query_o3)
-                logger.error(e)
-                logger.debug(ret)
-            
-            cur.close()
                 
-            
-            if controllo_percorso == -2:
-                stato_importazione.append('ERRORE: Percorso già consuntivato con delle causali')
-            elif (controllo_percorso == -1 or controllo_percorso==1):
-                check3=1
-            else:
-                stato_importazione.append('''ERRORE: CALL UNIOPE.CONTROLLAPERCORSO({},{},?) restituisce dei dati anomali
-                                        , ripulire la consuntivazione e provare a re-importare'''.format(vv[0],oggi1))
-         
-        # se tutto OK procedo con l'importazione
-        if (check1==1 and check2 == 1 and check3 == 1): 
-            
-            
-            # ANDRA' POI FATTA SU SIT UNA PULIZIA DI SERVIZI 
-            '''select distinct ap.id_asta_percorso, num_seq, tipo, eap.frequenza, ap.id_asta  from elem.aste_percorso ap 
-            left join elem.elementi_aste_percorso eap on eap.id_asta_percorso = ap.id_asta_percorso 
-            where ap.id_percorso = 200296 
+                
+                """query_o3='''CALL UNIOPE.CONTROLLAPERCORSO(:cod_perc,:data1,:nret);'''
 
-            select * from elem.elementi_aste_percorso eap where id_asta_percorso in 
-            (select id_asta_percorso  from elem.aste_percorso ap where id_percorso = 200296 )'''
-            
-            # cerco se raccolta o spazzamento o altro e salvo il risultato nella variabile tipo_percorso
-            cur = con.cursor()
-            query_tipo= ''' SELECT GETTIPOPERCORSO(:cod_perc, TO_DATE (:data1, 'DD/MM/YYYY')) FROM DUAL'''
-            try:
-                cur.execute(query_tipo, (cod_perc,data1))
-                tt_pp=cur.fetchall()
-            except Exception as e:
-                logger.error(query_tipo)
-                logger.error(e)                                            
-
-
-            
-            for t_p in tt_pp:
-                tipo_percorso=t_p[0]
-            
-            cur.close()
-            
-            
-            # importazione macro tappe
-            
-            # cerco la max macro tappa 
-            cur = con.cursor()
-            query_id_t= '''SELECT max(ID_TAPPA) FROM CONS_PERCORSI_VIE_TAPPE'''
-            try:
-                cur.execute(query_id_t)
-                ii_tt=cur.fetchall()
-            except Exception as e:
-                logger.error(query_id_t)
-                logger.error(e)                                            
-
-
-            
-            for i_t in ii_tt:
-                max_id_macro_tappa=i_t[0]
-            
-            cur.close()
-            
-            
-            # cerco la max micro tappa - NON SERVE
-            """cur = con.cursor()
-            query_id_t= '''SELECT max(ID_MICRO_TAPPA) FROM CONS_MICRO_TAPPA'''
-            try:
-                cur.execute(query_id_t)
-                ii_tt=cur.fetchall()
-            except Exception as e:
-                logger.error(query_id_t)
-                logger.error(e)                                            
-
-
-            
-            for i_t in ii_tt:
-                max_id_micro_tappa=i_t[0]
-            
-            cur.close()
-            """
-            
-            
-            
-            
-            
-            if tipo_percorso=='R':
+                try:
+                    cur.execute(query_o3, (vv[0],oggi1, '?'))
+                    risp=cur.fetchone()
+                except Exception as e:
+                    logger.error(query_o3)
+                    logger.error(e)      
                 """
-                devo inserire:
-                 - macro tappe
-                 - cons_vie_tappe
-                 - micro tappe
-                 
-                 Tutto a partire dalla etl.v_tappe di SIT
+                try:    
+                    controllo_percorso=int(ret[2])
+                except Exception as e:
+                    #logger.error(query_o3)
+                    logger.error(e)
+                    logger.debug(ret)
                 
-                """ 
-            
-                # PRIMA VERIFICO SE CI SIANO DIFFERENZE CHE GIUSTIFICHINO IMPORTAZIONE
-                curr1 = conn.cursor()
-                """"sel_sit='''select vt.num_seq, id_via::int, coalesce(numero_civico,' ') as numero_civico , 
-                coalesce(riferimento,' ') as riferimento, fo.freq_binaria as frequenza,vt.tipo_elemento, vt.id_elemento::int,
-                coalesce(vt.nota_asta, ' ') as nota_asta
-                from etl.v_tappe vt 
-                join etl.frequenze_ok fo on fo.cod_frequenza = vt.frequenza_elemento::int 
-                where id_percorso = %s  
-                order by num_seq , numero_civico, riferimento, id_elemento '''
+                cur.close()
+                    
+                
+                if controllo_percorso == -2:
+                    stato_importazione.append('ERRORE: Percorso già consuntivato con delle causali')
+                    global_check_error+=1
+                elif (controllo_percorso == -1 or controllo_percorso==1):
+                    check3=1
+                else:
+                    stato_importazione.append('''ERRORE: CALL UNIOPE.CONTROLLAPERCORSO({},{},?) restituisce dei dati anomali
+                                            , ripulire la consuntivazione e provare a re-importare'''.format(vv[0],oggi1))
+                    global_check_error+=1
+            # se tutto OK procedo con l'importazione
+            if (check1==1 and check2 == 1 and check3 == 1): 
+                
+                
+                # ANDRA' POI FATTA SU SIT UNA PULIZIA DI SERVIZI 
+                '''select distinct ap.id_asta_percorso, num_seq, tipo, eap.frequenza, ap.id_asta  from elem.aste_percorso ap 
+                left join elem.elementi_aste_percorso eap on eap.id_asta_percorso = ap.id_asta_percorso 
+                where ap.id_percorso = 200296 
+
+                select * from elem.elementi_aste_percorso eap where id_asta_percorso in 
+                (select id_asta_percorso  from elem.aste_percorso ap where id_percorso = 200296 )'''
+                
+                # cerco se raccolta o spazzamento o altro e salvo il risultato nella variabile tipo_percorso
+                cur = con.cursor()
+                query_tipo= ''' SELECT GETTIPOPERCORSO(:cod_perc, TO_DATE (:data1, 'DD/MM/YYYY')) FROM DUAL'''
+                try:
+                    cur.execute(query_tipo, (cod_perc,data1))
+                    tt_pp=cur.fetchall()
+                except Exception as e:
+                    logger.error(query_tipo)
+                    logger.error(e)                                            
+
+
+                
+                for t_p in tt_pp:
+                    tipo_percorso=t_p[0]
+                
+                cur.close()
+                
+                
+                # importazione macro tappe
+                
+                # cerco la max macro tappa 
+                cur = con.cursor()
+                query_id_t= '''SELECT max(ID_TAPPA) FROM CONS_PERCORSI_VIE_TAPPE'''
+                try:
+                    cur.execute(query_id_t)
+                    ii_tt=cur.fetchall()
+                except Exception as e:
+                    logger.error(query_id_t)
+                    logger.error(e)                                            
+
+
+                
+                for i_t in ii_tt:
+                    max_id_macro_tappa=i_t[0]
+                
+                cur.close()
+                
+                
+                # cerco la max micro tappa - NON SERVE
+                """cur = con.cursor()
+                query_id_t= '''SELECT max(ID_MICRO_TAPPA) FROM CONS_MICRO_TAPPA'''
+                try:
+                    cur.execute(query_id_t)
+                    ii_tt=cur.fetchall()
+                except Exception as e:
+                    logger.error(query_id_t)
+                    logger.error(e)                                            
+
+
+                
+                for i_t in ii_tt:
+                    max_id_micro_tappa=i_t[0]
+                
+                cur.close()
                 """
                 
-                sel_sit='''select vt.num_seq, id_via::int, coalesce(numero_civico,' ') as numero_civico , 
-                coalesce(riferimento,' ') as riferimento, fo.freq_binaria as frequenza,vt.tipo_elemento, vt.id_elemento::int,
-                coalesce(riferimento, ' ') as nota_asta,  coalesce (ripasso, 0) as ripasso
-                from etl.v_tappe vt 
-                join etl.frequenze_ok fo on fo.cod_frequenza = vt.frequenza_elemento::int 
-                where id_percorso = %s  
-                order by num_seq , numero_civico, riferimento, id_elemento '''
-                
-                try:
-                    curr1.execute(sel_sit, (vv[4],))
-                    #logger.debug(query_sit1, max_id_macro_tappa, vv[4] )
-                    #curr1.rowfactory = makeDictFactory(curr1)
-                    tappe_sit=curr1.fetchall()
-                except Exception as e:
-                    logger.error(sel_sit, vv[4] )
-                    logger.error(e)
-                
-                
-                cur1 = con.cursor()
-                sel_uo='''SELECT VTP.CRONOLOGIA NUM_SEQ,VTP.ID_VIA, NVL(VTP.NUM_CIVICO,' ') as  NUMERO_CIVICO,
-                NVL(VTP.RIFERIMENTO, ' ') as RIFERIMENTO,
-                VTP.FREQELEM, VTP.TIPO_ELEMENTO, TO_NUMBER(VTP.ID_ELEMENTO) AS ID_ELEM_INT,
-                 NVL(VTP.NOTA_VIA, ' ') as NOTA_VIA, COALESCE(TO_NUMBER(RIPASSO),0) AS RIPASSO
-                FROM V_TAPPE_ELEMENTI_PERCORSI VTP
-                inner join (select MAX(CPVT.DATA_PREVISTA) data_prevista, CPVT.ID_PERCORSO
-                 from CONS_PERCORSI_VIE_TAPPE CPVT
-                where CPVT.DATA_PREVISTA<=TO_DATE(:t1,'DD/MM/YYYY') 
-                group by CPVT.ID_PERCORSO) PVT
-                on PVT.ID_PERCORSO=VTP.ID_PERCORSO 
-               	and vtp.data_prevista = pvt.data_prevista
-                where VTP.ID_PERCORSO=:t2
-                ORDER BY VTP.CRONOLOGIA, NUMERO_CIVICO, RIFERIMENTO, ID_ELEM_INT
-                ''' 
-                try:
-                    cur1.execute(sel_uo, (oggi1, vv[0]))
-                    #cur1.rowfactory = makeDictFactory(cur1)
-                    tappe_uo=cur1.fetchall()
-                except Exception as e:
-                    logger.error(sel_uo, oggi1, vv[0] )
-                    logger.error(e)
-                
-                curr1.close()  
-                cur1.close()      
-                logger.debug('Trovate {} tappe su SIT per il percorso {}'.format(len(tappe_sit),vv[0]))
-                logger.debug('Trovate {} tappe su UO per il percorso {}'.format(len(tappe_uo),vv[0]))
-                #logger.debug(tappe_sit[:][1])
-                #logger.debug(tappe_uo[:][1])
                 
                 
                 
-                to_import = 1
                 
-                if len(tappe_sit) == 0: 
-                    logger.info('Percorso {} non ha più tappe su SIT.'.format(vv[0]))
-                    stato_importazione.append('WARNING - Percorso senza tappe su SIT. Verificare e probabilmente disattivare')         
-                    to_import=0
-                elif len (tappe_uo) ==0:
-                    logger.info( 'Su UO non ci sono ancora tappe. Ora le importo')
-                elif len(tappe_uo) > 0 and cfr_tappe(tappe_sit, tappe_uo, logger)==0 :
-                    logger.info('Percorso {} già importato con data antecedente. Non ci sono state modifiche sostanziali.'.format(vv[0]))
-                    stato_importazione.append('Percorso già importato con data antecedente. Non ci sono state modifiche sostanziali.')
-                    to_import=0
+                if tipo_percorso=='R':
+                    """
+                    devo inserire:
+                    - macro tappe
+                    - cons_vie_tappe
+                    - micro tappe
+                    
+                    Tutto a partire dalla etl.v_tappe di SIT
+                    
+                    """ 
                 
-                if to_import==1:
-                           
-                    # procedo con importazione
+                    # PRIMA VERIFICO SE CI SIANO DIFFERENZE CHE GIUSTIFICHINO IMPORTAZIONE
                     curr1 = conn.cursor()
-                    curr2 = conn.cursor()
+                    """"sel_sit='''select vt.num_seq, id_via::int, coalesce(numero_civico,' ') as numero_civico , 
+                    coalesce(riferimento,' ') as riferimento, fo.freq_binaria as frequenza,vt.tipo_elemento, vt.id_elemento::int,
+                    coalesce(vt.nota_asta, ' ') as nota_asta
+                    from etl.v_tappe vt 
+                    join etl.frequenze_ok fo on fo.cod_frequenza = vt.frequenza_elemento::int 
+                    where id_percorso = %s  
+                    order by num_seq , numero_civico, riferimento, id_elemento '''
+                    """
                     
-                    query_sit1='''select  (row_number() OVER 
-                    (ORDER BY vt.num_seq, case when numero_civico='' then null else numero_civico end nulls last, riferimento)+%s),
-                            riferimento,
-                            0 as qta_tot_spazzamento, fo.freq_binaria as frequenza, 
-                            /*case 
-                            when COALESCE (vt.ripasso, 0) > 0 then 1
-                            else  COALESCE (vt.ripasso, 0)
-                            end ripasso,*/
-                            COALESCE (vt.ripasso, 0) as ripasso,
-                            id_piazzola, id_asta,  lung_trattamento, 
-                            vt.cod_percorso, vt.id_via, vt.num_seq as cronologia, 
-                            now() as dta_import, (now()::date)::timestamp as data_prevista, numero_civico, tipo_elemento
-                            ,nota_asta, 
-                            case 
-                                when id_piazzola is null then id_elemento 
-                                else null
-                            end as id_elemento_no_piazzola
-                            from etl.v_tappe vt 
-                            join etl.frequenze_ok fo on fo.cod_frequenza = vt.frequenza_elemento::int 
-                            where id_percorso = %s 
-                            group by vt.num_seq, riferimento,
-                            id_piazzola, id_asta, fo.freq_binaria, 
-                            ripasso, lung_trattamento, 
-                            vt.cod_percorso, vt.id_via, vt.num_seq, vt.numero_civico, tipo_elemento, nota_asta,
-                            case 
-                                when id_piazzola is null then id_elemento 
-                                else null
-                            end
-                            order by num_seq, case when numero_civico='' then null else numero_civico end nulls last, riferimento  '''
-                    
-                    
+                    sel_sit='''select vt.num_seq, id_via::int, coalesce(numero_civico,' ') as numero_civico , 
+                    coalesce(riferimento,' ') as riferimento, fo.freq_binaria as frequenza,vt.tipo_elemento, vt.id_elemento::int,
+                    coalesce(riferimento, ' ') as nota_asta,  coalesce (ripasso, 0) as ripasso
+                    from etl.v_tappe vt 
+                    join etl.frequenze_ok fo on fo.cod_frequenza = vt.frequenza_elemento::int 
+                    where id_percorso = %s  
+                    order by num_seq , numero_civico, riferimento, id_elemento '''
                     
                     try:
-                        curr1.execute(query_sit1, (max_id_macro_tappa, vv[4]))
+                        curr1.execute(sel_sit, (vv[4],))
                         #logger.debug(query_sit1, max_id_macro_tappa, vv[4] )
-                        sit1=curr1.fetchall()
+                        #curr1.rowfactory = makeDictFactory(curr1)
+                        tappe_sit=curr1.fetchall()
                     except Exception as e:
-                        logger.error(query_sit1, max_id_macro_tappa, vv[4] )
+                        logger.error(sel_sit, vv[4] )
                         logger.error(e)
                     
                     
-                        
-                    macro_tappe=[]    
-                    cur = con.cursor()
                     cur1 = con.cursor()
-                    cur2 = con.cursor()
-                    
-                    # ciclo sulle piazzole o macro tappe
-                    logger.debug('Ora inserisco le tappe - Inizio ciclo')
-                    for tappa in sit1:
-                        logger.debug(tappa[0])
-                        logger.debug(tappa[5])
-                        logger.debug(tappa[10])
-                        
-                        query_insert0='''INSERT INTO UNIOPE.CONS_MACRO_TAPPA
-                        (ID_MACRO_TAPPA, RIFERIMENTO, QTA_TOT_SPAZZAMENTO, FREQUENZA, RIPASSO, ID_PIAZZOLA, ID_ASTA, LUNG_TRATTAMENTO, NOTA_VIA)
-                        VALUES(:t1, :t2, :t3, :t4, :t5, :t6, :t7, :t8, :t9)'''
-        
-        
-                        try:
-                            cur.execute(query_insert0, (tappa[0], tappa[1], tappa[2], tappa[3], tappa[4], tappa[5], tappa[6], tappa[7], tappa[15]))
-                            #macro_tappe.append(tappa[0])
-                        except Exception as e:
-                            check_error=1
-                            logger.error(tappa)
-                            logger.error(query_insert0)
-                            logger.error(e)
-                            check_error=1   
-        
-        
-                        # dopo aver inserito le macro tappe ora mi concentro sulle CONS_PERCORSI_VIE_TAPPE
-                        curr1 = conn.cursor()
-                    
-                        query_sit1=''''''
-                        
-                        
-                        
-                        # CONS_PERCORSI_VIE_TAPPE
-                        query_insert1='''INSERT INTO UNIOPE.CONS_PERCORSI_VIE_TAPPE
-                    (ID_PERCORSO, ID_VIA, ID_TAPPA, CRONOLOGIA, DTA_IMPORT, DATA_PREVISTA)
-                    VALUES(:t1, :t2, :t3, :t4, :t5, :t6)
-                    '''
-                    
-                    
-                        try:
-                            cur.execute(query_insert1, (tappa[8], tappa[9], tappa[0], tappa[10], tappa[11], tappa[12]))
-                            #macro_tappe.append(tappa[2])
-                        except Exception as e:
-                            check_error=1
-                            #logger.error(tappa)
-                            logger.error(query_insert1)
-                            logger.error('1:{}, 2:{}, 3:{}, 4:{}, 5:{}, 6:{}'.format(tappa[8], tappa[9], tappa[0], tappa[10], tappa[11], tappa[12]))
-                            logger.error(e)
-                            check_error=1                                            
-
-
-
-                        # ORA DEVO POPOLARE MICROTAPPE E CONS_ELEMENTI
-                        query_insert3='''INSERT INTO UNIOPE.CONS_MICRO_TAPPA
-                        (ID_MICRO_TAPPA, ID_MACRO_TAPPA, FREQUENZA, RIPASSO, NUM_CIVICO, POSIZIONE, ID_ELEMENTO, ID_PIAZZOLA)
-                        VALUES(
-                            (SELECT max(ID_MICRO_TAPPA)+1 FROM CONS_MICRO_TAPPA),
-                            :t1, :t2, :t3, :t4, :t5, :t6, :t7)'''
-
-                        query_insert3_nopiazzola='''INSERT INTO UNIOPE.CONS_MICRO_TAPPA
-                        (ID_MICRO_TAPPA, ID_MACRO_TAPPA, FREQUENZA, RIPASSO, NUM_CIVICO, POSIZIONE, ID_ELEMENTO, ID_PIAZZOLA)
-                        VALUES(
-                            (SELECT max(ID_MICRO_TAPPA)+1 FROM CONS_MICRO_TAPPA),
-                            :t1, :t2, :t3, :t4, :t5, :t6, NULL)'''
-
-                        
-                        if tappa[5] is None:
-                            query_sit2='''select fo.freq_binaria as frequenza, 
-                            /*case 
-                                when COALESCE (vt.ripasso, 0) > 0 then 1
-                                else  COALESCE (vt.ripasso, 0)
-                                end ripasso, */
-                            COALESCE (vt.ripasso, 0) as ripasso,
-                            numero_civico, riferimento, 
-                            id_elemento, id_piazzola, tipo_elemento, num_seq
-                            from etl.v_tappe vt 
-                            join etl.frequenze_ok fo on fo.cod_frequenza = vt.frequenza_elemento::int 
-                            where id_percorso = %s and tipo_elemento = %s and id_elemento=%s
-                            order by num_seq, case when numero_civico='' then null else numero_civico end nulls last, id_elemento'''
-                            
-                            try:
-                                curr2.execute(query_sit2, (vv[4], tappa[14], tappa[16]))
-                                sit2=curr2.fetchall()
-                            except Exception as e:
-                                logger.error(query_sit2, vv[4], tappa[14], tappa[10] )
-                                logger.error(e)
-                        else:
-                            query_sit2='''select fo.freq_binaria as frequenza, 
-                            /*case 
-                                when COALESCE (vt.ripasso, 0) > 0 then 1
-                                else  COALESCE (vt.ripasso, 0)
-                                end ripasso, */
-                            COALESCE (vt.ripasso, 0) as ripasso,
-                            numero_civico, riferimento, 
-                            id_elemento, id_piazzola, tipo_elemento, num_seq
-                            from etl.v_tappe vt 
-                            join etl.frequenze_ok fo on fo.cod_frequenza = vt.frequenza_elemento::int 
-                            where id_percorso = %s and id_piazzola=%s and tipo_elemento = %s and num_seq= %s
-                            order by num_seq, case when numero_civico='' then null else numero_civico end nulls last, id_elemento'''
-                            
-                            try:
-                                curr2.execute(query_sit2, (vv[4], tappa[5], tappa[14], tappa[10]))
-                                sit2=curr2.fetchall()
-                            except Exception as e:
-                                logger.error(query_sit2, vv[4], tappa[5], tappa[14], tappa[10] )
-                                logger.error(e)
-                        
-                        logger.debug('Ora inserisco gli elementi')
-                        for elementi in sit2:
-                            logger.debug(elementi[4])
-                            # per prima cosa cerco se esiste già un elemento e faccio update o insert del tipo elemento
-                            query_sel_el='''SELECT TIPO_ELEMENTO, ID_ELEMENTO FROM UNIOPE.CONS_ELEMENTI WHERE ID_ELEMENTO = :t1
-                            '''
-                            try:
-                                cur1.execute(query_sel_el, (str(elementi[4]),))
-                                ee=cur1.fetchall()
-                            except Exception as e:
-                                check_error=1
-                                logger.error(str(elementi[4]))
-                                logger.error(query_sel_el)
-                                logger.error(e)
-                                check_error=1
-                            
-                            if len(ee)==1:
-                                # update
-                                query_update='''UPDATE UNIOPE.CONS_ELEMENTI SET TIPO_ELEMENTO=:t1
-                                WHERE ID_ELEMENTO=:t2'''
-                                try:
-                                    cur.execute(query_update, (elementi[6], str(elementi[4])))
-                                    #macro_tappe.append(tappa[2])
-                                except Exception as e:
-                                    check_error=1
-                                    logger.error(elementi)
-                                    logger.error(query_insert4)
-                                    logger.error(e)
-                                    check_error=1
-                            else:
-                                #insert
-                                query_insert4='''INSERT INTO UNIOPE.CONS_ELEMENTI
-                                (ID_ELEMENTO, TIPO_ELEMENTO)
-                                VALUES (:t1, :t2)'''
-                                try:
-                                    cur.execute(query_insert4, (str(elementi[4]), elementi[6]))
-                                    #macro_tappe.append(tappa[2])
-                                except Exception as e:
-                                    check_error=1
-                                    logger.error(elementi)
-                                    logger.error(query_insert4)
-                                    logger.error(e)
-                                    check_error=1
-
-                            # dopo aver inserito gli elementi ora posso inserire le microtappe
-                            
-                            if elementi[5] is None:
-                                #query_insert3_nopiazzola
-                                try:
-                                    cur2.execute(query_insert3_nopiazzola, (tappa[0], elementi[0], elementi[1], elementi[2], elementi[3], str(elementi[4])))
-                                    #macro_tappe.append(tappa[2])
-                                except Exception as e:
-                                    check_error=1
-                                    logger.error(tappa[0])
-                                    logger.error('elementi {}'.format(elementi))
-                                    logger.error(query_insert3)
-                                    logger.error(e)
-                                    check_error=1
-                            else:
-                                try:
-                                    logger.debug('Faccio insert elemento {}'.format(elementi[4]))
-                                    cur2.execute(query_insert3, (tappa[0], elementi[0], elementi[1], elementi[2], elementi[3], str(elementi[4]), elementi[5]))
-                                    #macro_tappe.append(tappa[2])
-                                except Exception as e:
-                                    check_error=1
-                                    logger.error(tappa[0])
-                                    logger.error('elementi {}'.format(elementi))
-                                    logger.error(query_insert3)
-                                    logger.error(e)
-                                    check_error=1
-                        
-                    # chiudo connessione oracle
-                    cur.close()
-                    cur1.close()
-                    cur2.close()
-                    con.commit()
-                    curr1.close()
-                    curr2.close()
-                    
-                    
-
-                    #exit()
-            elif tipo_percorso=='S':
-                
-                # anche in questo caso devo vedere se ci sono differenze
-                
-                # PRIMA VERIFICO SE CI SIANO DIFFERENZE CHE GIUSTIFICHINO IMPORTAZIONE
-                curr1 = conn.cursor()
-                sel_sit='''select vt.num_seq, id_via::int, coalesce(numero_civico,' ') as numero_civico , 
-                coalesce(riferimento,' ') as riferimento, fo.freq_binaria as frequenza,vt.tipo_elemento, vt.id_elemento::int,
-                coalesce(vt.nota_asta, ' ') as nota_asta, coalesce(vt.ripasso, 0) as ripasso
-                from etl.v_tappe vt 
-                join etl.frequenze_ok fo on fo.cod_frequenza = vt.frequenza_asta::int 
-                where id_percorso = %s  
-                order by num_seq , case when numero_civico='' then null else numero_civico end nulls last, id_elemento '''
-                try:
-                    curr1.execute(sel_sit, (vv[4],))
-                    #logger.debug(query_sit1, max_id_macro_tappa, vv[4] )
-                    #curr1.rowfactory = makeDictFactory(curr1)
-                    tappe_sit=curr1.fetchall()
-                except Exception as e:
-                    logger.error(sel_sit, vv[4] )
-                    logger.error(e)
-                
-                
-                cur1 = con.cursor()
-                sel_uo='''SELECT VTP.CRONOLOGIA NUM_SEQ, VTP.ID_VIA, NVL(VTP.NUM_CIVICO,' ') as  NUMERO_CIVICO,
-                NVL(VTP.RIFERIMENTO, ' ') as RIFERIMENTO,
-                VTP.FREQELEM, VTP.TIPO_ELEMENTO, TO_NUMBER(VTP.ID_ELEMENTO) AS ID_ELEM_INT,
-                CASE 
-	                 WHEN VTP.NOTA_VIA IS NULL AND VTP.RIFERIMENTO IS NOT NULL THEN VTP.RIFERIMENTO
-                 	 ELSE NVL(VTP.NOTA_VIA, ' ')
-                 END
-                  as NOTA_VIA, COALESCE(TO_NUMBER(RIPASSO),0) AS RIPASSO
-                FROM V_TAPPE_ELEMENTI_PERCORSI VTP
-                inner join (select MAX(CPVT.DATA_PREVISTA) data_prevista, CPVT.ID_PERCORSO
-                 from CONS_PERCORSI_VIE_TAPPE CPVT
-                where CPVT.DATA_PREVISTA<=TO_DATE(:t1,'DD/MM/YYYY') 
-                group by CPVT.ID_PERCORSO) PVT
-                on PVT.ID_PERCORSO=VTP.ID_PERCORSO 
-               	and vtp.data_prevista = pvt.data_prevista
-                where VTP.ID_PERCORSO=:t2
-                ORDER BY VTP.CRONOLOGIA, NUMERO_CIVICO, ID_ELEM_INT
-                ''' 
-                try:
-                    cur1.execute(sel_uo, (oggi1, vv[0]))
-                    #cur1.rowfactory = makeDictFactory(cur1)
-                    tappe_uo=cur1.fetchall()
-                except Exception as e:
-                    logger.error(sel_uo, oggi1, vv[0] )
-                    logger.error(e)
-                
-                curr1.close()  
-                cur1.close()      
-                logger.debug('Trovate {} tappe su SIT per il percorso {}'.format(len(tappe_sit),vv[0]))
-                logger.debug('Trovate {} tappe su UO per il percorso {}'.format(len(tappe_uo),vv[0]))
-                #logger.debug(tappe_sit[:][1])
-                #logger.debug(tappe_uo[:][1])
-                
-                to_import =1
-                
-                if len(tappe_sit) == 0: 
-                    logger.info('Percorso {} non ha più tappe su SIT.'.format(vv[0]))
-                    stato_importazione.append('WARNING - Percorso senza tappe su SIT. Verificare e probabilmente disattivare')         
-                    to_import=0
-                elif len (tappe_uo) ==0:
-                    logger.info( 'Su UO non ci sono ancora tappe. Ora le importo')
-                elif len(tappe_uo) > 0 and cfr_tappe(tappe_sit, tappe_uo, logger)==0 :
-                    logger.info('Percorso {} già importato con data antecedente. Non ci sono state modifiche sostanziali.'.format(vv[0]))
-                    stato_importazione.append('Percorso già importato con data  antecedente. Non ci sono state modifiche sostanziali.')
-                    to_import=0
-                
-                if to_import==1:
-                
-                    curr1 = conn.cursor()
-                    curr2 = conn.cursor()
-                    
-                    query_sit1='''select  (row_number() OVER (ORDER BY vt.num_seq)+%s), vt.nota_asta,
-                            vt.mq_trattati, fo.freq_binaria as frequenza, COALESCE (vt.ripasso, 0) as ripasso,
-                            id_asta,  lung_trattamento, 
-                            vt.cod_percorso, vt.id_via, vt.num_seq as cronologia, 
-                            now() as dta_import, (now()::date)::timestamp as data_prevista
-                            from etl.v_tappe vt 
-                            join etl.frequenze_ok fo on fo.cod_frequenza = vt.frequenza_asta::int 
-                            where id_percorso = %s 
-                            group by  vt.num_seq, vt.nota_asta, vt.mq_trattati,
-                            id_asta, fo.freq_binaria, 
-                            ripasso, lung_trattamento, 
-                            vt.cod_percorso, vt.id_via, vt.num_seq
-                            order by num_seq '''
-                    
-                    
-                    
+                    sel_uo='''SELECT VTP.CRONOLOGIA NUM_SEQ,VTP.ID_VIA, NVL(VTP.NUM_CIVICO,' ') as  NUMERO_CIVICO,
+                    NVL(VTP.RIFERIMENTO, ' ') as RIFERIMENTO,
+                    VTP.FREQELEM, VTP.TIPO_ELEMENTO, TO_NUMBER(VTP.ID_ELEMENTO) AS ID_ELEM_INT,
+                    NVL(VTP.NOTA_VIA, ' ') as NOTA_VIA, COALESCE(TO_NUMBER(RIPASSO),0) AS RIPASSO
+                    FROM V_TAPPE_ELEMENTI_PERCORSI VTP
+                    inner join (select MAX(CPVT.DATA_PREVISTA) data_prevista, CPVT.ID_PERCORSO
+                    from CONS_PERCORSI_VIE_TAPPE CPVT
+                    where CPVT.DATA_PREVISTA<=TO_DATE(:t1,'DD/MM/YYYY') 
+                    group by CPVT.ID_PERCORSO) PVT
+                    on PVT.ID_PERCORSO=VTP.ID_PERCORSO 
+                    and vtp.data_prevista = pvt.data_prevista
+                    where VTP.ID_PERCORSO=:t2
+                    ORDER BY VTP.CRONOLOGIA, NUMERO_CIVICO, RIFERIMENTO, ID_ELEM_INT
+                    ''' 
                     try:
-                        curr1.execute(query_sit1, (max_id_macro_tappa, vv[4]))
-                        logger.debug(query_sit1, max_id_macro_tappa, vv[4] )
-                        sit1=curr1.fetchall()
+                        cur1.execute(sel_uo, (oggi1, vv[0]))
+                        #cur1.rowfactory = makeDictFactory(cur1)
+                        tappe_uo=cur1.fetchall()
                     except Exception as e:
-                        logger.error(query_sit1, max_id_macro_tappa, vv[4] )
+                        logger.error(sel_uo, oggi1, vv[0] )
                         logger.error(e)
-                        check_error=1
+                    
+                    curr1.close()  
+                    cur1.close()      
+                    logger.debug('Trovate {} tappe su SIT per il percorso {}'.format(len(tappe_sit),vv[0]))
+                    logger.debug('Trovate {} tappe su UO per il percorso {}'.format(len(tappe_uo),vv[0]))
+                    #logger.debug(tappe_sit[:][1])
+                    #logger.debug(tappe_uo[:][1])
                     
                     
-                        
-                    macro_tappe=[]    
-                    cur = con.cursor()
-                    for tappa in sit1:
-                        
-                        
-                        query_insert0='''INSERT INTO UNIOPE.CONS_MACRO_TAPPA
-        (ID_MACRO_TAPPA, NOTA_VIA, QTA_TOT_SPAZZAMENTO, FREQUENZA, RIPASSO, ID_ASTA, LUNG_TRATTAMENTO)
-        VALUES(:t1, :t2, :t3, :t4, :t5, :t6, :t7)'''
-        
-        
-                        try:
-                            cur.execute(query_insert0, (tappa[0], tappa[1], tappa[2], tappa[3], tappa[4], tappa[5], tappa[6]))
-                            #macro_tappe.append(tappa[0])
-                        except Exception as e:
-                            logger.error(tappa)
-                            logger.error(query_insert0)
-                            logger.error(e)
-                            check_error=1    
-        
-        
-                        # dopo aver inserito le macro tappe ora mi concentro sulle micro
+                    
+                    to_import = 1
+                    
+                    if len(tappe_sit) == 0: 
+                        logger.info('Percorso {} non ha più tappe su SIT.'.format(vv[0]))
+                        stato_importazione.append('WARNING - Percorso senza tappe su SIT. Verificare e probabilmente disattivare')         
+                        to_import=0
+                    elif len (tappe_uo) ==0:
+                        logger.info( 'Su UO non ci sono ancora tappe. Ora le importo')
+                    elif len(tappe_uo) > 0 and cfr_tappe(tappe_sit, tappe_uo, logger)==0 :
+                        logger.info('Percorso {} già importato con data antecedente. Non ci sono state modifiche sostanziali.'.format(vv[0]))
+                        stato_importazione.append('Percorso già importato con data antecedente. Non ci sono state modifiche sostanziali.')
+                        to_import=0
+                    
+                    if to_import==1:
+                            
+                        # procedo con importazione
                         curr1 = conn.cursor()
-                    
-                        query_sit1=''''''
+                        curr2 = conn.cursor()
+                        
+                        query_sit1='''select  (row_number() OVER 
+                        (ORDER BY vt.num_seq, case when numero_civico='' then null else numero_civico end nulls last, riferimento)+%s),
+                                riferimento,
+                                0 as qta_tot_spazzamento, fo.freq_binaria as frequenza, 
+                                /*case 
+                                when COALESCE (vt.ripasso, 0) > 0 then 1
+                                else  COALESCE (vt.ripasso, 0)
+                                end ripasso,*/
+                                COALESCE (vt.ripasso, 0) as ripasso,
+                                id_piazzola, id_asta,  lung_trattamento, 
+                                vt.cod_percorso, vt.id_via, vt.num_seq as cronologia, 
+                                now() as dta_import, (now()::date)::timestamp as data_prevista, numero_civico, tipo_elemento
+                                ,nota_asta, 
+                                case 
+                                    when id_piazzola is null then id_elemento 
+                                    else null
+                                end as id_elemento_no_piazzola
+                                from etl.v_tappe vt 
+                                join etl.frequenze_ok fo on fo.cod_frequenza = vt.frequenza_elemento::int 
+                                where id_percorso = %s 
+                                group by vt.num_seq, riferimento,
+                                id_piazzola, id_asta, fo.freq_binaria, 
+                                ripasso, lung_trattamento, 
+                                vt.cod_percorso, vt.id_via, vt.num_seq, vt.numero_civico, tipo_elemento, nota_asta,
+                                case 
+                                    when id_piazzola is null then id_elemento 
+                                    else null
+                                end
+                                order by num_seq, case when numero_civico='' then null else numero_civico end nulls last, riferimento  '''
                         
                         
                         
-                        
-                        query_insert1='''INSERT INTO UNIOPE.CONS_PERCORSI_VIE_TAPPE
-                    (ID_PERCORSO, ID_VIA, ID_TAPPA, CRONOLOGIA, DTA_IMPORT, DATA_PREVISTA)
-                    VALUES(:t1, :t2, :t3, :t4, :t5, :t6)
-                    '''
-                    
-                    
                         try:
-                            cur.execute(query_insert1, (tappa[7], tappa[8], tappa[0], tappa[9], tappa[10], tappa[11]))
-                            #macro_tappe.append(tappa[2])
+                            curr1.execute(query_sit1, (max_id_macro_tappa, vv[4]))
+                            #logger.debug(query_sit1, max_id_macro_tappa, vv[4] )
+                            sit1=curr1.fetchall()
                         except Exception as e:
-                            logger.error('''{}, {},{}, {}, {}, {} '''.format(tappa[7], tappa[8], tappa[0], tappa[9], tappa[10], tappa[11]))
-                            logger.error(query_insert1)
+                            logger.error(query_sit1, max_id_macro_tappa, vv[4] )
                             logger.error(e)
-                            check_error=1
-                    
-                    # chiudo cursore oracle
-                    cur.close()
-                    con.commit()
-                    # chiudo cursore PostgreSQL
-                    curr1.close()
-                   
-            elif tipo_percorso == 'A':
-                logger.debug('ALTRO TO DO')
-                check_error=2
-                stato_importazione.append('ERRORE: Percorso di tipo ALTRO non gestito dalle importazioni')
-                error_mail='''Problema di importazione percorso {0}. <br> 
-                Il servizio su UO è categorizzato come ALTRO
-                '''    
-            else:
-                check_error=1
-                error_mail = '''Problema di importazione percorso {0}. <br>
-                Verificare funzione GETTIPOPERCORSO. <br>
-                SELECT GETTIPOPERCORSO({0}, TO_DATE ({1}, 'DD/MM/YYYY')) FROM DUAL;
-                '''.format(vv[0], oggi1)
-                stato_importazione.append('ERRORE: Percorso di tipo sconosciuto non gestito dalle importazioni')
+                        
+                        
+                            
+                        macro_tappe=[]    
+                        cur = con.cursor()
+                        cur1 = con.cursor()
+                        cur2 = con.cursor()
+                        
+                        # ciclo sulle piazzole o macro tappe
+                        logger.debug('Ora inserisco le tappe - Inizio ciclo')
+                        for tappa in sit1:
+                            logger.debug(tappa[0])
+                            logger.debug(tappa[5])
+                            logger.debug(tappa[10])
+                            
+                            query_insert0='''INSERT INTO UNIOPE.CONS_MACRO_TAPPA
+                            (ID_MACRO_TAPPA, RIFERIMENTO, QTA_TOT_SPAZZAMENTO, FREQUENZA, RIPASSO, ID_PIAZZOLA, ID_ASTA, LUNG_TRATTAMENTO, NOTA_VIA)
+                            VALUES(:t1, :t2, :t3, :t4, :t5, :t6, :t7, :t8, :t9)'''
             
-            if check_error==1 and to_import==1:
-                stato_importazione.append('ERRORE: Percorso non importato correttamente')
-            elif check_error==0 and to_import==1:
-                # Il percorso è stato imporato ma devo replicare la consuntivazione 
-                if (controllo_percorso==-1):
-                    # devo lanciare una seconda procedura
-                    cur = con.cursor()
-                    risp='?'
-                    try:
-                        ret=cur.callproc('UNIOPE.REPLICACONSUNTIVAZIONE',
-                                [vv[0],oggi1,risp])
-                    except Exception as e:
-                        #logger.error(query_o3)
-                        logger.error(e)
+            
+                            try:
+                                cur.execute(query_insert0, (tappa[0], tappa[1], tappa[2], tappa[3], tappa[4], tappa[5], tappa[6], tappa[7], tappa[15]))
+                                #macro_tappe.append(tappa[0])
+                            except Exception as e:
+                                check_error=1
+                                logger.error(tappa)
+                                logger.error(query_insert0)
+                                logger.error(e)
+                                check_error=1   
+            
+            
+                            # dopo aver inserito le macro tappe ora mi concentro sulle CONS_PERCORSI_VIE_TAPPE
+                            curr1 = conn.cursor()
                         
+                            query_sit1=''''''
+                            
+                            
+                            
+                            # CONS_PERCORSI_VIE_TAPPE
+                            query_insert1='''INSERT INTO UNIOPE.CONS_PERCORSI_VIE_TAPPE
+                        (ID_PERCORSO, ID_VIA, ID_TAPPA, CRONOLOGIA, DTA_IMPORT, DATA_PREVISTA)
+                        VALUES(:t1, :t2, :t3, :t4, :t5, :t6)
+                        '''
+                        
+                        
+                            try:
+                                cur.execute(query_insert1, (tappa[8], tappa[9], tappa[0], tappa[10], tappa[11], tappa[12]))
+                                #macro_tappe.append(tappa[2])
+                            except Exception as e:
+                                check_error=1
+                                #logger.error(tappa)
+                                logger.error(query_insert1)
+                                logger.error('1:{}, 2:{}, 3:{}, 4:{}, 5:{}, 6:{}'.format(tappa[8], tappa[9], tappa[0], tappa[10], tappa[11], tappa[12]))
+                                logger.error(e)
+                                check_error=1                                            
+
+
+
+                            # ORA DEVO POPOLARE MICROTAPPE E CONS_ELEMENTI
+                            query_insert3='''INSERT INTO UNIOPE.CONS_MICRO_TAPPA
+                            (ID_MICRO_TAPPA, ID_MACRO_TAPPA, FREQUENZA, RIPASSO, NUM_CIVICO, POSIZIONE, ID_ELEMENTO, ID_PIAZZOLA)
+                            VALUES(
+                                (SELECT max(ID_MICRO_TAPPA)+1 FROM CONS_MICRO_TAPPA),
+                                :t1, :t2, :t3, :t4, :t5, :t6, :t7)'''
+
+                            query_insert3_nopiazzola='''INSERT INTO UNIOPE.CONS_MICRO_TAPPA
+                            (ID_MICRO_TAPPA, ID_MACRO_TAPPA, FREQUENZA, RIPASSO, NUM_CIVICO, POSIZIONE, ID_ELEMENTO, ID_PIAZZOLA)
+                            VALUES(
+                                (SELECT max(ID_MICRO_TAPPA)+1 FROM CONS_MICRO_TAPPA),
+                                :t1, :t2, :t3, :t4, :t5, :t6, NULL)'''
+
+                            
+                            if tappa[5] is None:
+                                query_sit2='''select fo.freq_binaria as frequenza, 
+                                /*case 
+                                    when COALESCE (vt.ripasso, 0) > 0 then 1
+                                    else  COALESCE (vt.ripasso, 0)
+                                    end ripasso, */
+                                COALESCE (vt.ripasso, 0) as ripasso,
+                                numero_civico, riferimento, 
+                                id_elemento, id_piazzola, tipo_elemento, num_seq
+                                from etl.v_tappe vt 
+                                join etl.frequenze_ok fo on fo.cod_frequenza = vt.frequenza_elemento::int 
+                                where id_percorso = %s and tipo_elemento = %s and id_elemento=%s
+                                order by num_seq, case when numero_civico='' then null else numero_civico end nulls last, id_elemento'''
+                                
+                                try:
+                                    curr2.execute(query_sit2, (vv[4], tappa[14], tappa[16]))
+                                    sit2=curr2.fetchall()
+                                except Exception as e:
+                                    logger.error(query_sit2, vv[4], tappa[14], tappa[10] )
+                                    logger.error(e)
+                            else:
+                                query_sit2='''select fo.freq_binaria as frequenza, 
+                                /*case 
+                                    when COALESCE (vt.ripasso, 0) > 0 then 1
+                                    else  COALESCE (vt.ripasso, 0)
+                                    end ripasso, */
+                                COALESCE (vt.ripasso, 0) as ripasso,
+                                numero_civico, riferimento, 
+                                id_elemento, id_piazzola, tipo_elemento, num_seq
+                                from etl.v_tappe vt 
+                                join etl.frequenze_ok fo on fo.cod_frequenza = vt.frequenza_elemento::int 
+                                where id_percorso = %s and id_piazzola=%s and tipo_elemento = %s and num_seq= %s
+                                order by num_seq, case when numero_civico='' then null else numero_civico end nulls last, id_elemento'''
+                                
+                                try:
+                                    curr2.execute(query_sit2, (vv[4], tappa[5], tappa[14], tappa[10]))
+                                    sit2=curr2.fetchall()
+                                except Exception as e:
+                                    logger.error(query_sit2, vv[4], tappa[5], tappa[14], tappa[10] )
+                                    logger.error(e)
+                            
+                            logger.debug('Ora inserisco gli elementi')
+                            for elementi in sit2:
+                                logger.debug(elementi[4])
+                                # per prima cosa cerco se esiste già un elemento e faccio update o insert del tipo elemento
+                                query_sel_el='''SELECT TIPO_ELEMENTO, ID_ELEMENTO FROM UNIOPE.CONS_ELEMENTI WHERE ID_ELEMENTO = :t1
+                                '''
+                                try:
+                                    cur1.execute(query_sel_el, (str(elementi[4]),))
+                                    ee=cur1.fetchall()
+                                except Exception as e:
+                                    check_error=1
+                                    logger.error(str(elementi[4]))
+                                    logger.error(query_sel_el)
+                                    logger.error(e)
+                                    check_error=1
+                                
+                                if len(ee)==1:
+                                    # update
+                                    query_update='''UPDATE UNIOPE.CONS_ELEMENTI SET TIPO_ELEMENTO=:t1
+                                    WHERE ID_ELEMENTO=:t2'''
+                                    try:
+                                        cur.execute(query_update, (elementi[6], str(elementi[4])))
+                                        #macro_tappe.append(tappa[2])
+                                    except Exception as e:
+                                        check_error=1
+                                        logger.error(elementi)
+                                        logger.error(query_insert4)
+                                        logger.error(e)
+                                        check_error=1
+                                else:
+                                    #insert
+                                    query_insert4='''INSERT INTO UNIOPE.CONS_ELEMENTI
+                                    (ID_ELEMENTO, TIPO_ELEMENTO)
+                                    VALUES (:t1, :t2)'''
+                                    try:
+                                        cur.execute(query_insert4, (str(elementi[4]), elementi[6]))
+                                        #macro_tappe.append(tappa[2])
+                                    except Exception as e:
+                                        check_error=1
+                                        logger.error(elementi)
+                                        logger.error(query_insert4)
+                                        logger.error(e)
+                                        check_error=1
+
+                                # dopo aver inserito gli elementi ora posso inserire le microtappe
+                                
+                                if elementi[5] is None:
+                                    #query_insert3_nopiazzola
+                                    try:
+                                        cur2.execute(query_insert3_nopiazzola, (tappa[0], elementi[0], elementi[1], elementi[2], elementi[3], str(elementi[4])))
+                                        #macro_tappe.append(tappa[2])
+                                    except Exception as e:
+                                        check_error=1
+                                        logger.error(tappa[0])
+                                        logger.error('elementi {}'.format(elementi))
+                                        logger.error(query_insert3)
+                                        logger.error(e)
+                                        check_error=1
+                                else:
+                                    try:
+                                        logger.debug('Faccio insert elemento {}'.format(elementi[4]))
+                                        cur2.execute(query_insert3, (tappa[0], elementi[0], elementi[1], elementi[2], elementi[3], str(elementi[4]), elementi[5]))
+                                        #macro_tappe.append(tappa[2])
+                                    except Exception as e:
+                                        check_error=1
+                                        logger.error(tappa[0])
+                                        logger.error('elementi {}'.format(elementi))
+                                        logger.error(query_insert3)
+                                        logger.error(e)
+                                        check_error=1
+                            
+                        # chiudo connessione oracle
+                        cur.close()
+                        cur1.close()
+                        cur2.close()
+                        con.commit()
+                        curr1.close()
+                        curr2.close()
+                        
+                        
+
+                        #exit()
+                elif tipo_percorso=='S':
                     
-                    logger.info('UNIOPE.REPLICACONSUNTIVAZIONE - ret={}'.format(ret))
-                    controllo_replica=int(ret[2])
-                    if controllo_replica < 0:
-                        # c'è stato un errore nella funzione per replicare la consuntivazione
-                        stato_importazione.append('ERRORE - La consuntivazione non è stata replicata correttamenete')
-                    else:
+                    # anche in questo caso devo vedere se ci sono differenze
+                    
+                    # PRIMA VERIFICO SE CI SIANO DIFFERENZE CHE GIUSTIFICHINO IMPORTAZIONE
+                    curr1 = conn.cursor()
+                    sel_sit='''select vt.num_seq, id_via::int, coalesce(numero_civico,' ') as numero_civico , 
+                    coalesce(riferimento,' ') as riferimento, fo.freq_binaria as frequenza,vt.tipo_elemento, vt.id_elemento::int,
+                    coalesce(vt.nota_asta, ' ') as nota_asta, coalesce(vt.ripasso, 0) as ripasso
+                    from etl.v_tappe vt 
+                    join etl.frequenze_ok fo on fo.cod_frequenza = vt.frequenza_asta::int 
+                    where id_percorso = %s  
+                    order by num_seq , case when numero_civico='' then null else numero_civico end nulls last, id_elemento '''
+                    try:
+                        curr1.execute(sel_sit, (vv[4],))
+                        #logger.debug(query_sit1, max_id_macro_tappa, vv[4] )
+                        #curr1.rowfactory = makeDictFactory(curr1)
+                        tappe_sit=curr1.fetchall()
+                    except Exception as e:
+                        logger.error(sel_sit, vv[4] )
+                        logger.error(e)
+                    
+                    
+                    cur1 = con.cursor()
+                    sel_uo='''SELECT VTP.CRONOLOGIA NUM_SEQ, VTP.ID_VIA, NVL(VTP.NUM_CIVICO,' ') as  NUMERO_CIVICO,
+                    NVL(VTP.RIFERIMENTO, ' ') as RIFERIMENTO,
+                    VTP.FREQELEM, VTP.TIPO_ELEMENTO, TO_NUMBER(VTP.ID_ELEMENTO) AS ID_ELEM_INT,
+                    CASE 
+                        WHEN VTP.NOTA_VIA IS NULL AND VTP.RIFERIMENTO IS NOT NULL THEN VTP.RIFERIMENTO
+                        ELSE NVL(VTP.NOTA_VIA, ' ')
+                    END
+                    as NOTA_VIA, COALESCE(TO_NUMBER(RIPASSO),0) AS RIPASSO
+                    FROM V_TAPPE_ELEMENTI_PERCORSI VTP
+                    inner join (select MAX(CPVT.DATA_PREVISTA) data_prevista, CPVT.ID_PERCORSO
+                    from CONS_PERCORSI_VIE_TAPPE CPVT
+                    where CPVT.DATA_PREVISTA<=TO_DATE(:t1,'DD/MM/YYYY') 
+                    group by CPVT.ID_PERCORSO) PVT
+                    on PVT.ID_PERCORSO=VTP.ID_PERCORSO 
+                    and vtp.data_prevista = pvt.data_prevista
+                    where VTP.ID_PERCORSO=:t2
+                    ORDER BY VTP.CRONOLOGIA, NUMERO_CIVICO, ID_ELEM_INT
+                    ''' 
+                    try:
+                        cur1.execute(sel_uo, (oggi1, vv[0]))
+                        #cur1.rowfactory = makeDictFactory(cur1)
+                        tappe_uo=cur1.fetchall()
+                    except Exception as e:
+                        logger.error(sel_uo, oggi1, vv[0] )
+                        logger.error(e)
+                    
+                    curr1.close()  
+                    cur1.close()      
+                    logger.debug('Trovate {} tappe su SIT per il percorso {}'.format(len(tappe_sit),vv[0]))
+                    logger.debug('Trovate {} tappe su UO per il percorso {}'.format(len(tappe_uo),vv[0]))
+                    #logger.debug(tappe_sit[:][1])
+                    #logger.debug(tappe_uo[:][1])
+                    
+                    to_import =1
+                    
+                    if len(tappe_sit) == 0: 
+                        logger.info('Percorso {} non ha più tappe su SIT.'.format(vv[0]))
+                        stato_importazione.append('WARNING - Percorso senza tappe su SIT. Verificare e probabilmente disattivare')         
+                        to_import=0
+                    elif len (tappe_uo) ==0:
+                        logger.info( 'Su UO non ci sono ancora tappe. Ora le importo')
+                    elif len(tappe_uo) > 0 and cfr_tappe(tappe_sit, tappe_uo, logger)==0 :
+                        logger.info('Percorso {} già importato con data antecedente. Non ci sono state modifiche sostanziali.'.format(vv[0]))
+                        stato_importazione.append('Percorso già importato con data  antecedente. Non ci sono state modifiche sostanziali.')
+                        to_import=0
+                    
+                    if to_import==1:
+                    
+                        curr1 = conn.cursor()
+                        curr2 = conn.cursor()
+                        
+                        query_sit1='''select  (row_number() OVER (ORDER BY vt.num_seq)+%s), vt.nota_asta,
+                                vt.mq_trattati, fo.freq_binaria as frequenza, COALESCE (vt.ripasso, 0) as ripasso,
+                                id_asta,  lung_trattamento, 
+                                vt.cod_percorso, vt.id_via, vt.num_seq as cronologia, 
+                                now() as dta_import, (now()::date)::timestamp as data_prevista
+                                from etl.v_tappe vt 
+                                join etl.frequenze_ok fo on fo.cod_frequenza = vt.frequenza_asta::int 
+                                where id_percorso = %s 
+                                group by  vt.num_seq, vt.nota_asta, vt.mq_trattati,
+                                id_asta, fo.freq_binaria, 
+                                ripasso, lung_trattamento, 
+                                vt.cod_percorso, vt.id_via, vt.num_seq
+                                order by num_seq '''
+                        
+                        
+                        
+                        try:
+                            curr1.execute(query_sit1, (max_id_macro_tappa, vv[4]))
+                            logger.debug(query_sit1, max_id_macro_tappa, vv[4] )
+                            sit1=curr1.fetchall()
+                        except Exception as e:
+                            logger.error(query_sit1, max_id_macro_tappa, vv[4] )
+                            logger.error(e)
+                            check_error=1
+                        
+                        
+                            
+                        macro_tappe=[]    
+                        cur = con.cursor()
+                        for tappa in sit1:
+                            
+                            
+                            query_insert0='''INSERT INTO UNIOPE.CONS_MACRO_TAPPA
+            (ID_MACRO_TAPPA, NOTA_VIA, QTA_TOT_SPAZZAMENTO, FREQUENZA, RIPASSO, ID_ASTA, LUNG_TRATTAMENTO)
+            VALUES(:t1, :t2, :t3, :t4, :t5, :t6, :t7)'''
+            
+            
+                            try:
+                                cur.execute(query_insert0, (tappa[0], tappa[1], tappa[2], tappa[3], tappa[4], tappa[5], tappa[6]))
+                                #macro_tappe.append(tappa[0])
+                            except Exception as e:
+                                logger.error(tappa)
+                                logger.error(query_insert0)
+                                logger.error(e)
+                                check_error=1    
+            
+            
+                            # dopo aver inserito le macro tappe ora mi concentro sulle micro
+                            curr1 = conn.cursor()
+                        
+                            query_sit1=''''''
+                            
+                            
+                            
+                            
+                            query_insert1='''INSERT INTO UNIOPE.CONS_PERCORSI_VIE_TAPPE
+                        (ID_PERCORSO, ID_VIA, ID_TAPPA, CRONOLOGIA, DTA_IMPORT, DATA_PREVISTA)
+                        VALUES(:t1, :t2, :t3, :t4, :t5, :t6)
+                        '''
+                        
+                        
+                            try:
+                                cur.execute(query_insert1, (tappa[7], tappa[8], tappa[0], tappa[9], tappa[10], tappa[11]))
+                                #macro_tappe.append(tappa[2])
+                            except Exception as e:
+                                logger.error('''{}, {},{}, {}, {}, {} '''.format(tappa[7], tappa[8], tappa[0], tappa[9], tappa[10], tappa[11]))
+                                logger.error(query_insert1)
+                                logger.error(e)
+                                check_error=1
+                        
+                        # chiudo cursore oracle
+                        cur.close()
+                        con.commit()
+                        # chiudo cursore PostgreSQL
+                        curr1.close()
+                    
+                elif tipo_percorso == 'A':
+                    logger.debug('ALTRO TO DO')
+                    check_error=2
+                    stato_importazione.append('ERRORE: Percorso di tipo ALTRO non gestito dalle importazioni')
+                    global_check_error+=1
+                    error_mail='''Problema di importazione percorso {0}. <br> 
+                    Il servizio su UO è categorizzato come ALTRO
+                    '''    
+                else:
+                    check_error=1
+                    error_mail = '''Problema di importazione percorso {0}. <br>
+                    Verificare funzione GETTIPOPERCORSO. <br>
+                    SELECT GETTIPOPERCORSO({0}, TO_DATE ({1}, 'DD/MM/YYYY')) FROM DUAL;
+                    '''.format(vv[0], oggi1)
+                    stato_importazione.append('ERRORE: Percorso di tipo sconosciuto non gestito dalle importazioni')
+                    global_check_error+=1
+                
+                if check_error==1 and to_import==1:
+                    stato_importazione.append('ERRORE: Percorso non importato correttamente')
+                    global_check_error+=1
+                elif check_error==0 and to_import==1:
+                    # Il percorso è stato imporato ma devo replicare la consuntivazione 
+                    if (controllo_percorso==-1):
+                        # devo lanciare una seconda procedura
+                        cur = con.cursor()
+                        risp='?'
+                        try:
+                            ret=cur.callproc('UNIOPE.REPLICACONSUNTIVAZIONE',
+                                    [vv[0],oggi1,risp])
+                        except Exception as e:
+                            #logger.error(query_o3)
+                            logger.error(e)
+                            
+                        
+                        logger.info('UNIOPE.REPLICACONSUNTIVAZIONE - ret={}'.format(ret))
+                        controllo_replica=int(ret[2])
+                        if controllo_replica < 0:
+                            # c'è stato un errore nella funzione per replicare la consuntivazione
+                            stato_importazione.append('ERRORE - La consuntivazione non è stata replicata correttamenete')
+                            global_check_error+=1
+                        else:
+                            stato_importazione.append('OK Percorso di tipo {} importato correttamente'.format(tipo_percorso))
+                        cur.close()
+                    else: 
                         stato_importazione.append('OK Percorso di tipo {} importato correttamente'.format(tipo_percorso))
-                    cur.close()
-                else: 
-                    stato_importazione.append('OK Percorso di tipo {} importato correttamente'.format(tipo_percorso))
-                    
-        #exit()
-        con.commit()
-    
+                        
+            #exit()
+            con.commit()
+        
 
-    if len(cod_percorso)!=len(stato_importazione):
-        logger.error('''La lunghezza dell'array stato_importazione non è correttta. VERIFICARE ''')
+        if len(cod_percorso)!=len(stato_importazione):
+            logger.error('''La lunghezza dell'array stato_importazione non è correttta. VERIFICARE ''')
     
     
     
-    # chiamo la funzione per aggiornare la tabella PR_VALIDITA_PERCORSI
-    cur0 = con.cursor()
-    try:
-        ret_func=cur0.callfunc('REP_CREADATEPERCORSI', int, [None])
-        #cur1.rowfactory = makeDictFactory(cur1)
-    except Exception as e:
-        logger.error(sel_uo)
-        logger.error(e)
-    logger.info('Risposta REP_CREADATEPERCORSI={}'.format(ret_func))
-    if ret_func!=0:
-        logger.error('La funzione REP_CREADATEPERCORSI non ha girato correttamente')
-        nota_f_mail='''<font color="red"><br><br>
-        <b>ATTENZIONE</b> Ci sono stati problemi con la funzione REP_CREADATEPERCORSI di aggiornamento della tabella PR_VALIDITA_PERCORSI
-        </font>'''
-    elif ret_func==0: 
-        nota_f_mail='<br><br>Al termine delle importazioni ha anche girato correttamente la funzione REP_CREADATEPERCORSI di aggiornamento della tabella PR_VALIDITA_PERCORSI'
-    cur0.close()
-    
-    
-    
-    '''INVIO FILE VARIAZIONI PER EKOVISION'''
-    curr.close()
-    logger.info('Ora invio le variazioni ad EKOVISION')
-    check_ekovision=0
-    logger.debug(cod_percorso)
-    cod_percorso_ok=tuple(cod_percorso)
-    logger.debug(cod_percorso_ok)
-    curr = conn.cursor()  
-    
-    """ SENZA TENERE CONTO  DELLE VECCHIE VERSIONI SIT
-    query_variazioni_ekovision='''SELECT codice_modello_servizio, 
-        case 
-        when data_fine is null then ordine 
-        else 1
-        end
-        ordine, objecy_type, 
-        codice, quantita, lato_servizio, percent_trattamento,
-        frequenza, numero_passaggi, nota, codice_qualita, codice_tipo_servizio,
-        data_inizio, data_fine, ripasso
-        FROM anagrafe_percorsi.v_percorsi_elementi_tratti
-        where codice_modello_servizio = ANY (%s) and (data_inizio!=data_fine  or data_fine is null)
-        order by codice_modello_servizio, data_fine, ordine,  ripasso
-        '''
-    """
-    
-    query_variazioni_ekovision='''select 
-codice_modello_servizio,
-coalesce((select distinct ordine from anagrafe_percorsi.v_percorsi_elementi_tratti 
-where codice_modello_servizio = tab.codice_modello_servizio 
-and codice = tab.codice
-and ripasso = tab.ripasso and data_fine is null limit 1),1)
-as ordine,
-objecy_type, 
-  codice, quantita, lato_servizio, percent_trattamento,
-coalesce((select distinct frequenza from anagrafe_percorsi.v_percorsi_elementi_tratti 
-where codice_modello_servizio = tab.codice_modello_servizio 
-and codice = tab.codice
-and ripasso = tab.ripasso and data_fine is null limit 1),0)
-as 
-  frequenza, 
-  numero_passaggi, nota,
-  codice_qualita, codice_tipo_servizio,
-min(data_inizio) as data_inizio, 
-case 
-	when max(data_fine) = '20991231' then null 
-	else max(data_fine)
-end data_fine, 
-/*ripasso*/
-case 
-	when max(data_fine) = '20991231' then ripasso 
-	else 0
-end ripasso
-from (
-	  SELECT codice_modello_servizio, ordine, objecy_type, 
-  codice, quantita, lato_servizio, percent_trattamento,frequenza,
-  ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
-  codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine
-	 FROM anagrafe_percorsi.v_percorsi_elementi_tratti where data_inizio < coalesce(data_fine, '20991231')
-	 union 
-	   SELECT codice_modello_servizio, ordine, objecy_type, 
-  codice, quantita, lato_servizio, percent_trattamento,frequenza,
-  ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
-  codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine
-	 FROM anagrafe_percorsi.v_percorsi_elementi_tratti_ovs where data_inizio < coalesce(data_fine, '20991231')
- ) tab 
- where codice_modello_servizio = ANY (%s) 
- group by codice_modello_servizio,  objecy_type, 
-  codice, quantita, lato_servizio, percent_trattamento,
-  ripasso, numero_passaggi, nota,
-  codice_qualita, codice_tipo_servizio
-  order by codice_modello_servizio, data_fine asc, ordine,  ripasso'''
-    
-    
-    #test=curr.mogrify(query_variazioni_ekovision,(cod_percorso_ok,))
-    #print(test)
-    #exit()
-    try:
-        curr.execute(query_variazioni_ekovision,(cod_percorso,))
-        dettaglio_percorsi_ekovision=curr.fetchall()
-    except Exception as e:
-        logger.error(e)
-        check_ekovision=101 # problema query
-    
-    try:    
-        nome_csv_ekovision="variazioni_itinerari_{0}.csv".format(giorno_file)
-        file_variazioni_ekovision="{0}/variazioni/{1}".format(path,nome_csv_ekovision)
-        fp = open(file_variazioni_ekovision, 'w', encoding='utf-8')
-        #myFile = csv.writer(fp, delimiter=';', quotechar='"', quoting=csv.QUOTE_NONNUMERIC)
-        myFile = csv.writer(fp, delimiter=';')
-        fieldnames = ['codice_modello_servizio', 'ordine', 'objecy_type', 
-                      'codice','quantita', 'lato_servizio', 'percent_trattamento',
-                      'frequenza', 'numero_passaggi', 'nota', 'codice_qualita', 'codice_tipo_servizio',
-                      'data_inizio', 'data_fine', 'ripasso']
-        myFile.writerow(fieldnames)
-        myFile.writerows(dettaglio_percorsi_ekovision)
-        fp.close()
-    except Exception as e:
-        logger.error(e)
-        check_ekovision=102 # problema file variazioni
-        
-        
-        
-    logger.info('Invio file con le variazioni via SFTP')
-    try: 
-        cnopts = pysftp.CnOpts()
-        cnopts.hostkeys = None
-        srv = pysftp.Connection(host=url_ev_sftp, username=user_ev_sftp,
-    password=pwd_ev_sftp, port= port_ev_sftp,  cnopts=cnopts,
-    log="/tmp/pysftp.log")
-
-        with srv.cd('percorsi/in/'): #chdir to public
-            srv.put(file_variazioni_ekovision) #upload file to nodejs/
-
-        # Closes the connection
-        srv.close()
-    except Exception as e:
-        logger.error(e)
-        check_ekovision=103 # problema invio SFTP
-    
-    
-    if check_ekovision!=0:
-        nota_e_mail='''<font color="red">
-        <br><br><b>ATTENZIONE</b> Problema invio file delle variazioni ad EKOVISION.
-        <br>Codice errore {0}
-        </font>'''.format(check_ekovision)
-    elif check_ekovision==0: 
-        nota_e_mail='''<font color="green">
-        <br><br>Il file delle variazioni è stato inviato correttamente ad EKOVISION</font>'''
-    curr.close()
-    
-    
-    # registro quanto successo per i controlli successivi 
-    
-    insert_query="""INSERT INTO anagrafe_percorsi.log_trasferimenti_giornalieri 
-    (giorno, check_error_uo, check_error_ekovision) 
-    VALUES(to_date(%s, 'YYYYMMDD'), %s, %s)
-    ON CONFLICT (giorno) DO UPDATE 
-  SET data_ora_aggiornamento= now(), 
-      check_error_uo = %s, 
-      check_error_ekovision = %s"""
-    curr.close()
-    logger.info('Log su SIT degli invii')
-    curr = conn.cursor()  
-    
-    try:
-        curr.execute(insert_query,(giorno_file, check_error, check_ekovision, check_error, check_ekovision))
-    except Exception as e:
-        logger.error(e)
-        
-    
-    
-       
-    if len(cod_percorso)>0:
-        logger.info('Oggi ci sono {} variazioni. Creo nuovo file'.format(len(cod_percorso)))
-        nome_file="{0}_variazioni.xlsx".format(giorno_file)
-        file_variazioni="{0}/variazioni/{1}".format(path,nome_file)
-        
-        
-        workbook = xlsxwriter.Workbook(file_variazioni)
-        w = workbook.add_worksheet()
-
-        w.write(0, 0, 'cod_percorso') 
-        w.write(0, 1, 'descrizione') 
-        w.write(0, 2, 'servizio') 
-        w.write(0, 3, 'ut') 
-        w.write(0, 4, 'ESITO IMPORTAZIONE') 
-        w.write(0, 5, 'MAIL') 
-        
-        '''
-        w.write(1, 0, 1234.56)  # Writes a float
-        w.write(2, 0, 'Hello')  # Writes a string
-        w.write(3, 0, None)     # Writes None
-        w.write(4, 0, True)     # Writes a bool
-        '''
-        
-        #f = open(file_variazioni, "w")
-        #f.write('cod_percorso;descrizione;servizio;ut_resp\n')
-    
-
-
-    i=0
-    while i<len(cod_percorso):
-        #f.write('"{}";"{}";"{}";"{}"\n'.format(cod_percorso[i],descrizione[i],servizio[i],ut[i]))
-        w.write(i+1,0,'{}'.format(cod_percorso[i]))
-        w.write(i+1,1,'{}'.format(descrizione[i]))
-        w.write(i+1,2,'{}'.format(servizio[i]))
-        w.write(i+1,3,'{}'.format(ut[i]))
-        w.write(i+1,4,'{}'.format(stato_importazione[i]))
-        w.write(i+1,5,'{}'.format(invio_mail[i]))
-        # provo l'invio dei report 
+        # chiamo la funzione per aggiornare la tabella PR_VALIDITA_PERCORSI
+        cur0 = con.cursor()
         try:
-            if stato_importazione[i].lower().startswith("ok"):              
-                report_settimanali_percorsi_ok.main(cod_percorso[i], 'sempl', invio_mail[i], num)
+            ret_func=cur0.callfunc('REP_CREADATEPERCORSI', int, [None])
+            #cur1.rowfactory = makeDictFactory(cur1)
+        except Exception as e:
+            logger.error(sel_uo)
+            logger.error(e)
+        logger.info('Risposta REP_CREADATEPERCORSI={}'.format(ret_func))
+        if ret_func!=0:
+            logger.error('La funzione REP_CREADATEPERCORSI non ha girato correttamente')
+            nota_f_mail='''<font color="red"><br><br>
+            <b>ATTENZIONE</b> Ci sono stati problemi con la funzione REP_CREADATEPERCORSI di aggiornamento della tabella PR_VALIDITA_PERCORSI
+            </font>'''
+        elif ret_func==0: 
+            nota_f_mail='<br><br>Al termine delle importazioni ha anche girato correttamente la funzione REP_CREADATEPERCORSI di aggiornamento della tabella PR_VALIDITA_PERCORSI'
+        cur0.close()
+    
+    
+    
+        '''INVIO FILE VARIAZIONI PER EKOVISION'''
+        curr.close()
+        logger.info('Ora invio le variazioni ad EKOVISION')
+        check_ekovision=0
+        logger.debug(cod_percorso)
+        cod_percorso_ok=tuple(cod_percorso)
+        logger.debug(cod_percorso_ok)
+        curr = conn.cursor()  
+        
+        """ SENZA TENERE CONTO  DELLE VECCHIE VERSIONI SIT
+        query_variazioni_ekovision='''SELECT codice_modello_servizio, 
+            case 
+            when data_fine is null then ordine 
+            else 1
+            end
+            ordine, objecy_type, 
+            codice, quantita, lato_servizio, percent_trattamento,
+            frequenza, numero_passaggi, nota, codice_qualita, codice_tipo_servizio,
+            data_inizio, data_fine, ripasso
+            FROM anagrafe_percorsi.v_percorsi_elementi_tratti
+            where codice_modello_servizio = ANY (%s) and (data_inizio!=data_fine  or data_fine is null)
+            order by codice_modello_servizio, data_fine, ordine,  ripasso
+            '''
+        """
+    
+        query_variazioni_ekovision='''select 
+    codice_modello_servizio,
+    coalesce((select distinct ordine from anagrafe_percorsi.v_percorsi_elementi_tratti 
+    where codice_modello_servizio = tab.codice_modello_servizio 
+    and codice = tab.codice
+    and ripasso = tab.ripasso and data_fine is null limit 1),1)
+    as ordine,
+    objecy_type, 
+    codice, quantita, lato_servizio, percent_trattamento,
+    coalesce((select distinct frequenza from anagrafe_percorsi.v_percorsi_elementi_tratti 
+    where codice_modello_servizio = tab.codice_modello_servizio 
+    and codice = tab.codice
+    and ripasso = tab.ripasso and data_fine is null limit 1),0)
+    as 
+    frequenza, 
+    numero_passaggi, nota,
+    codice_qualita, codice_tipo_servizio,
+    min(data_inizio) as data_inizio, 
+    case 
+        when max(data_fine) = '20991231' then null 
+        else max(data_fine)
+    end data_fine, 
+    /*ripasso*/
+    case 
+        when max(data_fine) = '20991231' then ripasso 
+        else 0
+    end ripasso
+    from (
+        SELECT codice_modello_servizio, ordine, objecy_type, 
+    codice, quantita, lato_servizio, percent_trattamento,frequenza,
+    ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
+    codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine
+        FROM anagrafe_percorsi.v_percorsi_elementi_tratti where data_inizio < coalesce(data_fine, '20991231')
+        union 
+        SELECT codice_modello_servizio, ordine, objecy_type, 
+    codice, quantita, lato_servizio, percent_trattamento,frequenza,
+    ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
+    codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine
+        FROM anagrafe_percorsi.v_percorsi_elementi_tratti_ovs where data_inizio < coalesce(data_fine, '20991231')
+    ) tab 
+    where codice_modello_servizio = ANY (%s) 
+    group by codice_modello_servizio,  objecy_type, 
+    codice, quantita, lato_servizio, percent_trattamento,
+    ripasso, numero_passaggi, nota,
+    codice_qualita, codice_tipo_servizio
+    order by codice_modello_servizio, data_fine asc, ordine,  ripasso'''
+        
+        
+        #test=curr.mogrify(query_variazioni_ekovision,(cod_percorso_ok,))
+        #print(test)
+        #exit()
+        try:
+            curr.execute(query_variazioni_ekovision,(cod_percorso,))
+            dettaglio_percorsi_ekovision=curr.fetchall()
         except Exception as e:
             logger.error(e)
-            
-        i+=1
+            check_ekovision=101 # problema query
+        
+        try:    
+            nome_csv_ekovision="variazioni_itinerari_{0}.csv".format(giorno_file)
+            file_variazioni_ekovision="{0}/variazioni/{1}".format(path,nome_csv_ekovision)
+            fp = open(file_variazioni_ekovision, 'w', encoding='utf-8')
+            #myFile = csv.writer(fp, delimiter=';', quotechar='"', quoting=csv.QUOTE_NONNUMERIC)
+            myFile = csv.writer(fp, delimiter=';')
+            fieldnames = ['codice_modello_servizio', 'ordine', 'objecy_type', 
+                        'codice','quantita', 'lato_servizio', 'percent_trattamento',
+                        'frequenza', 'numero_passaggi', 'nota', 'codice_qualita', 'codice_tipo_servizio',
+                        'data_inizio', 'data_fine', 'ripasso']
+            myFile.writerow(fieldnames)
+            myFile.writerows(dettaglio_percorsi_ekovision)
+            fp.close()
+        except Exception as e:
+            logger.error(e)
+            check_ekovision=102 # problema file variazioni
+        
+        
+        
+        logger.info('Invio file con le variazioni via SFTP')
+        try: 
+            cnopts = pysftp.CnOpts()
+            cnopts.hostkeys = None
+            srv = pysftp.Connection(host=url_ev_sftp, username=user_ev_sftp,
+        password=pwd_ev_sftp, port= port_ev_sftp,  cnopts=cnopts,
+        log="/tmp/pysftp.log")
 
-    if len(cod_percorso)>0:
-        #f.close()
-        workbook.close()
+            with srv.cd('percorsi/in/'): #chdir to public
+                srv.put(file_variazioni_ekovision) #upload file to nodejs/
 
-    #exit() # per ora esco qua e non vado oltre
-
+            # Closes the connection
+            srv.close()
+        except Exception as e:
+            logger.error(e)
+            check_ekovision=103 # problema invio SFTP
     
-    # Create a secure SSL context
-    context = ssl.create_default_context()
-
-
-
-   # messaggio='Test invio messaggio'
-
-
-    subject = "Variazioni odierne - File automatico"
-    if num==1:
-        gg_text='''dell'ultimo giorno (ieri)'''
-    else:
-        gg_text='''degli ultimi {} giorni'''.format(num)
+    
+        if check_ekovision!=0:
+            nota_e_mail='''<font color="red">
+            <br><br><b>ATTENZIONE</b> Problema invio file delle variazioni ad EKOVISION.
+            <br>Codice errore {0}
+            </font>'''.format(check_ekovision)
+        elif check_ekovision==0: 
+            nota_e_mail='''<font color="green">
+            <br><br>Il file delle variazioni è stato inviato correttamente ad EKOVISION</font>'''
+        curr.close()
+        
+    
         
         
-    riepilogo_controlli='''
-    <br><br><b>Riepilogo check</b>:
-    <br> check_error= {0}
-    <br> check_ekovision= {1}
-    '''.format(check_error, check_ekovision)
-    if check_uo==0:
-        riepilogo_controlli = '{}<br> check_uo=0'.format(riepilogo_controlli)
-    else:
-        riepilogo_controlli = '{}<font color="red"><br> check_uo={}</font> (num percorsi in errore)'.format(riepilogo_controlli, check_uo)
+    
+    
        
-    body = """Report giornaliero delle variazioni {0}.<br><br>
-    
-    I nuovi percorsi sono già stati importati. Non dovrebbe servire nessuna verifica.
-    {3}
-    {4}
-    <br>
-    
-    <b>Riepilogo controlli  - TEST </b>
-    {5}
-    <br><br><br>
-    L'applicativo che gestisce le importazioni su UO in maniera automatica è stato realizzato dal gruppo Gestione Applicativi del SIGT.<br> 
-    Segnalare tempestivamente eventuali malfunzionamenti inoltrando la presente mail a {1}<br><br>
-    Giorno {2}<br><br>
-    AMIU Assistenza Territorio<br>
-     <img src="cid:image1" alt="Logo" width=197>
-    <br>
-    """.format(gg_text, user_mail, oggi1, nota_f_mail, nota_e_mail, riepilogo_controlli)
-    ##sender_email = user_mail
-    receiver_email='assterritorio@amiu.genova.it'
-    debug_email='roberto.marzocchi@amiu.genova.it'
+        if len(cod_percorso)>0:
+            logger.info('Oggi ci sono {} variazioni. Creo nuovo file'.format(len(cod_percorso)))
+            nome_file="{0}_variazioni.xlsx".format(giorno_file)
+            file_variazioni="{0}/variazioni/{1}".format(path,nome_file)
+            
+            
+            workbook = xlsxwriter.Workbook(file_variazioni)
+            w = workbook.add_worksheet()
 
-    # Create a multipart message and set headers
-    message = MIMEMultipart()
-    message["From"] = sender_email
-    message["To"] = receiver_email
-    message["Subject"] = subject
-    #message["Bcc"] = debug_email  # Recommended for mass emails
-    message.preamble = "File giornaliero con le variazioni"
+            w.write(0, 0, 'cod_percorso') 
+            w.write(0, 1, 'descrizione') 
+            w.write(0, 2, 'servizio') 
+            w.write(0, 3, 'ut') 
+            w.write(0, 4, 'ESITO IMPORTAZIONE') 
+            w.write(0, 5, 'MAIL') 
+            
+            '''
+            w.write(1, 0, 1234.56)  # Writes a float
+            w.write(2, 0, 'Hello')  # Writes a string
+            w.write(3, 0, None)     # Writes None
+            w.write(4, 0, True)     # Writes a bool
+            '''
+            
+            #f = open(file_variazioni, "w")
+            #f.write('cod_percorso;descrizione;servizio;ut_resp\n')
+        
+
+
+        i=0
+        while i<len(cod_percorso):
+            #f.write('"{}";"{}";"{}";"{}"\n'.format(cod_percorso[i],descrizione[i],servizio[i],ut[i]))
+            w.write(i+1,0,'{}'.format(cod_percorso[i]))
+            w.write(i+1,1,'{}'.format(descrizione[i]))
+            w.write(i+1,2,'{}'.format(servizio[i]))
+            w.write(i+1,3,'{}'.format(ut[i]))
+            w.write(i+1,4,'{}'.format(stato_importazione[i]))
+            w.write(i+1,5,'{}'.format(invio_mail[i]))
+            # provo l'invio dei report 
+            try:
+                if stato_importazione[i].lower().startswith("ok"):              
+                    report_settimanali_percorsi_ok.main(cod_percorso[i], 'sempl', invio_mail[i], num)
+            except Exception as e:
+                logger.error(e)
+                
+            i+=1
+
+        if len(cod_percorso)>0:
+            #f.close()
+            workbook.close()
+
+        #exit() # per ora esco qua e non vado oltre
+
+        
+        # Create a secure SSL context
+        context = ssl.create_default_context()
+
+
+
+    # messaggio='Test invio messaggio'
+
+
+        subject = "Variazioni odierne - File automatico"
+        if num==1:
+            gg_text='''dell'ultimo giorno (ieri)'''
+        else:
+            gg_text='''degli ultimi {} giorni'''.format(num)
+        
+        
+        riepilogo_controlli='''
+        <br><br><b>Riepilogo check</b>:
+        <br> check_error= {0}
+        <br> check_ekovision= {1}
+        '''.format(check_error, check_ekovision)
+        if global_check_error ==0:
+            if check_uo==0:
+                riepilogo_controlli = '{}<br> check_uo=0'.format(riepilogo_controlli)
+            else:
+                riepilogo_controlli = '{}<font color="red"><br> check_uo={}</font> (num percorsi in errore)'.format(riepilogo_controlli, check_uo)
+        else:
+            riepilogo_controlli = '{}<font color="red"><br> check_uo={}</font> Ci sono stati diversi errori, verificare il file Excel'.format(riepilogo_controlli, check_uo)
+        
+        
+        body = """Report giornaliero delle variazioni {0}.<br><br>
+            
+            I nuovi percorsi sono già stati importati. Non dovrebbe servire nessuna verifica.
+            {3}
+            {4}
+            <br>
+            
+            <b>Riepilogo controlli  - TEST </b>
+            {5}
+            <br><br><br>
+            L'applicativo che gestisce le importazioni su UO in maniera automatica è stato realizzato dal gruppo Gestione Applicativi del SIGT.<br> 
+            Segnalare tempestivamente eventuali malfunzionamenti inoltrando la presente mail a {1}<br><br>
+            Giorno {2}<br><br>
+            AMIU Assistenza Territorio<br>
+            <img src="cid:image1" alt="Logo" width=197>
+            <br>
+            """.format(gg_text, user_mail, oggi1, nota_f_mail, nota_e_mail, riepilogo_controlli)
+
+        ##sender_email = user_mail
+        receiver_email='assterritorio@amiu.genova.it'
+        debug_email='roberto.marzocchi@amiu.genova.it'
+
+        # Create a multipart message and set headers
+        message = MIMEMultipart()
+        message["From"] = sender_email
+        message["To"] = receiver_email
+        message["Subject"] = subject
+        #message["Bcc"] = debug_email  # Recommended for mass emails
+        message.preamble = "File giornaliero con le variazioni"
 
 
         
                         
-    # Add body to email
-    message.attach(MIMEText(body, "html"))
+        # Add body to email
+        message.attach(MIMEText(body, "html"))
 
 
-    #aggiungo logo 
-    logoname='{}/img/logo_amiu.jpg'.format(path)
-    immagine(message,logoname)
-    
-    
-    # aggiunto allegato (usando la funzione importata)
-    allegato(message, file_variazioni, nome_file)
-    
+        #aggiungo logo 
+        logoname='{}/img/logo_amiu.jpg'.format(path)
+        immagine(message,logoname)
+        
+        
+        # aggiunto allegato (usando la funzione importata)
+        allegato(message, file_variazioni, nome_file)
 
+    else:
+        subject = "Variazioni odierne - NESSUNA VARIAZIONE"
+        body = """
+        Ieri non ci sono state variazioni, pertanto non è stato generato alcun file delle variazioni e non è stato inviato nulla a Ekovision<br><br>
+
+        Si tratta di un caso eccezionale ma che potrebbe verificarsi dopo un giorno di festa.<br>
+        Per sicurezza verificare i log dello script variazioni_importazioni.py e far girare la query che genera l\'array <i>lista_variazioni</i>.<br>
+        Se stai leggendo questa mail vuol dire che la query non ha restituito risultati e che l\'array è vuoto.
+        """
+        receiver_email='assterritorio@amiu.genova.it'
+        message = MIMEMultipart()
+        message["From"] = sender_email
+        message["To"] = receiver_email
+        message["Subject"] = subject
+        message.attach(MIMEText(body, "html"))
+        logoname='{}/img/logo_amiu.jpg'.format(path)
+        immagine(message,logoname)
     
     
     text = message.as_string()
@@ -1586,6 +1599,40 @@ from (
     
     
     
+    
+    
+    
+    # registro quanto successo per i controlli successivi 
+    
+    # prima di tutto controllo che le variabili siano inizializzate. Nel caso in cui non ci siano state variazioni li inizializzo ora a 0
+    
+    try:
+        check_error
+    except NameError:
+        check_error = 0  
+    
+    try:
+        check_ekovision
+    except NameError:
+        check_ekovision = 0      
+        
+        
+          
+    insert_query="""INSERT INTO anagrafe_percorsi.log_trasferimenti_giornalieri 
+    (giorno, check_error_uo, check_error_ekovision) 
+    VALUES(to_date(%s, 'YYYYMMDD'), %s, %s)
+    ON CONFLICT (giorno) DO UPDATE 
+    SET data_ora_aggiornamento= now(), 
+    check_error_uo = %s, 
+    check_error_ekovision = %s"""
+    curr.close()
+    logger.info('Log su SIT degli invii')
+    curr = conn.cursor()  
+    
+    try:
+        curr.execute(insert_query,(giorno_file, check_error, check_ekovision, check_error, check_ekovision))
+    except Exception as e:
+        logger.error(e)
      
         
     ##################################################################################################

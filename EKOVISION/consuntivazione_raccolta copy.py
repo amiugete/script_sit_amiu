@@ -222,6 +222,11 @@ def main():
 	order by 1'''
     
     # query che corregge le cavolate di Tocchi.. non guardo la colonna fatto ma solo la causale
+    
+    
+    ################
+    # query lanciata una tantum per correggere dai che erano "sporchi"
+    ################ 
     query_effettuati_totem='''select distinct 
 	e.id, 
 	e.id_percorso,
@@ -247,15 +252,17 @@ def main():
   	left join totem.v_personale_ekovision_step1 vpes on vpes.codice_badge::text = e.codice 
 	left join raccolta.causali_testi ct on trim(replace(e.causale, ' - (no in questa giornata)', '')) ilike trim(ct.descrizione)
     left join servizi.mail_ut mu on mu.id_uo::int  = t.id_uo::int
-	where 
+	where
 	(trim(replace(e.causale, ' - (no in questa giornata)', '')) != '' /*or e.fatto >0*/) 
-	and datalav >= '2024-01-29'
-    and codice not in ('1111', '2222', '3333', '4444', '8888', '9998', '9999')
-    and e.id > (select coalesce(max(max_id),0) from raccolta.invio_consuntivazioni_ekovision ice)
-	order by 1'''
- 
-    
-
+	and e.id_percorso in ('0500130201',
+'0101383701',
+'0101388701',
+'0500125103',
+'0500124501',
+'0508072901',
+'0101384701',
+'0502007602',
+'0101360101')'''
     
     
     # prima di tutto faccio un controllo che non ci siano causali che non so gestire e nel caso fermo tutto il passaggio dati e lancio allarme
@@ -499,7 +506,7 @@ def main():
             sorgente_dati_distinct.append(sorgente_dati[k])
         k+=1
         
-    
+    """
     logger.info('Controllo se le schede di lavoro esistono')
     k=0
     while k< len(cod_percorsi_distinct):
@@ -656,7 +663,7 @@ def main():
         # committo l'inserimento nella tabella di creazione delle schede
         conn.commit() 
     
-    
+    """
     if datetime.today() >= datetime.strptime('29/01/2024', '%d/%m/%Y'):
         check_ekovision=200
         '''
@@ -744,6 +751,7 @@ def main():
         currc = connc.cursor()
         
         
+        """
         if check_ekovision==200 and len(lista_x_piazzola)>0:
             insert_max_id='''INSERT INTO raccolta.invio_consuntivazioni_ekovision
             (max_id, data_ora)
@@ -756,7 +764,7 @@ def main():
                 logger.error(insert_max_id)
                 logger.error(max_id)
                 logger.error(e)
-            
+        """   
         
            
 

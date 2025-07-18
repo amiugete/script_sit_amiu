@@ -160,6 +160,10 @@ def main():
             logger.error(e)
         conn.commit()
 
+        
+        
+        
+        
         logger.info('Inizio aggiornamento tabella {} su amiugis'.format(mv))
         
         
@@ -200,6 +204,12 @@ def main():
             logger.error(query_dblink2)
             logger.error(e)
 
+
+        # faccio commit
+        conn_web.commit()
+        
+        
+        
         query_dblink3='''ALTER TABLE gps.{0} 
         ADD CONSTRAINT {0}_pk PRIMARY KEY ({1})'''.format(mv, 'id')
 
@@ -236,10 +246,17 @@ def main():
             logger.error(query_dblink8)
             logger.error(e)
 
+
+
+        # nella query devo escudere eventuali punti a cavallo fra 2 comuni lo faccio con il group by e l'having
         query_dblink6='''create table gps.{0}_pref as 
-        SELECT r.id, r.tipo_mezzo, r.sportello, r.data_ora, r."data", r.sweeper_mode, r.geom, c.prefisso_utenti 
+        SELECT r.id, r.tipo_mezzo, r.sportello, r.data_ora, r."data", r.sweeper_mode, r.geom, 
+        max(c.prefisso_utenti) as prefisso_utenti 
         FROM gps.{0} r
-        join gps.v_confini_comuni_area_pref c on st_intersects(r.geom, c.geom)'''.format(mv)
+        join gps.v_confini_comuni_area_pref c on st_intersects(r.geom, c.geom)
+        group by r.id, r.tipo_mezzo, r.sportello, r.data_ora, r."data", r.sweeper_mode, r.geom
+        having count(c.prefisso_utenti)=1
+        '''.format(mv)
 
         try:
             curr_web.execute(query_dblink6)
@@ -247,6 +264,9 @@ def main():
             logger.error(query_dblink6)
             logger.error(e)
             
+        # faccio commit
+        conn_web.commit()
+        
             
         query_dblink7='''ALTER TABLE gps.{0}_pref 
         ADD CONSTRAINT {0}_pref_pk PRIMARY KEY (id)'''.format(mv)

@@ -158,8 +158,7 @@ def main():
     #################################################################
     logger.info("Recupero il token")
     token1=token()
-    print(token1)
-    logger.debug(token1)
+    logger.debug(f'Token = {token1}')
     #################################################################
     logger.info('Connessione al db SIT')
     conn = psycopg2.connect(dbname=db,
@@ -187,7 +186,7 @@ def main():
     '''
     curr.close()
     curr = conn.cursor()
-    #print(headers1)
+    #logger.debug(headers1)
     #exit()
     p=1
     check=0
@@ -214,8 +213,8 @@ def main():
             response.raise_for_status()
             # access JSOn content
             #jsonResponse = response.json()
-            #print("Entire JSON response")
-            #print(jsonResponse)
+            #logger.debug("Entire JSON response")
+            #logger.debug(jsonResponse)
         except HTTPError as http_err:
             logger.error(f'HTTP error occurred: {http_err}')
             check=1
@@ -401,7 +400,7 @@ def main():
                 except Exception as e:
                     logger.error("Postazione {0} - Errore {1}".format(letture['data'][i][0]['id_pdr'],e))    
                 
-                #print(i,letture['data'][i][9], letture['data'][i][10], letture['data'][i][14], letture['data'][i][16],letture['data'][i][17])
+                #logger.debug(i,letture['data'][i][9], letture['data'][i][10], letture['data'][i][14], letture['data'][i][16],letture['data'][i][17])
                 i+=1
             p+=1
    

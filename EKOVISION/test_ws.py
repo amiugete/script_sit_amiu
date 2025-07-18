@@ -156,10 +156,18 @@ def main():
     # 0213236102 scheda eseguita con 2 persone 
 
     # qua provo il WS
+    """params={'obj':'schede_lavoro',
+        'act' : 'r',
+        'sch_lav_data': '20240101',
+        'cod_modello_srv': '0101377801',
+        'flg_includi_eseguite': 1,
+        'flg_includi_chiuse': 1
+        }
+    """
+    # provo il WS solo con la data 
     params={'obj':'schede_lavoro',
         'act' : 'r',
-        'sch_lav_data': '20240611',
-        'cod_modello_srv': '0213236102',
+        'sch_lav_data': '20240101',
         'flg_includi_eseguite': 1,
         'flg_includi_chiuse': 1
         }
@@ -181,7 +189,10 @@ def main():
         check=1
     if check<1:
         letture = response.json()
-        logger.info(letture)
+        #logger.info(letture)
+        logger.info(len(letture['schede_lavoro']))
+        
+        exit()
         logger.debug(len(letture['schede_lavoro']))
         if len(letture['schede_lavoro']) == 0:
             #va creata la scheda di lavoro

@@ -113,6 +113,8 @@ from invio_messaggio import *
 import csv
 
 
+import uuid
+
 
     
      
@@ -146,7 +148,7 @@ def main():
     
 
     
-    id_scheda =  478458   #423341 OK #   423319 da problemi
+    id_scheda =  641828   #423341 OK #   423319 da problemi
     
     
     
@@ -168,6 +170,7 @@ def main():
     params2={'obj':'schede_lavoro',
             'act' : 'r',
             'id': '{}'.format(id_scheda),
+            'flg_esponi_consunt': 1
             }
     
     response2 = requests.post(eko_url_test, params=params2, data=data, headers=headers)
@@ -179,8 +182,8 @@ def main():
     #key_to_remove = "status"
     del letture2["status"]  
     del letture2['schede_lavoro'][0]['trips']  
-    del letture2['schede_lavoro'][0]['risorse_tecniche']
-    del letture2['schede_lavoro'][0]['risorse_umane']   
+    # del letture2['schede_lavoro'][0]['risorse_tecniche']
+    # letture2['schede_lavoro'][0]['risorse_umane']   
     del letture2['schede_lavoro'][0]['filtri_rfid']        
     logger.info(letture2)
     
@@ -209,10 +212,10 @@ def main():
     logger.info('Provo a salvare nuovamente la scheda')
     logger.info(letture2)
     
-    
+    guid = uuid.uuid4()
     params2={'obj':'schede_lavoro',
             'act' : 'w',
-            'ruid': 'A{}'.format(id_scheda),
+            'ruid': '{}'.format(str(guid)),
             'json': json.dumps(letture2, ensure_ascii=False).encode('utf-8')
             }
     #exit()

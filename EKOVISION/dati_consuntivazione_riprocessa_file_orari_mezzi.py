@@ -275,9 +275,30 @@ def main():
                                 if data[i]['data_esecuzione_prevista']>=data_start_ekovision:
                                     #logger.debug(data[i]['cons_ris_tecniche'])
                                     
+                                    check_ditta_terza=0
+                                    cur3 = con.cursor()
+                                    select_query='''SELECT au.ID_ZONATERRITORIALE 
+                                    FROM ANAGR_SER_PER_UO aspu
+                                    JOIN anagr_UO au ON aspu.id_UO = au.id_UO
+                                    WHERE ID_PERCORSO = :p1 and TO_DATE(:p2, 'YYYYMMDD') between aspu.DTA_ATTIVAZIONE 
+                                    and aspu.DTA_DISATTIVAZIONE'''
+                                    try:
+                                        cur3.execute(select_query, (data[i]['codice_serv_pred'],data[i]['data_esecuzione_prevista'] ))
+                                        ii_uu=cur3.fetchall()
+                                    except Exception as e:
+                                        logger.error(select_query)
+                                        logger.error(e)
+                                    for i_u in ii_uu:
+                                        id_zona=i_u[0]
+                                    
+                                    cur3.close()
+                                    if id_zona==7:
+                                        # non c'è errore 
+                                        check_ditta_terza=1
+                                        logger.info('Percorso di ditta esterna non salvo nulla')
                                     
                                     
-                                    if data[i]['cod_caus_srv_non_eseg_ext']=='' and len(data[i]['cons_ris_tecniche'])>0:
+                                    if data[i]['cod_caus_srv_non_eseg_ext']=='' and len(data[i]['cons_ris_tecniche'])>0 and check_ditta_terza==0:
                                         if data[i]['cons_ris_tecniche'][0]['id_giustificativo'] == 0 or data[i]['cons_ris_tecniche'][0]['id_risorsa_tecnica'] > 0:
                                             tt=0
                                             while  tt<len(data[i]['cons_ris_tecniche']):

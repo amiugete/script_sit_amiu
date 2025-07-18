@@ -165,7 +165,7 @@ def main(argv):
     if check_eco==1:
         query_area='''select replace(nome,' ', '_') as nome_area from etl.aree_ecopunti_4326 where id = %s'''
     elif check_eco==2:
-        query_area='''select replace(nome,' ', '_') as nome_area from etl.aree where id = %s'''
+        query_area='''select replace(nome,' ', '_') as nome_area from etl.aree_4326 where id = %s'''
         
     
     try:

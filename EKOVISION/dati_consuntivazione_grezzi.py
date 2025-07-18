@@ -114,6 +114,9 @@ from invio_messaggio import *
 import fnmatch
 
 
+from tappa_prevista import tappa_prevista
+
+
 
 def fascia_turno(ora_inizio_lav, ora_fine_lav, ora_inizio_lav_2 ,ora_fine_lav_2):
     '''
@@ -173,6 +176,15 @@ def main():
     
     logger.info('Il PID corrente è {0}'.format(os.getpid()))
     
+    
+    # variabile 
+    # se vale 0 fa tutto come di consueto
+    # se vale 1 processa il file come di consueto ma non lo cancella nè scrive sulla tabella dei file processati,
+    # quindi lo riprocessa fino a che non si è risolto l'errore
+    debug = 0
+    
+    
+    
     # Get today's date
     #presentday = datetime.now() # or presentday = datetime.today()
     oggi=datetime.today()
@@ -219,6 +231,16 @@ def main():
     logger.info("Versione ORACLE: {}".format(con.version))
     
     cur = con.cursor()
+    
+    cur.execute("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYYMMDD'")
+    cur.execute("ALTER SESSION SET NLS_LANGUAGE = 'ITALIAN'")
+    cur.execute("ALTER SESSION SET NLS_TERRITORY = 'ITALY'")
+    
+    
+    # mi creo una lista in cui mettere codPercorso_data dei percorsi dove ci sono delle tappe consuntivate con 999 
+    # scopo è per mandare una sola mail e non una per ogni tappa
+    percorsi_tappe_anomale=[]
+    
     
     
     
@@ -455,8 +477,132 @@ def main():
                                                     causale=None
                                             # la causale 999, creata per le preconsuntivazione, in realtà non dovrebbe essere usata.. 
                                             # se fosse arrivato qualcosa lo assimilo alla 102 (percorso non previsto)
+                                            previsto = 0
                                             if causale == 999:
+                                                
                                                 causale = 102
+                                                if '{}_{}'.format(data[i]['codice_serv_pred'],data[i]['data_esecuzione_prevista']) not in percorsi_tappe_anomale:
+                                                    
+                                                    logger.info('Verifico se componente {} del percorso {} è prevista il {}'
+                                                             .format(int(data[i]['cons_works'][t]['cod_componente'].strip()),
+                                                                    data[i]['codice_serv_pred'], 
+                                                                    data[i]['data_esecuzione_prevista'] 
+                                                                    )
+                                                    )
+                                                    # qua dovrei verificare se la componente o il tratto stradale è previsto o meno in quel giorno 
+                                                    
+                                                    # per le componenti 
+                                                    
+                                                    if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC' or data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
+                                                        query_raccolta='''SELECT id_elemento, frequenza
+                                                        FROM cons_micro_tappa c
+                                                        WHERE c.ID_MACRO_TAPPA IN 
+                                                        (
+                                                        SELECT ID_TAPPA  FROM CONS_PERCORSI_VIE_TAPPE cpvt 
+                                                        JOIN CONS_MACRO_TAPPA cmt ON cmt.ID_MACRO_TAPPA=cpvt.ID_TAPPA
+                                                        WHERE ID_PERCORSO IN (
+                                                            :cod_percorso
+                                                        ) AND DATA_PREVISTA = 
+                                                        (SELECT max(DATA_PREVISTA) FROM CONS_PERCORSI_VIE_TAPPE cpvt1 WHERE  cpvt1.id_percorso =cpvt.ID_PERCORSO  
+                                                        AND DATA_PREVISTA <= to_date(:dataperc, 'YYYYMMDD')
+                                                        )
+                                                        ) AND UNIOPE.ISDATEINFREQ(to_date(:dataperc, 'YYYYMMDD'), c.FREQUENZA)=1
+                                                        AND id_elemento = :cod_componente'''
+                                                        
+                                                        
+                                                        try:
+                                                            cur.execute(query_raccolta, (data[i]['codice_serv_pred'], 
+                                                                                    data[i]['data_esecuzione_prevista'],
+                                                                                    data[i]['data_esecuzione_prevista'], 
+                                                                                    int(data[i]['cons_works'][t]['cod_componente'].strip())
+                                                                                    )
+                                                                        )
+                                                            check_componente_previsto=cur.fetchall()
+                                                            #logger.debug(query_raccolta)
+                                                            #logger.debug(check_componente_previsto)
+                                                            if len(check_componente_previsto)>0:
+                                                                previsto = 1
+                                                            logger.debug(previsto)
+                                                        except Exception as e:
+                                                            logger.error(query_raccolta)
+                                                            logger.error(e)
+                                                            
+                                                            
+                                                    elif data[i]['cons_works'][t]['tipo_srv_comp']=='SPAZZ':
+                                                        query_spazzamento = '''SELECT id_asta, frequenza
+                                                        FROM cons_macro_tappa c
+                                                        WHERE c.ID_MACRO_TAPPA IN 
+                                                        (
+                                                        SELECT ID_TAPPA  FROM CONS_PERCORSI_VIE_TAPPE cpvt 
+                                                        JOIN CONS_MACRO_TAPPA cmt ON cmt.ID_MACRO_TAPPA=cpvt.ID_TAPPA
+                                                        WHERE ID_PERCORSO IN (
+                                                            :cod_percorso
+                                                        ) AND DATA_PREVISTA = 
+                                                        (SELECT max(DATA_PREVISTA) FROM CONS_PERCORSI_VIE_TAPPE cpvt1 WHERE  cpvt1.id_percorso =cpvt.ID_PERCORSO  
+                                                        /*----------------------------------------------------------------
+                                                        --data consuntivazione*/
+                                                        AND DATA_PREVISTA <= to_date(:dataperc, 'YYYYMMDD')
+                                                        /*AND (SELECT UNIOPE.ISDATEINFREQ(to_date(:dataperc, 'YYYYMMDD'), cmt.FREQUENZA) FROM dual)>0*/
+                                                        )
+                                                        ) AND UNIOPE.ISDATEINFREQ(to_date(:dataperc, 'YYYYMMDD'), c.FREQUENZA)=1
+                                                        AND id_asta = :cod_tratto'''
+                                                        
+                                                        
+                                                        try:
+                                                            cur.execute(query_spazzamento, (data[i]['codice_serv_pred'], 
+                                                                                    data[i]['data_esecuzione_prevista'],
+                                                                                    data[i]['data_esecuzione_prevista'], 
+                                                                                    int(data[i]['cons_works'][t]['cod_tratto'].strip())
+                                                                                    )
+                                                                        )
+                                                            check_tratto_previsto=cur.fetchall()
+                                                            if len(check_tratto_previsto)>0:
+                                                                previsto = 1
+                                                        except Exception as e:
+                                                            logger.error(query_spazzamento)
+                                                            logger.error(e)
+                                                            
+                                                        
+                                                    
+                                                    if previsto > 0 :
+                                                        # faccio append
+                                                        percorsi_tappe_anomale.append('{}_{}'.format(data[i]['codice_serv_pred'],data[i]['data_esecuzione_prevista']))
+                                                        # invio mail warning 
+                                                        messaggio = '''Per il percorso {0} del {1} (id_scheda = {2})
+                                                        sono state consuntivate alcune tappe previste 
+                                                        con la causale "<i>Frequenza non prevista</i>" (999) 
+                                                        che non andrebbe usata se non per le tappe effettivamente non previste da SIT.<br>
+                                                        Si prega di controllare e correggere il dato su Ekovision inserendo una causale corretta.
+                                                        '''.format(data[i]['codice_serv_pred'], 
+                                                                data[i]['data_esecuzione_prevista'],
+                                                                data[i]['id_scheda'])
+                                                        query_mail='''SELECT au.mail || ', '|| a.MAIL AS destinatari_mail 
+                                                            FROM ANAGR_UO au
+                                                            LEFT JOIN ANAGR_ZONE a ON a.ID_ZONATERRITORIALE = au.ID_ZONATERRITORIALE
+                                                            WHERE id_uo IN ( 
+                                                                SELECT id_uo FROM anagr_ser_per_uo 
+                                                                WHERE ID_PERCORSO = :m1
+                                                                AND to_date(:m2, 'YYYYMMDD') 
+                                                                BETWEEN DTA_ATTIVAZIONE AND DTA_DISATTIVAZIONE 
+                                                            )'''
+                                                        try:
+                                                            cur.execute(query_mail, (data[i]['codice_serv_pred'], 
+                                                                                    data[i]['data_esecuzione_prevista'],))
+                                                            check_mails=cur.fetchall()
+                                                        except Exception as e:
+                                                            logger.error(query_mail)
+                                                            logger.error(e)
+                                                            
+                                                        for cm in check_mails:
+                                                            destinatari=cm[0]
+                                                        
+                                                        
+                                                        warning_message_mail(messaggio, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                            
+                                                #else:
+                                                    # non faccio nulla 
+                                                    
+                                                        
                                             # vedo se consuntivazione arriva da totem o meno 
                                             if int(data[i]['cons_works'][t]['ts_exec']) == 0:
                                                 totem=0
@@ -663,7 +809,13 @@ def main():
                         #srv.rename("./"+ filename, "./json_error/" + filename)
                         #error_log_mail(errorfile, 'assterritorio@amiu.genova.it; andrea.volpi@ekovision.it; francesco.venturi@ekovision.it', os.path.basename(__file__), logger)
                     
-                       
+                    # in modalità debug non scrivo nella tabella UNIOPE.EKOVISION_LETTURA_CONSUNT 
+                    # in modo da pote processare più volte lo stesso file fino a che non trovo errore
+                    if debug == 1:
+                        logger.warning('Sono in modalità DEBUG. Mi fermo qua senza scrivere in UNIOPE.EKOVISION_LETTURA_CONSUNT')
+                        exit()   
+                        
+                        
                     insert_log='''INSERT INTO UNIOPE.EKOVISION_LETTURA_CONSUNT (FILENAME, ERROR) SELECT :c1, :c2
                     FROM DUAL 
                     WHERE NOT EXISTS (SELECT 1 FROM UNIOPE.EKOVISION_LETTURA_CONSUNT WHERE FILENAME = :c3)'''
@@ -693,6 +845,7 @@ def main():
                         logger.error(e)
                     con.commit()
                     #exit()
+                    
                     
                     os.remove(path + "/eko_output2/" + filename)
                     

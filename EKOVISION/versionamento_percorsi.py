@@ -153,6 +153,8 @@ def main():
     curr = conn.cursor()
     
     
+    
+    # credo eventuali ripassi fittizi nella tabella elem.aste_percorso. Servono a Ekovision
     query_ripassi_fittizi='''select id_percorso, id_asta, num_seq, ripasso_fittizio
                 from elem.aste_percorso ap where id_percorso in (
                 select id_percorso from elem.percorsi where id_categoria_uso in (3,6)) 
@@ -198,6 +200,10 @@ def main():
     conn.commit()
     curr.close()
     curr = conn.cursor()                
+
+
+
+
 
     # PULIZIA TABELLA anagrafe_percorsi.date_percorsi_sit_uo
     
@@ -510,10 +516,11 @@ order by cod_percorso, data_fine_validita '''
         tipo_ripartizione, codice_cer, codici_cer_compatibili,
         data_inizio_validita, data_fine_validita, versione
         FROM anagrafe_percorsi.v_servizi_per_ekovision
-        where cod_percorso in (
+        where (cod_percorso in (
         select distinct cod_percorso from anagrafe_percorsi.elenco_percorsi ep  
         where data_fine_validita >= now()::date or data_ultima_modifica >= now()::date - interval '1' day
-        )  or data_fine_validita >= now()::date - interval '1' month
+        )  or data_fine_validita >= now()::date - interval '1' month)
+        and data_inizio_validita <= now()::date
         order by cod_percorso,versione'''
     else:
         # solo incrementale
@@ -525,9 +532,9 @@ order by cod_percorso, data_fine_validita '''
         FROM anagrafe_percorsi.v_servizi_per_ekovision
         where cod_percorso in (
         select distinct cod_percorso from anagrafe_percorsi.elenco_percorsi ep  
-        where data_inizio_validita >= now()::date or data_fine_validita = now()::date
+        where data_inizio_validita = now()::date or data_fine_validita = now()::date
         or data_ultima_modifica >= now()::date - interval '1' day
-        )   
+        ) and data_inizio_validita <= now()::date   
         order by cod_percorso,versione'''
       
     try:
