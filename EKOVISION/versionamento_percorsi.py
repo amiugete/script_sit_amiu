@@ -154,7 +154,10 @@ def main():
     
     
     
-    # credo eventuali ripassi fittizi nella tabella elem.aste_percorso. Servono a Ekovision
+    
+    
+    
+    # creo eventuali ripassi fittizi nella tabella elem.aste_percorso. Servono a Ekovision
     query_ripassi_fittizi='''select id_percorso, id_asta, num_seq, ripasso_fittizio
                 from elem.aste_percorso ap where id_percorso in (
                 select id_percorso from elem.percorsi where id_categoria_uso in (3,6)) 
@@ -346,7 +349,7 @@ def main():
     curr = conn.cursor()
     
     # step 3 
-    #STEP 2 correggo un secondo caso.. (percorsi dismessi su SIT e non sulla UO)
+    #STEP 2 correggo un terzo caso.. (percorsi dismessi su SIT e non sulla UO)
     query_date_correggere3='''select dpsu.id_percorso_sit, dpsu.cod_percorso, 
  dpsu.data_inizio_validita, dpsu.data_fine_validita 
  from anagrafe_percorsi.date_percorsi_sit_uo dpsu
@@ -407,6 +410,35 @@ def main():
     #exit()
     curr = conn.cursor()
     
+    
+
+    # nel caso di nuove versioni che partano nel futuro (e.data_inizio_validita > oggi (CURRENT_DATE) )
+    # correggo su elem.percorsi (tabella dei percorsi di SIT) la data di attivazione 
+    # in modo da non incasinare i vari script che girano per verificare frequenze dei percorsi
+    # es. preconsuntivazioni ekovision, calendario, etc
+    
+    
+    query_date_percorsi= '''UPDATE elem.percorsi p SET data_attivazione = e.data_inizio_validita
+FROM anagrafe_percorsi.elenco_percorsi e
+/*select e.*, p.data_attivazione FROM anagrafe_percorsi.elenco_percorsi e,  elem.percorsi p*/
+WHERE p.cod_percorso = e.cod_percorso
+  AND p.id_categoria_uso = 3
+  AND CURRENT_DATE BETWEEN e.data_inizio_validita AND e.data_fine_validita
+  AND e.data_inizio_validita < p.data_attivazione
+  AND p.data_attivazione > CURRENT_DATE'''
+    
+    try:
+        curr.execute(query_date_percorsi)
+    except Exception as e:
+        logger.error(query_date_percorsi)
+        check_error=1
+        logger.error(e)
+        
+    conn.commit()
+    curr.close()
+    #exit()
+    curr = conn.cursor()
+    
     codici=[]
     versioni=[]
 
@@ -414,6 +446,12 @@ def main():
     if creazione_versioni==1:
         logger.warning('Questa parte qua la devo pensare un secondo con Riccardo')
         exit()
+
+
+
+
+
+    # correzione numero versione e data_fine_ekovision perchè non vogliono andare oltre all'anno in corso
 
     query_percorsi='''select cod_percorso, descrizione, id_tipo, freq_testata, id_turno, versione_testata,
 data_inizio_validita, data_fine_validita, data_fine_ekovision 
