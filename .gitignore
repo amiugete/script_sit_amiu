@@ -1,16 +1,19 @@
 credenziali.py
 
 log/*.log
+log/*.txt
 log/ping_output.txt
 
 variazioni/*.csv
 variazioni/*.xlsx
 
 
+TAG/log/*.log
 
 TREG/log/*.log
-
 TREG/output/*.txt
+TREG/download/*.csv
+
 
 
 EKOVISION/preconsuntivazioni/*.csv
@@ -22,10 +25,13 @@ EKOVISION/log/*.log
 EKOVISION/eko_output/*.json
 EKOVISION/eko_output2/*.json
 EKOVISION/eko_output3/*.json
+EKOVISION/eko_output_mezzi/*.json
 EKOVISION/inaz_output/*.csv
 EKOVISION/anomalie_output/*.csv
 
+TELLUS/input/*.json
 
+csv_spazz_comune/*.csv
 
 
 dati_consuntivazione_posteriori/log/*.log
