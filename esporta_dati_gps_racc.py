@@ -190,16 +190,14 @@ def main():
         data_ora timestamp, tipo_evento varchar,
         svuotamento integer, "data" date, geom geometry(point,4326))'''.format(mv)
 
-
-        # faccio commit
-        conn_web.commit()
-        
-        
         try:
             curr_web.execute(query_dblink2)
         except Exception as e:
             logger.error(query_dblink2)
             logger.error(e)
+
+        # faccio commit
+        conn_web.commit()
             
         query_dblink3='''ALTER TABLE gps.{0} 
         ADD CONSTRAINT {0}_pk PRIMARY KEY ({1})'''.format(mv, 'id')
@@ -233,6 +231,9 @@ def main():
             logger.error(e)
 
 
+        #exit()
+
+
         query_dblink8='''drop table if exists gps.{0}_pref'''.format(mv) 
 
         try:
@@ -241,6 +242,8 @@ def main():
             logger.error(query_dblink8)
             logger.error(e)            
         
+        # faccio commit
+        conn_web.commit()   
         
         # nella query devo escudere eventuali punti a cavallo fra 2 comuni lo faccio con il group by e l'having
         query_dblink6='''create table gps.{0}_pref as 

@@ -122,6 +122,8 @@ personale_ce_o='{}/personale/output/cedolini'.format(path)
 personale_cu_o='{}/personale/output/cu'.format(path)
 
 
+#csv per comune 
+csv_comune_ge='{}/csv_spazz_comune/'.format(path)
 
 # report vari
 report='{}/report'.format(path)
@@ -130,15 +132,18 @@ report='{}/report'.format(path)
 backup_db= '{}/backup_db_new'.format(home_directory)
 
 
+#TREG 
+treg_log='{}/TREG/log'.format(path)
+
 cartelle_da_pulire=[logpath, variazioni, idea, ecopunti, utenze, 
                     consuntivazioni, preconsuntivazioni, timbrature, assenze, json_ekovision,
                     personale_ca_o, personale_ce_o, personale_cu_o, csv_ekovision_personale, report,
-                    eko_pesi, backup_db]
+                    eko_pesi, backup_db, csv_comune_ge, treg_log]
 
 giorni_pulizia = [ 14, 14, 7, 14, 14,
           7, 7, 7, 7, 1,
           1, 1, 1, 7, 7,
-          7, 7]
+          7, 7, 20, 7]
 
 c=0
 while c < len(cartelle_da_pulire):

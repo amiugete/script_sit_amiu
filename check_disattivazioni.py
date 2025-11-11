@@ -224,12 +224,12 @@ def main():
             query_uo2='''SELECT ID_SER_PER_UO, 
                 ID_PERCORSO, 
                 as2.DESC_SERVIZIO,au.DESC_UO,
-                DTA_DISATTIVAZIONE
+                aspu.DTA_DISATTIVAZIONE
                 FROM ANAGR_SER_PER_UO aspu 
                 JOIN ANAGR_UO au ON au.ID_UO = aspu.ID_UO 
                 JOIN ANAGR_SERVIZI as2 ON as2.ID_SERVIZIO = aspu.ID_SERVIZIO 
                 WHERE ID_PERCORSO = :cod_perc
-                AND DTA_DISATTIVAZIONE = 
+                AND aspu.DTA_DISATTIVAZIONE = 
                 (SELECT max(DTA_DISATTIVAZIONE) FROM ANAGR_SER_PER_UO aspu1 WHERE ID_PERCORSO = aspu.ID_PERCORSO
                 ) AND aspu.ID_SERVIZIO !=9 '''
             try:

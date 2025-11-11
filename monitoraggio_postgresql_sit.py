@@ -2,7 +2,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# AMIU copyleft 202
+# AMIU copyleft 2025
 # ChatGPT + Roberto Marzocchi
 
 '''
@@ -99,21 +99,21 @@ TRESHOLD_RUNTIME_SEC = 200
 INTERVALLO_SEC = 30
 
 
-def get_query_attive():
+def get_query_attive(HOST_SERVER):
     nome_db=db
     #logger.info('Connessione al db {}'.format(nome_db))
 
-    conn = psycopg2.connect(dbname=nome_db,
+    conn = psycopg2.connect(dbname='postgres',
                         port=port,
                         user=user,
                         password=pwd,
-                        host=host)
+                        host=HOST_SERVER)
     
     cur = conn.cursor()
     cur.execute("""
         SELECT pid, usename, datname, state, 
                now() - query_start AS runtime,
-               wait_event_type, query
+               wait_event_type, query, application_name, client_addr
         FROM pg_stat_activity
         WHERE state != 'idle'
         ORDER BY runtime DESC;
@@ -126,16 +126,34 @@ def get_query_attive():
 def monitora_query():
     i=0
     while True:
-        query_attive = get_query_attive()
+        query_attive = get_query_attive(host)
+        query_attive2 = get_query_attive(host_dwh)
         if i==0 or i%1000 == 0:
             logger.info(f"Controllo {i} in corso su {len(query_attive)} query attive in questo momento")
         for q in query_attive:
-            pid, usename, datname, state, runtime, wait_event_type, query = q
-            runtime_sec = runtime.total_seconds()
+            pid, usename, datname, state, runtime, wait_event_type, query, application_name, client_addr= q
+            runtime_sec = runtime.total_seconds()          
             if runtime_sec > TRESHOLD_RUNTIME_SEC:
-                msg = f"[PID {pid}] {usename}@{datname} - {runtime_sec:.1f}s - {query[:100]}"
+                msg = f"""<b>Server SITDB</b>
+                <br>[PID {pid}] {usename}@{datname} 
+                <br>Runtime: {runtime_sec:.1f}s 
+                <br>Query: {query}
+                <br>Lanciata da IP: {client_addr}
+                <br>Client: {application_name}"""
                 logging.warning(msg)
                 warning_message_mail(msg, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+        for q2 in query_attive2:
+            pid2, usename2, datname2, state2, runtime2, wait_event_type2, query2, application_name2, client_addr2= q2
+            runtime_sec2 = runtime2.total_seconds()          
+            if runtime_sec > TRESHOLD_RUNTIME_SEC:
+                msg2 = f"""<b>Server AMIUPOSTGRES</b>
+                <br>[PID {pid2}] {usename2}@{datname2} 
+                <br>Runtime: {runtime_sec2:.1f}s 
+                <br>Query: {query2}
+                <br>Lanciata da IP: {client_addr2}
+                <br>Client: {application_name2}"""
+                logging.warning(msg2)
+                warning_message_mail(msg2, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
         i+=1        
         time.sleep(INTERVALLO_SEC)
 

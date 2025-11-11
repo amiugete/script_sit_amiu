@@ -212,7 +212,7 @@ def main():
     run_script=0
     
     
-    w_m_eko='''NOTA BENE: Se ora l'importazione è andata a buon fine c'è da avvisare anche Ekovision di rilanciara a mano il job notturno'''
+    w_m_eko='''NOTA BENE: Se ora l'importazione è andata a buon fine, dal connector di Ekovision rilanciare il job ITINERARI (flussi in)'''
     if len(errori)==0:
         # non ha girato devo far rigirare il tutto
         w_m='Oggi non ha ancora girato lo script che invia le modifiche ai percorsi alla UO e ad Ekovision'

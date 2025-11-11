@@ -62,8 +62,8 @@ nome=os.path.basename(__file__).replace('.py','')
 
 
 #tmpfolder=tempfile.gettempdir() # get the current temporary directory
-logfile='{}/{}.log'.format(path, nome)
-errorfile='{}/error_{}.log'.format(path, nome)
+logfile='{}/log/{}.log'.format(path, nome)
+errorfile='{}/log/error_{}.log'.format(path, nome)
 #if os.path.exists(logfile):
 #    os.remove(logfile)
 
@@ -128,7 +128,7 @@ except Exception as e:
 
 debug_email= 'roberto.marzocchi@amiu.genova.it'
 if test==1:
-    hh=host
+    hh=host_test
     dd=db_test
     mail_notifiche_apertura='magmaco@amiu.genova.it'
     mail_notifiche_apertura=debug_email

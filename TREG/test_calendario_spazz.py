@@ -194,6 +194,20 @@ def main():
     curr = conn.cursor()
     
     
+    # Mi connetto al DB oracle UO
+    cx_Oracle.init_oracle_client(percorso_oracle) # necessario configurare il client oracle correttamente
+    #cx_Oracle.init_oracle_client() # necessario configurare il client oracle correttamente
+    parametri_con='{}/{}@//{}:{}/{}'.format(user_uo,pwd_uo, host_uo,port_uo,service_uo)
+    logger.debug(parametri_con)
+    con = cx_Oracle.connect(parametri_con)
+    logger.info("Versione ORACLE: {}".format(con.version))
+    
+    cur = con.cursor()
+    
+    
+    
+    file_anomalie = open(f"{path}/output/tappe_spazzamenti_doppie.csv", "w")
+    file_anomalie.write('cod_percorso; id_ekovision; pos; cod_tratto\n')
     
     # creo 3 dizionari e una lista per verificare anomalie sui percorsi
         
@@ -233,9 +247,12 @@ def main():
     curr = conn.cursor()
     
     # cerco il giono da cui partire
+    """
     query_first_day='''SELECT coalesce(max(data_last_calendar), to_date('20250101', 'YYYYMMDD')) as data_last_calendar
-FROM eko_treg.last_import_treg_spazz; '''
-
+FROM treg_eko.last_import_treg_spazz; '''
+    """
+    query_first_day='''SELECT to_date('20250801', 'YYYYMMDD') as data_last_calendar
+FROM treg_eko.last_import_treg_spazz; '''
     try:
         curr.execute(query_first_day)
         giorno_mese_anno=curr.fetchall()
@@ -247,13 +264,21 @@ FROM eko_treg.last_import_treg_spazz; '''
     
     for gma in giorno_mese_anno:
         data_start=gma[0]
-        logger.debug('{} era {}'.format(data_start, data_start.strftime('%A')))
+    logger.debug('{} era {}'.format(data_start, data_start.strftime('%A')))
 
 
-    #fine_ciclo=oggi
+    #########################################################################
+    # IMPOSTO FINE CICLO
     
-    fine_ciclo = datetime.strptime('20250630', '%Y%m%d')
+    # per arrivare ad oggi
+    #fine_ciclo=oggi
+
+    # per fermarmi prima di oggi 
+    fine_ciclo = datetime.strptime('20250901', '%Y%m%d')
     fine_ciclo=date(fine_ciclo.year, fine_ciclo.month, fine_ciclo.day)
+    #########################################################################
+    
+    
     while  data_start <= fine_ciclo:
         logger.info('Processo il giorno {}'.format(data_start))
         if data_start.isocalendar()[1]%2 == 1:
@@ -361,13 +386,14 @@ FROM eko_treg.last_import_treg_spazz; '''
                     dict_percorsi_doppi[c]=data_start
                     ss=0
                     while ss < len(letture['schede_lavoro']):
-                        id_scheda.append(int(letture['schede_lavoro'][ss]['id_scheda_lav']))
+                        if int(letture['schede_lavoro'][ss]['id_scheda_lav']) not in id_scheda:
+                            id_scheda.append(int(letture['schede_lavoro'][ss]['id_scheda_lav']))
                         ss+=1
-                else: 
+                else:
                     id_scheda.append(int(letture['schede_lavoro'][0]['id_scheda_lav']))
             
             # ora devo verificare i tratti
-            
+            logger.debug('lista id_scheda = {}'.format(id_scheda))
             tratti_sit=[]
             tratti_Eko=[] # !! che da WS mi tiro fuori id_ekovision e non id_elemento
             
@@ -438,11 +464,9 @@ FROM eko_treg.last_import_treg_spazz; '''
             # popolo tratti_sit
             for eep in elenco_elementi_percorso:
                 # verifico se in frequenza con la solita funzione
-                #if tappa_prevista(data_start,  eep[1])==1:
-                    # questa sarà da passare a TREG, le altre no
-
-                # per ora per il confronto con ekovision gliele passo tutte
-                tratti_sit.append(eep[3])
+                if tappa_prevista(data_start,  eep[1])==1:
+                    # questa va confrontata con i risultati del WS, le altre no
+                    tratti_sit.append(eep[3])
                 
             
             
@@ -499,9 +523,44 @@ FROM eko_treg.last_import_treg_spazz; '''
             #ora che abbiamo le 2 liste per quel percorso e quella data le dobbiamo confrontare
             lista_tratti_anomali=[]
             if len(tratti_Eko)>len(tratti_sit):
+                """query_eko='''SELECT ces.COD_TRATTO, posizione 
+            FROM CONSUNT_EKOVISION_SPAZZAMENTO ces 
+            WHERE ces.ID_SCHEDA = :d1
+            AND ces.RECORD_VALIDO = 'S'
+            ORDER BY 2'''
+                try:
+                    cur.execute(query_eko, (id_scheda[0],))
+                    cod_tratti=cur.fetchall()
+                except Exception as e:
+                    logger.error(query_elementi_percorso)
+                    logger.error(e)
+            
+            
+                logger.debug('len tratti eko {}'.format(len(tratti_Eko)))
+                logger.debug('tratti eko {}'.format(tratti_Eko))
+                logger.debug('len tratti sit {}'.format(len(tratti_sit)))
+                
+                logger.debug('len tratti cons {}'.format(len(cod_tratti)))
+                s=0
+                e=0
+                while e < len(tratti_Eko):
+                    #logger.debug(f'Ordine SIT {ordine_sit[s]}, {cod_tratti[e][1]}')
+                    #logger.debug(f'ID EKO: {tratti_Eko[e]} - Codice EKO {cod_tratti[e][0]} - Tratti SIT {tratti_sit[s]}')
+                    logger.debug(f'indice tratti sit {s} - indice tratti eko {e}')
+                    if cod_tratti[e][0]!=tratti_sit[s]:
+                        logger.warning('Trovato problema')
+                        logger.warning(f'ID_EKO:{tratti_Eko[e]},  Posizione EKO:{cod_tratti[e][1]}, Codice eko {cod_tratti[e][0]} - Tratti SIT {tratti_sit[s]}')
+                        file_anomalie.write(f'{c};{tratti_Eko[e]};{cod_tratti[e][1]};{cod_tratti[e][0]}\n')                
+                    else:
+                        s+=1 
+                    e+=1
+                
+                """
                 # spunte blu e marroni che sarebbero tappe non correttamente tolte dal percorso da Ekovision per problemi con le date di inizio
                 if c not in lista_percorsi_da_verificare:
                     lista_percorsi_da_verificare.append(c) 
+                    
+    
             
             elif len(tratti_Eko) == len(tratti_sit):
                 # devo verificare che siano le stesse componenti
@@ -551,7 +610,7 @@ FROM eko_treg.last_import_treg_spazz; '''
     
     
     
-    
+    file_anomalie.close()
     
     
     # check se c_handller contiene almeno una riga 

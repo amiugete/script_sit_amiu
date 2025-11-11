@@ -122,7 +122,7 @@ def main():
                         port=port,
                         user=user,
                         password=pwd,
-                        host=host)
+                        host=host_prog)
 
     curr_p = conn_p.cursor()
 
@@ -780,7 +780,7 @@ def main():
                         port=port,
                         user=user,
                         password=pwd,
-                        host=host)
+                        host=host_prog)
 
     curr_p = conn_p.cursor()
     conn_p.autocommit = True

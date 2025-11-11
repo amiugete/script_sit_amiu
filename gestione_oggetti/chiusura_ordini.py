@@ -58,8 +58,8 @@ giorno_file=datetime.datetime.today().strftime('%Y%m%d%H%M')
 
 
 #tmpfolder=tempfile.gettempdir() # get the current temporary directory
-logfile='{}/chiusura_ordini.log'.format(path)
-errorfile='{}/error_chiusura_ordini.log'.format(path)
+logfile='{}/log/chiusura_ordini.log'.format(path)
+errorfile='{}/log/error_chiusura_ordini.log'.format(path)
 #if os.path.exists(logfile):
 #    os.remove(logfile)
 
@@ -130,7 +130,7 @@ except Exception as e:
     test=1
 
 if test==1:
-    hh=host
+    hh=host_test
     dd=db_test
     mail_notifiche_apertura='roberto.marzocchi@amiu.genova.it'
     und_test='_TEST'

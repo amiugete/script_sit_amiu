@@ -220,6 +220,23 @@ def main():
     cur = con.cursor()
     
     
+    # cerco l'ultimo file STANDARD letto 
+    # STANDARD --> uso REGEXP_LIKE(REGEXP_SUBSTR(filename, '[^_]+', 1, 4), '^\d+$')
+    
+    query_select=''' SELECT max(substr(filename, 0,34)) 
+FROM UNIOPE.HIST_SERVIZI_MEZZI_OK
+WHERE REGEXP_LIKE(REGEXP_SUBSTR(filename, '[^_]+', 1, 4),'^\d+$') '''
+    
+    try:
+        cur.execute(query_select)
+        check_filename=cur.fetchall()
+    except Exception as e:
+        logger.error(query_select)
+        logger.error(e)
+    
+    
+    for cf in check_filename:
+        filtro=cf[0]
     
     try: 
         cnopts = pysftp.CnOpts()
@@ -230,7 +247,12 @@ def main():
 
         with srv.cd(cartella_sftp_eko): #chdir to public
             #print(srv.listdir('./'))
-            for filename in srv.listdir('./'):
+            tutti_file = srv.listdir('./')  # lista tutti i file
+            file_filtrati = sorted(f for f in tutti_file if f > filtro)
+            
+            for filename in file_filtrati:
+                
+                """
                 #logger.debug(filename)
                 select_file='''SELECT * FROM UNIOPE.HIST_SERVIZI_MEZZI_OK 
                 WHERE FILENAME=:f1 '''
@@ -241,188 +263,214 @@ def main():
                 except Exception as e:
                     logger.error(select_file)
                     logger.error(e)
-                                 
+                
+                # check_filename=[]      # per riprocessare tutto
+                           
                 # se non ho già letto il file
                 if len(check_filename)==0 and fnmatch.fnmatch(filename, "sch_lav_consuntivi*"):
-                    srv.get(filename, path + "/eko_output2/" + filename)
+                    srv.get(filename, path + "/eko_output_mezzi/" + filename)
                     logger.info('Scaricato file {}'.format(filename))
                     
                     
+                """    
+                srv.get(filename, path + "/eko_output_mezzi/" + filename)
+                logger.info('Scaricato file {}'.format(filename))
+                logger.info ('Inizio processo file'.format(filename))   
+                
+                # imposto a 0 un controllo sulla lettura del file
+                check_lettura=0
+                
+                
+                # Opening JSON file
+                f = open(path + "/eko_output_mezzi/" + filename)
+                
+                # returns JSON object as 
+                # a dictionary
+                try:
+                    data = json.load(f)
                     
-                    logger.info ('Inizio processo file'.format(filename))   
-                    
-                    # imposto a 0 un controllo sulla lettura del file
-                    check_lettura=0
                     
                     
-                    # Opening JSON file
-                    f = open(path + "/eko_output2/" + filename)
-                    
-                    # returns JSON object as 
-                    # a dictionary
-                    try:
-                        data = json.load(f)
-                        
-                        
-                        
-                        i=0
-                        while i<len(data):
-                            try:
-                                logger.info('{} - Leggo dati della scheda di lavoro {}'.format(i, data[i]['id_scheda']))
+                    i=0
+                    while i<len(data):
+                        try:
+                            logger.info('{} - Leggo dati della scheda di lavoro {}'.format(i, data[i]['id_scheda']))
+                            
+                            check=0                    
+                            
+                            if data[i]['data_esecuzione_prevista']>=data_start_ekovision:
+                                #logger.debug(data[i]['cons_ris_tecniche'])
                                 
-                                check=0                    
+                                check_ditta_terza=0
+                                cur3 = con.cursor()
+                                select_query='''SELECT au.ID_ZONATERRITORIALE 
+                                FROM ANAGR_SER_PER_UO aspu
+                                JOIN anagr_UO au ON aspu.id_UO = au.id_UO
+                                WHERE ID_PERCORSO = :p1 and TO_DATE(:p2, 'YYYYMMDD') between aspu.DTA_ATTIVAZIONE 
+                                and aspu.DTA_DISATTIVAZIONE'''
+                                try:
+                                    cur3.execute(select_query, (data[i]['codice_serv_pred'],data[i]['data_esecuzione_prevista'] ))
+                                    ii_uu=cur3.fetchall()
+                                except Exception as e:
+                                    logger.error(select_query)
+                                    logger.error(e)
+                                for i_u in ii_uu:
+                                    id_zona=i_u[0]
                                 
-                                if data[i]['data_esecuzione_prevista']>=data_start_ekovision:
-                                    #logger.debug(data[i]['cons_ris_tecniche'])
-                                    
-                                    check_ditta_terza=0
-                                    cur3 = con.cursor()
-                                    select_query='''SELECT au.ID_ZONATERRITORIALE 
-                                    FROM ANAGR_SER_PER_UO aspu
-                                    JOIN anagr_UO au ON aspu.id_UO = au.id_UO
-                                    WHERE ID_PERCORSO = :p1 and TO_DATE(:p2, 'YYYYMMDD') between aspu.DTA_ATTIVAZIONE 
-                                    and aspu.DTA_DISATTIVAZIONE'''
-                                    try:
-                                        cur3.execute(select_query, (data[i]['codice_serv_pred'],data[i]['data_esecuzione_prevista'] ))
-                                        ii_uu=cur3.fetchall()
-                                    except Exception as e:
-                                        logger.error(select_query)
-                                        logger.error(e)
-                                    for i_u in ii_uu:
-                                        id_zona=i_u[0]
-                                    
-                                    cur3.close()
-                                    if id_zona==7:
-                                        # non c'è errore 
-                                        check_ditta_terza=1
-                                        logger.info('Percorso di ditta esterna non salvo nulla')
-                                    
-                                    
-                                    if data[i]['cod_caus_srv_non_eseg_ext']=='' and len(data[i]['cons_ris_tecniche'])>0 and check_ditta_terza==0:
-                                        if data[i]['cons_ris_tecniche'][0]['id_giustificativo'] == 0 or data[i]['cons_ris_tecniche'][0]['id_risorsa_tecnica'] > 0:
-                                            tt=0
-                                            while  tt<len(data[i]['cons_ris_tecniche']):
-                                                sportello=data[i]['cons_ris_tecniche'][tt]['cod_matricola_ristec']
-                                                logger.debug(sportello)
+                                cur3.close()
+                                if id_zona==7:
+                                    # non c'è errore 
+                                    check_ditta_terza=1
+                                    logger.info('Percorso di ditta esterna non salvo nulla')
+                                
+                                
+                                # se ci fosse già qualcosa lo cancello per evitare casini
+                                cur2 = con.cursor()            
+                                delete_query=''' DELETE FROM UNIOPE.HIST_SERVIZI_MEZZI_OK
+                                WHERE ID_SCHEDA_EKOVISION = :m1 '''
+                                try:
+                                    cur2.execute(delete_query, (data[i]['id_scheda'], ))
+                                except Exception as e:
+                                    logger.error(delete_query)
+                                    logger.error(e)
+                                con.commit()
+                                cur2.close()
+                                
+                                
+                                # faccio inserimenti
+                                if data[i]['cod_caus_srv_non_eseg_ext']=='' and len(data[i]['cons_ris_tecniche'])>0 and check_ditta_terza==0:
+                                    if data[i]['cons_ris_tecniche'][0]['id_giustificativo'] == 0 or data[i]['cons_ris_tecniche'][0]['id_risorsa_tecnica'] > 0:
+                                        tt=0
+                                        while  tt<len(data[i]['cons_ris_tecniche']):
+                                            sportello=data[i]['cons_ris_tecniche'][tt]['cod_matricola_ristec']
+                                            logger.debug(sportello)
+                                            
+                                            
+                                            cur2 = con.cursor()
+                                            durata = 0
+                                            o=0
+                                            while o<len(data[i]['cons_ris_tecniche'][tt]['cons_ristec_orari']):
                                                 
+                                                data_ora_start='{} {}'.format(
+                                                    data[i]['cons_ris_tecniche'][tt]['cons_ristec_orari'][o]['data_ini'],
+                                                    data[i]['cons_ris_tecniche'][tt]['cons_ristec_orari'][o]['ora_ini'][0:4]
+                                                    )
+                                                data_ora_fine='{} {}'.format(
+                                                    data[i]['cons_ris_tecniche'][tt]['cons_ristec_orari'][o]['data_fine'],
+                                                    data[i]['cons_ris_tecniche'][tt]['cons_ristec_orari'][o]['ora_fine'][0:4]
+                                                    )
                                                 
-                                                cur2 = con.cursor()
-                                                durata = 0
-                                                o=0
-                                                while o<len(data[i]['cons_ris_tecniche'][tt]['cons_ristec_orari']):
-                                                    
-                                                    data_ora_start='{} {}'.format(
-                                                        data[i]['cons_ris_tecniche'][tt]['cons_ristec_orari'][o]['data_ini'],
-                                                        data[i]['cons_ris_tecniche'][tt]['cons_ristec_orari'][o]['ora_ini']
-                                                        )
-                                                    data_ora_fine='{} {}'.format(
-                                                        data[i]['cons_ris_tecniche'][tt]['cons_ristec_orari'][o]['data_fine'],
-                                                        data[i]['cons_ris_tecniche'][tt]['cons_ristec_orari'][o]['ora_fine']
-                                                        )
-                                                    
-                                                    fmt='%Y%m%d %H%M%S'
-                                                    data_ora_start_ok = datetime.strptime(data_ora_start, fmt)
-                                                    data_ora_fine_ok = datetime.strptime(data_ora_fine, fmt)
-                                                    # calcolo differenza in minuti ()
-                                                    durata+=(data_ora_fine_ok - data_ora_start_ok).total_seconds() / 60.0
-                                                    
-                                                    o+=1
-                                                logger.debug(durata)
+                                                fmt='%Y%m%d %H%M'
+                                                data_ora_start_ok = datetime.strptime(data_ora_start, fmt)
+                                                data_ora_fine_ok = datetime.strptime(data_ora_fine, fmt)
+                                                # calcolo differenza in minuti ()
+                                                durata+=(data_ora_fine_ok - data_ora_start_ok).total_seconds() / 60.0
                                                 
-                                                select_query='''SELECT ID_SCHEDA_EKOVISION FROM UNIOPE.HIST_SERVIZI_MEZZI_OK
-                                                WHERE ID_SCHEDA_EKOVISION = :m1 '''
+                                                o+=1
+                                            logger.debug(durata)
+                                            
+                                            
+                                            
+                                            """
+                                            select_query='''SELECT ID_SCHEDA_EKOVISION FROM UNIOPE.HIST_SERVIZI_MEZZI_OK
+                                            WHERE ID_SCHEDA_EKOVISION = :m1 /*and SPORTELLO =  :m2*/'''
+                                            try:
+                                                #cur2.execute(select_query, (data[i]['id_scheda'], sportello, ))
+                                                cur2.execute(select_query, (data[i]['id_scheda'], ))
+                                                id_schede=cur2.fetchall()
+                                            except Exception as e:
+                                                logger.error(select_query)
+                                                logger.error(e)
+                                            
+                                            cur2.close()
+                                            cur2 = con.cursor()
+                                            """
+                                            #INSERIMENTO
+                                            #if len(id_schede)==0:
+                                        
+                                            insert_query='''INSERT INTO 
+                                            UNIOPE.HIST_SERVIZI_MEZZI_OK (ID_SCHEDA_EKOVISION, SPORTELLO, DURATA, FILENAME)
+                                            VALUES
+                                            (:m1, :m3, :m4, :m5) '''
+                                            try:
+                                                cur2.execute(insert_query, (int(data[i]['id_scheda']), sportello, durata, filename))
+                                            except Exception as e:
+                                                # controllo se si tratta di ditta esterna (in quel caso non devo salvare i dati)
+                                                # altrimenti segnalo l'errore
+                                                cur3 = con.cursor()
+                                                select_query='''SELECT au.ID_ZONATERRITORIALE 
+                                                FROM ANAGR_SER_PER_UO aspu
+                                                JOIN anagr_UO au ON aspu.id_UO = au.id_UO
+                                                WHERE ID_PERCORSO = :p1 and TO_DATE(:p2, 'YYYYMMDD') between aspu.DTA_ATTIVAZIONE 
+                                                and aspu.DTA_DISATTIVAZIONE'''
                                                 try:
-                                                    cur2.execute(select_query, (data[i]['id_scheda'], ))
-                                                    id_schede=cur2.fetchall()
+                                                    cur3.execute(select_query, (data[i]['codice_serv_pred'],data[i]['data_esecuzione_prevista'] ))
+                                                    ii_uu=cur3.fetchall()
                                                 except Exception as e:
                                                     logger.error(select_query)
                                                     logger.error(e)
+                                                for i_u in ii_uu:
+                                                    id_zona=i_u[0]
                                                 
-                                                cur2.close()
-                                                cur2 = con.cursor()
-                                                if len(id_schede)==0:
-                                                    insert_query='''INSERT INTO 
-                                                    UNIOPE.HIST_SERVIZI_MEZZI_OK (ID_SCHEDA_EKOVISION, SPORTELLO, DURATA, FILENAME)
-                                                    VALUES
-                                                    (:m1, :m3, :m4, :m5) '''
-                                                    try:
-                                                        cur2.execute(insert_query, (int(data[i]['id_scheda']), sportello, durata, filename))
-                                                    except Exception as e:
-                                                        # controllo se si tratta di ditta esterna (in quel caso non devo salvare i dati)
-                                                        # altrimenti segnalo l'errore
-                                                        cur3 = con.cursor()
-                                                        select_query='''SELECT au.ID_ZONATERRITORIALE 
-                                                        FROM ANAGR_SER_PER_UO aspu
-                                                        JOIN anagr_UO au ON aspu.id_UO = au.id_UO
-                                                        WHERE ID_PERCORSO = :p1 and TO_DATE(:p2, 'YYYYMMDD') between aspu.DTA_ATTIVAZIONE 
-                                                        and aspu.DTA_DISATTIVAZIONE'''
-                                                        try:
-                                                            cur3.execute(select_query, (data[i]['codice_serv_pred'],data[i]['data_esecuzione_prevista'] ))
-                                                            ii_uu=cur3.fetchall()
-                                                        except Exception as e:
-                                                            logger.error(select_query)
-                                                            logger.error(e)
-                                                        for i_u in ii_uu:
-                                                            id_zona=i_u[0]
-                                                        
-                                                        cur3.close()
-                                                        if id_zona==7:
-                                                            # non c'è errore 
-                                                            logger.info('Percorso di ditta esterna non salvo nulla')
-                                                        else:
-                                                            logger.error(insert_query)
-                                                            logger.error
-                                                            logger.error('m1:{}, m2:{}, m3:{}, m4:{}'.format(int(data[i]['id_scheda']), sportello, durata, filename))
-                                                    
-                                                    
-                                                else: 
-                                                    update_query='''UPDATE
-                                                    UNIOPE.HIST_SERVIZI_MEZZI_OK 
-                                                    SET SPORTELLO=:m1, DURATA=:m2, FILENAME=:m3
-                                                    WHERE ID_SCHEDA_EKOVISION = :m4
-                                                    '''
-                                                    try:
-                                                        cur2.execute(update_query, (sportello, durata, filename,data[i]['id_scheda']))
-                                                    except Exception as e:
-                                                        logger.error(update_query)
-                                                        logger.error
-                                                        logger.error('m1:{}, m2:{}, m3:{}, m4:{}'.format( sportello, durata, filename, int(data[i]['id_scheda'])))
-                                                    
-                                                    
-                                                    
-                                                cur2.close()    
-                                                con.commit()
-                                                tt+=1 
-                                    
-                                    
-                                else:
-                                    logger.info('Non processo la scheda perchè antecedente alla data di partenza di Ekovision {}'.format(data_start_ekovision))
-                            except Exception as e:
-                                check=1
-                                logger.error('File:{}'.format(filename))
-                                logger.error('Non processo la riga {}'.format(i))
-                            i+=1
-                        #con.commit()
-                        
-                        
-                        # Closing file
-                        f.close()
-                        logger.info('Chiudo il file {}'.format(filename))
-                        logger.info('-----------------------------------------------------------------------------------------------------------------------')
-                        #exit()
-                        #srv.rename("./"+ filename, "./archive/" + filename)
-                    except Exception as e:
-                        logger.error(e)
-                        logger.error('Problema processamemto file {}'.format(filename))
-                        #logger.error('File spostato nella cartella json_error')
-                        f.close()
-                        #srv.rename("./"+ filename, "./json_error/" + filename)
-                        #error_log_mail(errorfile, 'assterritorio@amiu.genova.it; andrea.volpi@ekovision.it; francesco.venturi@ekovision.it', os.path.basename(__file__), logger)
+                                                cur3.close()
+                                                if id_zona==7:
+                                                    # non c'è errore 
+                                                    logger.info('Percorso di ditta esterna non salvo nulla')
+                                                else:
+                                                    logger.error(insert_query)
+                                                    logger.error
+                                                    logger.error('m1:{}, m2:{}, m3:{}, m4:{}'.format(int(data[i]['id_scheda']), sportello, durata, filename))
+                                            
+                                                
+                                            """else: 
+                                                update_query='''UPDATE
+                                                UNIOPE.HIST_SERVIZI_MEZZI_OK 
+                                                SET SPORTELLO=:m1, DURATA=:m2, FILENAME=:m3
+                                                WHERE ID_SCHEDA_EKOVISION = :m4 and SPORTELLO = :m5
+                                                and :m6 >= filename                                                   '''
+                                                try:
+                                                    cur2.execute(update_query, (sportello, durata, filename,data[i]['id_scheda'], sportello, filename))
+                                                    #cur2.execute(update_query, (sportello, durata, filename,data[i]['id_scheda'], sportello))
+                                                except Exception as e:
+                                                    logger.error(update_query)
+                                                    logger.error
+                                                    logger.error('m1:{}, m2:{}, m3:{}, m4:{}'.format( sportello, durata, filename, int(data[i]['id_scheda'])))
+                                                
+                                                
+                                            """    
+                                            cur2.close()    
+                                            con.commit()
+                                            tt+=1 
+                                
+                                
+                            else:
+                                logger.info('Non processo la scheda perchè antecedente alla data di partenza di Ekovision {}'.format(data_start_ekovision))
+                        except Exception as e:
+                            check=1
+                            logger.error('File:{}'.format(filename))
+                            logger.error('Non processo la riga {}'.format(i))
+                        i+=1
+                    #con.commit()
                     
-                        
+                    
+                    # Closing file
+                    f.close()
+                    logger.info('Chiudo il file {}'.format(filename))
+                    logger.info('-----------------------------------------------------------------------------------------------------------------------')
+                    #exit()
+                    #srv.rename("./"+ filename, "./archive/" + filename)
+                except Exception as e:
+                    logger.error(e)
+                    logger.error('Problema processamemto file {}'.format(filename))
+                    #logger.error('File spostato nella cartella json_error')
+                    f.close()
+                    #srv.rename("./"+ filename, "./json_error/" + filename)
+                    #error_log_mail(errorfile, 'assterritorio@amiu.genova.it; andrea.volpi@ekovision.it; francesco.venturi@ekovision.it', os.path.basename(__file__), logger)
                 
                     
-                    os.remove(path + "/eko_output2/" + filename)
+            
+                
+                os.remove(path + "/eko_output_mezzi/" + filename)
                 
         
         

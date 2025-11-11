@@ -327,7 +327,11 @@ and left(trim(replace(replace(replace(description, 'Percorso', ''), id_percorso:
         and p.id_categoria_uso in (3,6)
         UNION'''
     
-    query='''select distinct p.cod_percorso , p.descrizione, s.descrizione as servizio, u.descrizione  as ut,
+
+    
+    query='''select cod_percorso, descrizione, servizio, string_agg(ut, ',') as ut, id_percorso
+from (
+    select distinct p.cod_percorso , p.descrizione, s.descrizione as servizio, u.descrizione  as ut,
         p.id_percorso
         from util.sys_history h
         inner join elem.percorsi p 
@@ -348,7 +352,7 @@ and left(trim(replace(replace(replace(description, 'Percorso', ''), id_percorso:
         and h.action IN ('INSERT', 'UPDATE', 'DELETE')
         )
         )
-        and pu.responsabile = 'S'
+        /*and pu.responsabile = 'S'*/
         and p.id_categoria_uso in (3)
         and (p.data_dismissione is null or p.data_dismissione > current_date )
         and coalesce(p.data_attivazione, current_date::date) <= current_date::date
@@ -361,8 +365,8 @@ and left(trim(replace(replace(replace(description, 'Percorso', ''), id_percorso:
         on pu2.cod_percorso =p2.cod_percorso
         inner join topo.ut u2 
         on u2.id_ut = pu2.id_ut 
-        where pu2.responsabile = 'S'
-        and p2.id_categoria_uso in (3)
+        where /*pu2.responsabile = 'S'
+        and*/ p2.id_categoria_uso in (3)
         and p2.data_attivazione > (current_date - INTEGER '{0}')
         and p2.data_attivazione <= current_date::date
         UNION
@@ -385,10 +389,11 @@ and left(trim(replace(replace(replace(description, 'Percorso', ''), id_percorso:
         on pu3.cod_percorso =p3.cod_percorso
         inner join topo.ut u3 
         on u3.id_ut = pu3.id_ut 
-        where pu3.responsabile = 'S'
-        and p3.id_categoria_uso in (3)
+        where /*pu3.responsabile = 'S'
+        and*/ p3.id_categoria_uso in (3)
         and (p3.data_dismissione is null or p3.data_dismissione > current_date::date )
         and p3.data_attivazione <= current_date::date
+        ) as p group by cod_percorso, descrizione, servizio, id_percorso
         order by ut, servizio
         '''.format(num)
     
@@ -1366,13 +1371,13 @@ and left(trim(replace(replace(replace(description, 'Percorso', ''), id_percorso:
     codice, quantita, lato_servizio, percent_trattamento,frequenza,
     ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
     codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine
-        FROM anagrafe_percorsi.v_percorsi_elementi_tratti where data_inizio < coalesce(data_fine, '20991231')
+        FROM anagrafe_percorsi.v_percorsi_elementi_tratti where data_inizio <= coalesce(data_fine, '20991231')
         union 
         SELECT codice_modello_servizio, ordine, objecy_type, 
     codice, quantita, lato_servizio, percent_trattamento,frequenza,
     ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
     codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine
-        FROM anagrafe_percorsi.v_percorsi_elementi_tratti_ovs where data_inizio < coalesce(data_fine, '20991231')
+        FROM anagrafe_percorsi.v_percorsi_elementi_tratti_ovs where data_inizio <= coalesce(data_fine, '20991231')
     ) tab 
     where codice_modello_servizio = ANY (%s) 
     group by codice_modello_servizio,  objecy_type, 

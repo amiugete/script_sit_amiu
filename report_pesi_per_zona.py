@@ -505,7 +505,7 @@ and to_char(sysdate - (:gg-7), 'yyyymmdd')||'03:59:59' '''
     </ul>
     La presente mail è inviata in automatico dal file report_pesi_per_zona.py del server amiugis realizzato dal <i>SIGT - Gestione e sviluppo applicativi</i>. 
     <br> Per segnalare problemi al report contattare Riccardo Piana Riccardo.Piana@amiu.genova.it e Roberto Marzocchi Roberto.Marzocchi@amiu.genova.it
-    <br> Per segnalare problemi sull'assegnazione percorsi contattare Marzocchi/Magioncalda assterritorio@amiu.genova.it
+    <br> Per segnalare problemi sull'assegnazione percorsi contattare Marzocchi/Fagandini assterritorio@amiu.genova.it
     <br> Per segnalare anomalie sulle portate dei mezzi contattare l'ufficio automezzi Trapasso/Galleno
     <br>
     <img src="cid:image1" alt="Logo" width=197>

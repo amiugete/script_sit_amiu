@@ -41,6 +41,8 @@ import json
 
 import logging
 
+import uuid
+
 #path=os.path.dirname(sys.argv[0]) 
 
 
@@ -110,7 +112,9 @@ def esiste_versione(cursor, codice, giorno):
     ''''Dato un codice e un giorno (in formato YYYYMMDD)'''
     
     query_check='''select * FROM anagrafe_percorsi.v_servizi_per_ekovision
-where cod_percorso = %s
+where cod_percorso = %s 
+and data_inizio_validita <= now()::date /* modifica agosto 2025 per evitare creazione
+stagione sbagliata */
 and to_date(%s, 'YYYYMMDD') between data_inizio_validita and data_fine_validita '''
 
     
@@ -258,7 +262,7 @@ order by data_inizio_validita"""
                     logger.info("chiudo le connessioni in maniera definitiva")
                     curr.close()
                     conn.close()
-                    exit()
+                    #exit()
                 #response.json()
                 #logger.debug(response.status_code)
                 try:      
@@ -301,9 +305,10 @@ order by data_inizio_validita"""
                                             user=user,
                                             password=pwd,
                                             host=host)
-                        curr = conn.cursor()
+                        #curr = conn.cursor()
                         curr1 = conn.cursor() 
                         
+                        """
                         query_select_ruid='''select lpad((max(id)+1)::text, 7,'0') 
                         from anagrafe_percorsi.creazione_schede_lavoro csl'''
                         try:
@@ -318,7 +323,8 @@ order by data_inizio_validita"""
 
                         for ri in lista_ruid:
                             ruid=ri[0]
-
+                        """
+                        ruid = uuid.uuid4()
                         logger.info('ID richiesta Ekovision (ruid):{}'.format(ruid))
                         curr.close()
                         
@@ -355,10 +361,10 @@ order by data_inizio_validita"""
                             #logger.error('Id Scheda: {}'.format(id_scheda[k]))
                             # check se c_handller contiene almeno una riga 
                             error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
-                            logger.info("chiudo le connessioni in maniera definitiva")
-                            curr.close()
-                            conn.close()
-                            exit()
+                            #logger.info("chiudo le connessioni in maniera definitiva")
+                            #curr.close()
+                            #conn.close()
+                            #exit()
                         
                         if check_creazione_scheda ==1:
                             query_insert='''INSERT INTO anagrafe_percorsi.creazione_schede_lavoro

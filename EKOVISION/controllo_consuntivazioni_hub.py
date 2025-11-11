@@ -110,7 +110,28 @@ import csv
 
 from descrizione_percorso import *  
     
-     
+def crea_messaggio(subject, body_html, to_email, cc_email=''):
+    message = MIMEMultipart()
+    message["From"] = 'no_reply@amiu.genova.it'
+    message["To"] = to_email
+    message["Subject"] = subject
+    if cc_email:
+        message["Bcc"] = cc_email
+    message.preamble = subject
+    message.attach(MIMEText(body_html, "html"))
+    logoname='{}/img/logo_amiu.jpg'.format(parentdir)
+    immagine(message, logoname)
+    return message
+
+def invia_email(subject, body_html, to_email, cc_email=''):
+    message = crea_messaggio(subject, body_html, to_email, cc_email)
+    logger.info("Invio mail in corso...")
+    invio = invio_messaggio(message)
+    logger.info(f"Risultato invio: {invio}")
+    if invio == 200:
+        logger.info('Messaggio inviato correttamente')
+    else:
+        logger.error(f'Errore durante l\'invio: {invio}')
 
 def main():
       
@@ -121,9 +142,9 @@ def main():
     # Get today's date
     #presentday = datetime.now() # or presentday = datetime.today()
     oggi=datetime.datetime.today()
-    oggi=oggi.replace(hour=0, minute=0, second=0, microsecond=0)
-    oggi=datetime.date(oggi.year, oggi.month, oggi.day)
-    logger.debug('Oggi {}'.format(oggi))
+    #oggi=oggi.replace(hour=0, minute=0, second=0, microsecond=0)
+    #oggi=datetime.date(oggi.year, oggi.month, oggi.day)
+    #logger.debug('Oggi {}'.format(oggi))
     
     
     #num_giorno=datetime.today().weekday()
@@ -174,103 +195,102 @@ from spazzamento.effettuati'''
     
     if (datetime.datetime.now() - max_data) > datetime.timedelta(hours=24):
         logger.warning("interval = {0}".format(datetime.datetime.now() - max_data))
-        receiver_email='andrea.gava@wingsoft.it'
-        mail_cc='assterritorio@amiu.genova.it, pianar@amiu.genova.it'
         
         
-        # Create a multipart message and set headers
-        message = MIMEMultipart()
-        message["From"] = 'no_reply@amiu.genova.it'
-        message["To"] = receiver_email
-        #message["To"] = mail_cc
-        ####################################################
-        message["Subject"] = 'WARNING - Ultima consuntivazione spazzamento registrato > 24 ore'
-        message["Bcc"] = mail_cc  # Recommended for mass emails
-        message.preamble = "Ultima consuntivazione spazzamento > 24 ore"
-
-        body='''L'ultima consuntivazione spazzamento scaricata sull'HUB
-        risale al <b>{0}</b>.
-        <br><br>Verificare la correttezza dei dati
-        {1}
-        <img src="cid:image1" alt="Logo" width=197>
-        <br>'''.format(max_data, footer_mail)
-            
-                            
-        # Add body to email
-        message.attach(MIMEText(body, "html"))
-
-        
-        #aggiungo logo 
-        logoname='{}/img/logo_amiu.jpg'.format(parentdir)
-        immagine(message,logoname)
-        
-        #text = message.as_string()
-
-        logger.info("Richiamo la funzione per inviare mail")
-        invio=invio_messaggio(message)
-        logger.info(invio)
-        if invio==200:
-            logger.info('Messaggio inviato')
-
+        if max_data != datetime.datetime(2023, 11, 20): 
+            subjectS = 'WARNING - Ultima consuntivazione spazzamento registrato > 24 ore'
+            bodyS='''L'ultima consuntivazione spazzamento scaricata sull'HUB
+            risale al <b>{0}</b>.
+            <br><br>Verificare la correttezza dei dati
+            {1}
+            <img src="cid:image1" alt="Logo" width=197>
+            <br>'''.format(max_data, footer_mail)
         else:
-            logger.error('Problema invio mail. Error:{}'.format(invio))
-           
+            
+            subject = 'WARNING - Ultima consuntivazione spazzamento con data NULLA'
+
+            body='''       
+            L'ultima consuntivazione raccolta scaricata sull'HUB
+            risale al <b>{0}</b>.
+            <br> Ciò significa che quando ha girato lo script ossia alle {2} 
+            la query ha restituito valore nullo.
+            Verificare la correttezza dei dati. E' possibile sia un falso positivo, 
+            ma se il problema non ci fosse è possibile però che ci 
+            siano problemi sulla sincronizzazione da totem a hub (lenta?) 
+            {1}
+            <img src="cid:image1" alt="Logo" width=197>
+            <br>'''.format(max_data, footer_mail, giorno)
+            
+            
+        invia_email(subjectS, bodyS, 
+                to_email='andrea.gava@wingsoft.it', 
+                cc_email='assterritorio@amiu.genova.it, pianar@amiu.genova.it')
+
+     
+   
+   
+   
+   
+   
+    
+    
+    
+    
     
     # raccolta
-    query_select='''select coalesce(max(inser), to_date('20231120','YYYYMMDD'))
+    query_selectr='''select coalesce(max(inser), to_date('20231120','YYYYMMDD'))
 from raccolta.effettuati_amiu'''
     try:
-        currc.execute(query_select)
-        max_date=currc.fetchall()
+        currc.execute(query_selectr)
+        max_dater=currc.fetchall()
     except Exception as e:
         logging.error(e)
     
-    for dd in max_date:
+    for dd in max_dater:
         max_data=dd[0] 
-        
-    
+  
+     
     if (datetime.datetime.now() - max_data) > datetime.timedelta(hours=24):
+        logger.info("max data = {0}".format(max_data))
         logger.warning("interval = {0}".format(datetime.datetime.now() - max_data))
-        receiver_email='andrea.gava@wingsoft.it'
-        mail_cc='assterritorio@amiu.genova.it, pianar@amiu.genova.it'
         
         
-        # Create a multipart message and set headers
-        message = MIMEMultipart()
-        message["From"] = 'no_reply@amiu.genova.it'
-        message["To"] = receiver_email
-        #message["To"] = mail_cc
-        ####################################################
-        message["Subject"] = 'WARNING - Ultima consuntivazione raccolta registrata > 24 ore'
-        message["Bcc"] = mail_cc  # Recommended for mass emails
-        message.preamble = "Ultima consuntivazione raccolta > 24 ore"
+        
+        if max_data != datetime.datetime(2023, 11, 20): 
+            subject = 'WARNING - Ultima consuntivazione raccolta registrata > 24 ore'
+            #message.preamble = "Ultima consuntivazione raccolta > 24 ore"
 
-        body='''L'ultima consuntivazione raccolta scaricata sull'HUB
-        risale al <b>{0}</b>.
-        <br><br>Verificare la correttezza dei dati
-        {1}
-        <img src="cid:image1" alt="Logo" width=197>
-        <br>'''.format(max_data, footer_mail)
+            body='''L'ultima consuntivazione raccolta scaricata sull'HUB
+            risale al <b>{0}</b>.
+            <br><br>Verificare la correttezza dei dati
+            {1}
+            <img src="cid:image1" alt="Logo" width=197>
+            <br>'''.format(max_data, footer_mail)
+        else: 
+            subject = 'WARNING - Ultima consuntivazione raccolta con data NULLA'
+
+            body='''L'ultima consuntivazione raccolta scaricata sull'HUB
+            risale al <b>{0}</b>. 
+            <br> Ciò significa che quando ha girato lo script ossia alle {2} 
+            la query ha restituito valore nullo.
+            Verificare la correttezza dei dati. E' possibile sia un falso positivo, 
+            ma se il problema non ci fosse è possibile però che ci 
+            siano problemi sulla sincronizzazione da totem a hub (lenta?) 
+            {1}
+            <img src="cid:image1" alt="Logo" width=197>
+            <br>'''.format(max_data, footer_mail, oggi)
+        
+        
             
-                            
-        # Add body to email
-        message.attach(MIMEText(body, "html"))
+    
+        invia_email(subject, body, 
+            to_email='andrea.gava@wingsoft.it', 
+            cc_email='assterritorio@amiu.genova.it, pianar@amiu.genova.it')
+    else:
+        logger.info('Tutto Ok, ultima consuntivazione raccolta del {}'.format(max_data))
 
-        
-        #aggiungo logo 
-        logoname='{}/img/logo_amiu.jpg'.format(parentdir)
-        immagine(message,logoname)
-        
-        #text = message.as_string()
-
-        logger.info("Richiamo la funzione per inviare mail")
-        invio=invio_messaggio(message)
-        logger.info(invio)
-        if invio==200:
-            logger.info('Messaggio inviato')
-
-        else:
-            logger.error('Problema invio mail. Error:{}'.format(invio))
+    
+    
     
     
     # check se c_handller contiene almeno una riga 

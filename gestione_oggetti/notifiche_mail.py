@@ -76,8 +76,8 @@ giorno_file=datetime.datetime.today().strftime('%Y%m%d%H%M')
 
 
 #tmpfolder=tempfile.gettempdir() # get the current temporary directory
-logfile='{}/notifiche_mail.log'.format(path)
-errorfile='{}/error_notifiche_mail.log'.format(path)
+logfile='{}/log/notifiche_mail.log'.format(path)
+errorfile='{}/log/error_notifiche_mail.log'.format(path)
 #if os.path.exists(logfile):
 #    os.remove(logfile)
 
@@ -150,7 +150,7 @@ except Exception as e:
 
 debug_email= 'roberto.marzocchi@amiu.genova.it'
 if test==1:
-    hh=host
+    hh=host_test
     dd=db_test
     mail_notifiche_apertura='magmaco@amiu.genova.it'
     mail_notifiche_apertura=debug_email

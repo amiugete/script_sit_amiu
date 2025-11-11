@@ -238,6 +238,7 @@ def main():
             logger.error(e)
 
 
+
         query_dblink8='''drop table if exists gps.{0}_pref'''.format(mv) 
 
         try:

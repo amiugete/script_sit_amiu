@@ -207,6 +207,10 @@ and id_squadra = 44"""
         check_error=1
         logger.error(e)
 
+    curr.close()
+    conn.close()
+    
+    
            
     for lp in lista_percorsi_dt:
         logger.debug(lp[0])
@@ -264,6 +268,7 @@ and id_squadra = 44"""
                     params2={'obj':'schede_lavoro',
                             'act' : 'r',
                             'id': '{}'.format(id_scheda),
+                            'flg_esponi_consunt':1
                             }
                     
                     # salvo i dettagli nella variabile letture2
@@ -327,8 +332,8 @@ and id_squadra = 44"""
     logger.info("chiudo le connessioni in maniera definitiva")
     
     
-    curr.close()
-    conn.close()
+    #curr.close()
+    #conn.close()
 
 
 

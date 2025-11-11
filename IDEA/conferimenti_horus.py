@@ -46,11 +46,14 @@ import datetime
 import logging
 
 filename = inspect.getframeinfo(inspect.currentframe()).filename
-path = os.path.dirname(os.path.abspath(filename))
+#path = os.path.dirname(os.path.abspath(filename))
 
 #tmpfolder=tempfile.gettempdir() # get the current temporary directory
-logfile='{}/conferimenti_horus.log'.format(path)
-errorfile='{}/error_conferimenti_horus.log'.format(path)
+path=os.path.dirname(sys.argv[0]) 
+nome=os.path.basename(__file__).replace('.py','')
+#tmpfolder=tempfile.gettempdir() # get the current temporary directory
+logfile='{0}/log/{1}.log'.format(path,nome)
+errorfile='{0}/log/error_{1}.log'.format(path,nome)
 #if os.path.exists(logfile):
 #    os.remove(logfile)
 

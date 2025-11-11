@@ -47,11 +47,14 @@ import pysftp
 #import requests
 
 import logging
+import uuid
+
 
 path=os.path.dirname(sys.argv[0]) 
+nome=os.path.basename(__file__).replace('.py','')
 #tmpfolder=tempfile.gettempdir() # get the current temporary directory
-logfile='{}/log/consuntivazione_spazzamento.log'.format(path)
-errorfile='{}/log/error_consuntivazione_spazzamento.log'.format(path)
+logfile='{0}/log/{1}.log'.format(path,nome)
+errorfile='{0}/log/error_{1}.log'.format(path,nome)
 #if os.path.exists(logfile):
 #    os.remove(logfile)
 
@@ -77,7 +80,7 @@ f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.ERROR)
-f_handler.setLevel(logging.DEBUG)
+f_handler.setLevel(logging.INFO)
 
 
 # Add handlers to the logger
@@ -172,6 +175,18 @@ def main():
     currc = connc.cursor()
     
     
+    
+    # query per controllo causali
+    query_causale='''select ct.id, ct.descrizione  
+from totem.v_causali ct where id_ekovision = %s '''
+
+
+    query_verifica_causale='''select ve.*, cpra.desc_percorso from spazzamento.v_effettuati ve 
+left join  spazzamento.cons_percorsi_spazz_x_app cpra 
+on cpra.id_percorso = ve.idpercorso 
+and ve.datalav between cpra.data_inizio and cpra.data_fine    
+where ve.idpercorso =%s  and ve.datalav = to_date(%s, 'YYYYMMDD') 
+and ve.id_causale <> %s'''
             
     # ciclo su elenco vie / note consuntivate
     """query_effettuati_totem='''select 
@@ -537,12 +552,13 @@ def main():
             check=1
         if check<1:
             letture = response.json()
-            logger.info(letture)
+            logger.debug(letture)
             logger.debug(len(letture['schede_lavoro']))
             if len(letture['schede_lavoro']) == 0:
                 #va creata la scheda di lavoro
                 logger.info('Va creata la scheda di lavoro')
                 
+                """
                 curr.close()
                 curr = conn.cursor()
                 
@@ -560,8 +576,10 @@ def main():
 
                 for ri in lista_ruid:
                     ruid=ri[0]
-
+                """
+                ruid = uuid.uuid4()
                 logger.info('ID richiesta Ekovision (ruid):{}'.format(ruid))
+
                 curr.close()
                 
                 curr = conn.cursor()
@@ -616,7 +634,7 @@ def main():
                             VALUES(%s, %s, %s, NULL, %s);'''
                 try:
                     if check_creazione_scheda ==1:
-                        curr.execute(query_insert, (int(ruid),cod_percorsi_distinct[k], date_distinct[k], id_scheda, check_creazione_scheda))
+                        curr.execute(query_insert, (str(ruid),cod_percorsi_distinct[k], date_distinct[k], id_scheda, check_creazione_scheda))
                         conn.commit() 
                         body_mail='''E' arrivata una consuntivazione da totem per il percorso {} - {} in data {}.
                         <br>Origine del dato:{}
@@ -626,7 +644,7 @@ def main():
                                                            date_distinct[k], sorgente_dati_distinct[k], id_scheda)           
                         creazione_scheda_mail(body_mail, mail_arr_distinct[k], os.path.basename(__file__), logger)
                     else:
-                        curr.execute(query_insert, (int(ruid),cod_percorsi_distinct[k], date_distinct[k], check_creazione_scheda))
+                        curr.execute(query_insert, (str(ruid),cod_percorsi_distinct[k], date_distinct[k], check_creazione_scheda))
                         conn.commit() 
                 except Exception as e:
                     logger.error(query_insert)
@@ -779,17 +797,88 @@ def main():
                                 mail_arr.append(vv[13])   
                     
             elif len(letture['schede_lavoro']) > 0 : 
+                
+                
                 id_scheda=letture['schede_lavoro'][0]['id_scheda_lav']
-                try:
-                    id_turno_ekovision=int(letture['schede_lavoro'][0]['cod_turno_ext'])
-                    logger.info(id_scheda)
-                    if id_turno_ekovision != int(turno_distinct[k]):
-                        logger.warning('Anomalia turni per percorso {0}. Scheda di lavoro {1} del {2}. Turno UO ={3}, Turno Ekovision={4}'.format(cod_percorsi_distinct[k], id_scheda, date_distinct[k], turno_distinct[k], id_turno_ekovision))
-                        warning_log_mail(logfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
-                except Exception as e:
-                    logger.error(e)
-                    logger.error(letture)
-                    logger.error('Errore NON BLOCCANTE turni scheda {}'.format(id_scheda))
+                
+                
+                ss=0
+                while ss < len(letture['schede_lavoro']):
+                                                          
+                    id_scheda=letture['schede_lavoro'][ss]['id_scheda_lav']
+                    
+                    # CONTROLLO SUI TURNI 
+                    try:
+                        if letture['schede_lavoro'][0]['cod_turno_ext'] is None or letture['schede_lavoro'][0]['cod_turno_ext'] =='':
+                            logger.warning('Anomalia. Nessun turno su Ekovision per il percorso {0}. Scheda di lavoro {1} del {2}. Turno UO ={3}'.format(cod_percorsi_distinct[k], id_scheda, date_distinct[k], turno_distinct[k]))
+                        else: 
+                            id_turno_ekovision=int(letture['schede_lavoro'][0]['cod_turno_ext'])
+                            #logger.info(id_scheda)
+                            if id_turno_ekovision != int(turno_distinct[k]):
+                                logger.warning('Anomalia turni per percorso {0}. Scheda di lavoro {1} del {2}. Turno UO ={3}, Turno Ekovision={4}'.format(cod_percorsi_distinct[k], id_scheda, date_distinct[k], turno_distinct[k], id_turno_ekovision))
+                                warning_log_mail(logfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                    except Exception as e:
+                        logger.error(e)
+                        logger.error(letture)
+                        logger.error('Errore NON BLOCCANTE turni scheda {}'.format(id_scheda))
+                        
+                    # CONTROLLO SU SCHEDE DICHIARATE COME NON EFFETTUATE E MAIL (aggiunto il 24/10/2025)
+                    logger.info(f'Provo a leggere i dettagli della scheda {id_scheda} per capire che non ci sia il "non eseguita" già attivo')
+        
+                    params2={'obj':'schede_lavoro',
+                            'act' : 'r',
+                            'id': '{}'.format(id_scheda),
+                            }
+                    
+                    response2 = requests.post(eko_url, params=params2, data=data_json, headers=headers)
+                    #letture2 = response2.json()
+                    letture2 = response2.json()
+                    if int(letture2['schede_lavoro'][0]['servizi'][0]['flg_segn_srv_non_effett'])==1:
+                        id_causale_eko=letture2['schede_lavoro'][0]['servizi'][0]['id_caus_srv_non_eseg']
+                        #logger.info(f'id causale eko: {id_causale_eko}')
+                        #recupero id_amiu e descrizione
+                        curr2 = connc.cursor()
+                        try:
+                            curr2.execute(query_causale, (int(id_causale_eko),))
+                            row_result=curr2.fetchone()
+                            id_amiu= row_result[0]
+                            descrizione_causale=row_result[1]
+                        except Exception as e:
+                            logger.error(e)
+                            descrizione_causale='CAUSALE EKOVISION NON TROVATA CONTROLLARE LE TABELLE SU HUB'
+                            id_amiu=0
+                        #logger.info(f'id amiu: {id_amiu}')
+                        curr2.close()
+                        # verifico se ci sono causali diverse
+                        curr2 = connc.cursor()
+                        try:
+                            curr2.execute(query_verifica_causale, (cod_percorsi_distinct[k],
+                                                                   date_distinct[k], 
+                                                                   int(id_amiu),))
+                            consuntivazioni_diverse=curr2.fetchall()
+                        except Exception as e:
+                            logger.error(e)
+                        curr2.close()
+                        
+                        testo_causale_eko=letture2['schede_lavoro'][0]['servizi'][0]['txt_segn_srv_non_effett']
+                        if len(consuntivazioni_diverse) > 0:
+                            for ff in consuntivazioni_diverse:
+                                testo_percorso = ff[10]
+                            testo_warning=f'''La scheda {id_scheda} di SPAZZAMENTO/LAVAGGIO (cod_percorso = {cod_percorsi_distinct[k]} {testo_percorso} del {date_distinct[k]}) risulta non effettuata 
+                            <br>({id_causale_eko} - {descrizione_causale} - Note: {testo_causale_eko}). 
+                            <br><b>Le consuntivazioni arrivate da totem saranno ignorate. <font color="red">Su totem ci sono delle differenze di consuntivazione</font>.
+                            Nel caso in cui il servizio sia stato effettuato correggere i dati su Ekovision</b>'''
+                            logger.warning(testo_warning)
+                            warning_message_mail(f'MAIL CHE PER ORA ARRIVA SOLO A NOI, a regime al territorio {mail_arr_distinct[k]}<br><br>{testo_warning}', 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger, 'ATTENZIONE - consuntivazioni totem scheda non effettuata')
+                        else: 
+                            testo_warning=f'''La scheda {id_scheda} di SPAZZAMENTO/LAVAGGIO (cod_percorso = {cod_percorsi_distinct[k]} del {date_distinct[k]}) risulta non effettuata 
+                            <br>({id_causale_eko} - {descrizione_causale} - Note: {testo_causale_eko}). 
+                            <br><b>Le consuntivazioni arrivate da totem saranno ignorate.</b> <font color="green">Tutto è congruente</font>'''
+                            logger.warning(testo_warning)
+                            warning_message_mail(f'MAIL CHE PER ORA ARRIVA SOLO A NOI, a regime al territorio {mail_arr_distinct[k]}<br><br>{testo_warning}', 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger, 'ATTENZIONE - consuntivazioni totem scheda non effettuata')
+
+                    # VADO ALLA SCHEDA SEGUENTE (stesso codice percorso)
+                    ss+=1
     
         k+=1
         conn.commit() 
@@ -886,6 +975,7 @@ def main():
         VALUES
         (%s, now(),to_date(%s,'YYYYMMDD'))'''
         """
+        """
         insert_max_id='''INSERT INTO spazzamento.invio_consuntivazioni_ekovision
         (max_id, data_ora)
         VALUES
@@ -899,8 +989,40 @@ def main():
             logger.error(max_id)
             #logger.error(max_datalav)
             logger.error(e)
-            
         
+        """
+        
+         # prima di tutto inserisco i dati recuperati con Totem Wingsoft
+        insert_max_id='''INSERT INTO spazzamento.invio_consuntivazioni_ekovision
+        (max_id, data_ora)
+        VALUES
+        ((select max(substr(e.id,3)::int ) from spazzamento.v_effettuati e 
+	where substr(e.id,1,1) = 'w'), now())'''
+        try:
+            #currc.execute(insert_max_id, (max_id,max_datalav,))
+            currc.execute(insert_max_id)
+            connc.commit()
+        except Exception as e: 
+            logger.error(insert_max_id)
+            logger.error(e)
+            
+            
+        # quindi inserisco i dati recuperati con Totem Amiu
+        insert_max_id='''INSERT INTO spazzamento.invio_consuntivazioni_a_ekovision
+        (max_id, data_ora)
+        VALUES
+        ((select max(substr(e.id,3)::int ) from spazzamento.v_effettuati e 
+	where substr(e.id,1,1) = 'a'), now())'''
+        try:
+            #currc.execute(insert_max_id, (max_id,max_datalav,))
+            currc.execute(insert_max_id)
+            connc.commit()
+        except Exception as e: 
+            logger.error(insert_max_id)
+            logger.error(e)  
+        
+        
+         
            
     
     # check se c_handller contiene almeno una riga 

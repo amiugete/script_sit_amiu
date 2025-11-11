@@ -112,7 +112,7 @@ from invio_messaggio import *
 # libreria per scrivere file csv
 import csv
 
-
+import uuid
 
     
      
@@ -121,15 +121,7 @@ def main():
       
 
 
-    
 
-    
-    test= {"name": "école '& c/o aaa", 
-        "location": "New York"}
-    
-    json_data = json.dumps(test , ensure_ascii=False).encode('utf-8')
-    
-    print(json_data)
     
     #exit()
     
@@ -258,22 +250,87 @@ ORDER BY 3"""
     # ATTENZIONE ORA è su TEST (da cambiare 2 volte l'URL (lettura e scrittura) 
     
     
-    check_schede=[ [576939]] 
-    
-    
+    #check_schede=[[576939]] 
+    check_schede=[
+        [636034],
+[481241],
+[485006],
+[487079],
+[504487],
+[507199],
+[514991],
+[516271],
+[536618],
+[539660],
+[540261],
+[541128],
+[544611],
+[546066],
+[546067],
+[563182],
+[563441],
+[569353],
+[574351],
+[578859],
+[581037],
+[581465],
+[584835],
+[586162],
+[596498],
+[604842],
+[608905],
+[609214],
+[616106],
+[616175],
+[617035],
+[625217],
+[626280],
+[629677],
+[629678],
+[630059],
+[633416],
+[478967],
+[491467],
+[498621],
+[499399],
+[500987],
+[502658],
+[627711],
+[573242],
+[496735],
+[573325],
+[602553],
+[603136],
+[549962],
+[561642],
+[603254],
+[620387],
+[490528],
+[609064],
+[502332],
+[502367],
+[508213],
+[508699],
+[514608],
+[626922],
+[584929],
+[525453],
+[526328],
+[627674],
+[538349],
+[596503],
+[596912],
+[596918],
+[609039],
+[632199],
+[526011],
+[619502],
+[579724],
+[503913] 
+    ]
     id_schede_problemi=[]
     for id_scheda in check_schede:
-    
-    
-    
-    
-    
-    
-
-    
-    
-    
-    
+     
     
    
         logger.info('Provo a leggere i dettagli della scheda {}'.format(id_scheda[0]))
@@ -282,9 +339,10 @@ ORDER BY 3"""
         params2={'obj':'schede_lavoro',
                 'act' : 'r',
                 'id': '{}'.format(id_scheda[0]),
+                'flg_esponi_consunt' : 1
                 }
         
-        response2 = requests.post(eko_url_test, params=params2, data=data, headers=headers)
+        response2 = requests.post(eko_url, params=params2, data=data, headers=headers)
         #letture2 = response2.json()
         #try: 
         letture2 = response2.json()
@@ -312,14 +370,14 @@ ORDER BY 3"""
         logger.info('Provo a salvare nuovamente la scheda {}'.format(id_scheda[0]))
         
         
-        
+        guid = uuid.uuid4()
         params2={'obj':'schede_lavoro',
                 'act' : 'w',
-                'ruid': 'C{}'.format(id_scheda[0]),
+                'ruid': '{}'.format(str(guid)),
                 'json': json.dumps(letture2, ensure_ascii=False).encode('utf-8')
                 }
         #exit()
-        response2 = requests.post(eko_url_test, params=params2, data=data, headers=headers)
+        response2 = requests.post(eko_url, params=params2, data=data, headers=headers)
         try:
             result2 = response2.json()
             if result2['status']=='error':

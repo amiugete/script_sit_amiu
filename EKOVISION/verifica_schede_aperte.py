@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 # AMIU copyleft 2023
-# Roberto Marzocchi
+# Roberto Marzocchi, Roberta Fagandini
 
 '''
 Lo script si occupa di verificare se ci sono ancora delle schede non eseguite e/o non chiuse per un determinato mese
@@ -24,6 +24,8 @@ import json
 #import pymssql
 
 from datetime import date, datetime, timedelta
+
+from collections import defaultdict
 
 import locale
 
@@ -176,12 +178,22 @@ where anno::text||lpad(mese::text,2,'0')::text =
         anno=int(m_a[1])
         mese=int(m_a[2])
         mese_anno_eko =m_a[3]
+        data_eko=datetime.strptime(f'{anno}-{mese}-01', '%Y-%m-%d').date()
+
+    
+    
+    logger.debug(f'mese_anno_eko = {mese_anno_eko}')
+    logger.debug(f'mese_anno_oggi = {mese_anno_oggi}')
+    logger.debug(f'data_eko = {data_eko}')
+    logger.debug(f'Oggi-data_eko = {(oggi-data_eko).days}')
+   
+   
     
     if mese_anno_eko == mese_anno_oggi: 
         logger.info('Non devo fare nessuna verifica. Tutti i mesi precedenti sono chiusi')
         exit()
-    elif oggi.day<=5:
-        logger.info('Inizio le verifiche dal 6 del mese successivo')
+    elif (oggi-data_eko).days<=36:
+        logger.info('Inizio le verifiche dal 5 o il 6 del mese successivo')
         exit()
     else: 
         logger.info('Procedo con le verifiche')
@@ -193,8 +205,14 @@ where anno::text||lpad(mese::text,2,'0')::text =
     curr.close()
     
     
-    # consider the start date as 2021-february 1 st
+    
+    
+    # anno e mese sono quelli di ekovision
     start_date = date(anno, mese, 1)
+
+
+    end_date_finale = date(oggi.year, oggi.month, 1)
+    
 
     locale.setlocale(locale.LC_ALL, "") # prendo la lingua del server
 
@@ -202,19 +220,43 @@ where anno::text||lpad(mese::text,2,'0')::text =
     
     logger.debug(mese_mail)
     #exit()
-    
-    if mese ==12:
-        # consider the end date as 2021-march 1 st
+
+
+    # questa parte non è più valida perchè vado fino al primo del mese corrente
+    '''
+    if mese == 12:
         end_date = date(anno+1, 1, 1)
     else:
         end_date = date(anno, mese+1, 1)
+    '''
 
+    if oggi.day<5:
+        # vado fino al primo del mese corrente
+        cinque_giorni_fa = oggi - timedelta(days=5)
+        end_date = date(cinque_giorni_fa.year, cinque_giorni_fa.month, 1) 
+    else:    
+        end_date = date(oggi.year, oggi.month, 1)    
+
+
+    end_date_mail= end_date - timedelta(days=1)
+    
+    end_mese_mail=end_date_mail.strftime('%B')
+    
+    end_anno_mail=end_date_mail.year
+    
+    
+    logger.debug(end_mese_mail)
+    logger.debug(end_anno_mail)
+    #exit()
+    
+    
     # delta time
     delta = timedelta(days=1)
 
     # iterate over range of dates
     data_mese=start_date
-    
+
+      
     data_ne=[]
     data_nc=[]
     
@@ -266,7 +308,7 @@ where anno::text||lpad(mese::text,2,'0')::text =
             # leggo tutte le schede di quel giorno
             ss=0
             while ss < len(letture['schede_lavoro']):
-             
+            
                 if int(letture['schede_lavoro'][ss]['flg_eseguito'])==0:
                     data_ne.append(data_ws)
                     id_scheda_ne.append(letture['schede_lavoro'][ss]['id_scheda_lav'])                  
@@ -283,6 +325,46 @@ where anno::text||lpad(mese::text,2,'0')::text =
                 ss+=1
 
 
+
+    # aggiorno il DB per il prossimo giro
+
+    curr = conn.cursor()
+    anno_new=int(min(data_nc)[0:4])
+    mese_new=int(min(data_nc)[4:6])
+    logger.debug(anno_new)
+    logger.debug(mese_new)
+    data_mail=oggi=date(anno_new, mese_new, 1)
+    
+    mese_mail=data_mail.strftime('%B')
+    
+
+    logger.debug(mese_mail)
+    
+    
+    
+    
+    logger.info('Devo fare update mese anno')
+    query_insert='''INSERT INTO 
+    etl.ekovision_chiusura_schede 
+    (data_last_update, anno, mese) 
+    values 
+    (now(), %s, %s) ON CONFLICT (anno, mese) DO NOTHING
+    '''
+    
+    try:
+        curr.execute(query_insert, (anno_new, mese_new))
+    except Exception as e:
+        logger.error(query_insert)
+        logger.error(e)
+        
+    conn.commit()
+    curr.close()
+    if mese_mail == end_mese_mail and int(anno)==int(end_anno_mail):
+        incipit=f'A {mese_mail} {anno} ci sono'
+    else: 
+        incipit=f'''Da {mese_mail} {anno} a {end_mese_mail} {end_anno_mail} ci sono'''
+    logger.debug(incipit)
+    #exit()
     
     # ora devo processare gli array
     curr = conn.cursor()
@@ -316,6 +398,8 @@ where anno::text||lpad(mese::text,2,'0')::text =
     zone_ne=[]   
     sne=0
     while sne<len(id_scheda_ne):
+        #logger.info('cod_servizio_ne[sne] {}'.format(cod_servizio_ne[sne]))
+        #logger.info('data_ne[sne] {}'.format(data_ne[sne]))
         check_rimessa=0 # controllo percorsi su UT e rimessa
         try:
             curr.execute(query_ut, (cod_servizio_ne[sne], data_ne[sne]))
@@ -323,7 +407,7 @@ where anno::text||lpad(mese::text,2,'0')::text =
         except Exception as e:
             check_error=1
             logger.error(e)
-
+        #logger.debug('lista_ut_ne: {}'.format(len(lista_ut_ne)))
         if len(lista_ut_ne) == 0:
             logger.error(query_ut)
             logger.error(cod_servizio_ne[sne])
@@ -337,18 +421,24 @@ where anno::text||lpad(mese::text,2,'0')::text =
                 if une[2] == 5:
                     ut_ne.append((une[1]))
                     zone_ne.append((une[2]))
+                else:
+                    logger.warning(f"Nessuna rimessa trovata per scheda {id_scheda_ne[sne]}")
             else: 
                 ut_ne.append((une[1]))
                 zone_ne.append((une[2]))
         sne+=1
-    
-   
+        
+
     curr.close()
-   
+    #logger.debug('ut_ne len: {}'.format(len(ut_ne)))
+    #logger.debug('id_scheda_ne len: {}'.format(len(id_scheda_ne)))
+    #exit()
+
     #zones = list(set(zone_ne))
     #logger.debug('zone con schede non eseguite: {}'.format(zones))
-   
+
     uts = list(set(ut_ne))
+    #logger.info('ut_ne: {}'.format(ut_ne))
     logger.info('UT con schede non eseguite: {}'.format(uts))
     
     
@@ -367,18 +457,19 @@ where id_ut = %s'''
     
     curr = conn.cursor()
     
-    logger.debug('ut_ne len: {}'.format(len(ut_ne)))
-    logger.debug('id_scheda_ne len: {}'.format(len(id_scheda_ne)))
+    #logger.debug('ut_ne len: {}'.format(len(ut_ne)))
+    #logger.debug('id_scheda_ne len: {}'.format(len(id_scheda_ne)))
     uu = 0
     while uu < len(uts):
         
-        logger.debug(uts[uu])
+        logger.debug('id UT: {}'.format(uts[uu]))
         messaggio_start = '''ALERT AUTOMATICO EKOVISION
-    <br><br><font color="red">A {0} {1} ci sono {2} schede ancora da eseguire</font>. 
+    <br><br><font color="red">{0} {1} schede ancora da eseguire</font>. 
     <br><br> <b>Si ricorda che, ai fini della chiusura delle schede da parte dei capi zona, è necessario che tutte le schede siano <i>salvate come eseguite</i>.
 Pertanto si richiede gentilmente di controllare le schede ancora aperte sotto elencate e salvarle come eseguite, indicando eventuali causali nel caso di servizio non effettuato.
 </b>
-<br><br>Di seguito l'elenco <ul>'''.format(mese_mail, anno, ut_ne.count(uts[uu]))
+<br><br>Di seguito l'elenco <ul>'''.format(incipit,
+                                           ut_ne.count(uts[uu]))
         messaggio_end = '</ul>'
         try:
             curr.execute(query_mail, (int(uts[uu]),))
@@ -392,17 +483,22 @@ Pertanto si richiede gentilmente di controllare le schede ancora aperte sotto el
         for mune in uts_ne:
             #mune[]
             messaggio='UT: {0} (Zona: {1})<br><br>{2}'.format(mune[1], mune[3], messaggio_start)     
-            subject = "{} Schede da eseguire di {} {}".format(mune[1], mese_mail, anno)
+            #subject = "{} Schede da eseguire a partire da {} {}".format(mune[1], mese_mail, anno)
+            subject = "{} Schede da eseguire".format(mune[1])
             mail_to=mune[2]
             mail_cc=mune[4] 
         sne=0
+        #logger.debug(ut_ne)
         while sne<len(id_scheda_ne):
             #logger.debug('sne= {}'.format(sne))
             #logger.debug('uu= {}'.format(uu))
             #logger.debug(ut_ne[sne])
             #logger.debug(uts[uu])
             if ut_ne[sne] == uts[uu]:
-                messaggio='{0}<li>Data: {1} - {2} - id scheda: {3}</li>'.format(messaggio, data_ne[sne], servizio_ne[sne], id_scheda_ne[sne])
+                messaggio='{0}<li>Data: {1} - {2} - id scheda: {3}</li>'.format(messaggio, 
+                                                                                datetime.strptime(data_ne[sne], '%Y%m%d').strftime('%d/%m/%Y'),
+                                                                                servizio_ne[sne], 
+                                                                                id_scheda_ne[sne])
             sne+=1
         
         messaggio='{}'.format(messaggio,messaggio_end)
@@ -412,13 +508,14 @@ Pertanto si richiede gentilmente di controllare le schede ancora aperte sotto el
         ##sender_email = user_mail
         receiver_email='assterritorio@amiu.genova.it'
         debug_email='roberto.marzocchi@amiu.genova.it'
+        #debug_email='roberta.fagandini@amiu.genova.it'
 
         # Create a multipart message and set headers
         message = MIMEMultipart()
         message["From"] = 'noreply@amiu.genova.it'
         message["To"] = mail_to #debug_email #mail_to
         message["CC"] = mail_cc #debug_email #mail_cc
-        message["Bcc"] = receiver_email #debug_email #receiver_email
+        message["Bcc"] = receiver_email #debug_email
         #message["CCn"] = debug_email
         message["Subject"] = subject
         #message["Bcc"] = debug_email  # Recommended for mass emails
@@ -454,114 +551,98 @@ Pertanto si richiede gentilmente di controllare le schede ancora aperte sotto el
     
     
     curr.close()
-
+    #exit()
+    
     
     # Ora analizzo le schede non chiuse  
-    # primo ciclo cerco ut e zone di ogni scheda non chiusa 
+    # mi prendo ut e zone di ogni scheda non chiusa 
+    
     curr = conn.cursor()
-    ut_nc=[]
-    zone_nc=[]   
-    snc=0
-    while snc<len(id_scheda_nc):
+    ut_nc = []
+    zone_nc = []
+    schede_per_ut = defaultdict(set)  
+    zone_per_ut = {}  # UT → zona
+
+    for snc in range(len(id_scheda_nc)):
         try:
             curr.execute(query_ut, (cod_servizio_nc[snc], data_nc[snc]))
-            lista_ut_nc=curr.fetchall()
+            lista_ut_nc = curr.fetchall()
         except Exception as e:
-            check_error=1
+            check_error = 1
             logger.error(e)
+            lista_ut_nc = []
 
-            
         for unc in lista_ut_nc:
-            ut_nc.append((unc[1]))
-            zone_nc.append((unc[2]))
-        snc+=1
-    
-   
-    curr.close()
-   
-   
-    #cerco i valori unici di zona
-    zones = list(set(zone_nc))
-    logger.debug('Zone con schede non chiuse: {}'.format(zones))
-   
+            ut_corrente = unc[1]
+            zona_corrente = unc[2]
 
-    
-    # su queste faccio ciclo per inviare le mail alle Zone
-    
-    query_mail2='''select id_zona, cod_zona, mail 
-from topo.zone_amiu za where id_zona = %s'''
-    
-    messaggio_start = '''ALERT AUTOMATICO EKOVISION<br><br> 
-    <font color="red">A {0} {1} ci sono schede ancora da chiudere</font>.
-    <br><br><b>Si ricorda che le schede eseguite ma non chiuse sono modificabili e ciò genera diverse problematiche ai fini dell'invio dati a Città Metropolitana ed ARERA.</b>
-    <br><br>Le schede possono essere chiuse massivamente selezionando il periodo interessato e utilizzando il tasto <i>Azioni</i>.
-    <br><br>Nel seguito l'elenco delle UT con schede aperte <ul>'''.format(mese_mail, anno)
+            ut_nc.append(ut_corrente)
+            zone_nc.append(zona_corrente)
+            zone_per_ut[ut_corrente] = zona_corrente
+            schede_per_ut[ut_corrente].add(id_scheda_nc[snc])
+
+    logger.info(f'schede_per_ut {schede_per_ut}')
+    curr.close()
+
+    zones = list(set(zone_nc))
+    logger.debug(f'Zone con schede non chiuse: {zones}')
+
+    query_mail2 = '''select id_zona, cod_zona, mail from topo.zone_amiu za where id_zona = %s'''
+
+    messaggio_start = f'''ALERT AUTOMATICO EKOVISION<br><br>
+    <font color="red">{incipit} schede ancora da chiudere</font>.<br><br>
+    <b>Si ricorda che le schede eseguite ma non chiuse sono modificabili e ciò genera diverse problematiche ai fini dell'invio dati a Città Metropolitana ed ARERA.</b><br><br>
+    Le schede possono essere chiuse massivamente selezionando il periodo interessato e utilizzando il tasto <i>Azioni</i>.<br><br>
+    Nel seguito l'elenco delle UT con schede aperte <ul>'''
     messaggio_end = '</ul>'
+
     curr = conn.cursor()
-    
-    # ciclo sulle zone
-    zz = 0
-    while zz < len(zones):
-        
-        logger.debug(zones[zz])
-        # cerco la mail
+
+    for zona_corrente in zones:
+        logger.debug(zona_corrente)
+
+        # prendo mail della zona
         try:
-            curr.execute(query_mail2, (int(zones[zz]),))
-            zones_nc=curr.fetchall()
+            curr.execute(query_mail2, (int(zona_corrente),))
+            zones_nc = curr.fetchall()
         except Exception as e:
-            check_error=1
+            check_error = 1
             logger.error(query_mail2)
             logger.error(e)
             exit()
-        
-        # predispongo l'intestazione del messaggio
+
         for munc in zones_nc:
-            #mune[]
-            messaggio='(Zona: {0})<br><br>{1}'.format(munc[1], messaggio_start)     
-            subject = "{} Schede non chiuse di {} {}".format(munc[1], mese_mail, anno)
-            mail_to=munc[2]
-            if zones[zz]==5:
-                mail_cc='rapettia@amiu.genova.it'
-            else: 
-                mail_cc='magni@amiu.genova.it, longo@amiu.genova.it'
-        # su quella specifica zona cerco le UT
-        snc=0
-        ut_zona=[]
-        while snc<len(id_scheda_nc):
-            if zone_nc[snc] == zones[zz]:
-                ut_zona.append(ut_nc[snc]) #
-            snc+=1
+            messaggio = f'(Zona: {munc[1]})<br><br>{messaggio_start}'
+            #subject = f"{munc[1]} Schede non chiuse a partire da {mese_mail} {anno}"
+            subject = f"{munc[1]} Schede non chiuse"
+            mail_to = munc[2]
+            mail_cc = 'rapettia@amiu.genova.it' if zona_corrente == 5 else 'magni@amiu.genova.it, longo@amiu.genova.it'
 
-        # filtro le UT di quella zona 
-        
-        curr1= conn.cursor()  
-      
-        ut_zona_distinct = list(set(ut_zona))
+        curr1 = conn.cursor()
 
-        # faccio un ciclo su quelle UT per scrivere il messaggio
-        unc=0
-        while unc <len(ut_zona_distinct): 
+        # UT della zona corrente
+        ut_zona_distinct = [ut for ut, zona in zone_per_ut.items() if zona == zona_corrente]
+
+        for ut_corrente in ut_zona_distinct:
             try:
-                curr1.execute(query_mail, (int(ut_zona_distinct[unc]),))
-                uts=curr1.fetchall()
+                curr1.execute(query_mail, (int(ut_corrente),))
+                uts = curr1.fetchall()
             except Exception as e:
-                check_error=1
+                check_error = 1
                 logger.error(query_mail)
                 logger.error(e)
                 exit()
-        
-            for u in uts:
-                ut_mail=u[1]
-            
-            
-            messaggio='{0} <li>{2} schede non correttamente chiuse di {1}</li>'.format(messaggio, ut_mail, ut_nc.count(ut_zona_distinct[unc]))
-        
-        
-            unc+=1
 
+            ut_mail = uts[0][1] if uts else str(ut_corrente)
 
+            # Schede della UT corrente
+            schede_ut_corrente = list(schede_per_ut[ut_corrente])
+            num_schede = len(schede_ut_corrente)
+            #(ID: {schede_ut_corrente})
+            messaggio += f" <li>{num_schede} schede non correttamente chiuse di {ut_mail} </li>"
+            logger.debug(f"UT {ut_corrente} - Schede: {schede_ut_corrente}")
 
-        curr1.close()    
+        curr1.close()
             
         
         messaggio='{}'.format(messaggio,messaggio_end)
@@ -571,6 +652,7 @@ from topo.zone_amiu za where id_zona = %s'''
         ##sender_email = user_mail
         receiver_email='assterritorio@amiu.genova.it'
         debug_email='roberto.marzocchi@amiu.genova.it'
+        #debug_email='roberta.fagandini@amiu.genova.it'
 
         # Create a multipart message and set headers
         message = MIMEMultipart()
@@ -607,12 +689,12 @@ from topo.zone_amiu za where id_zona = %s'''
         logger.info("Richiamo la funzione per inviare mail")
         invio=invio_messaggio(message)
         logger.info(invio)
-        zz+=1 
+        #zz+=1 
 
 
     
     # controllo array per capire se aggiornare o meno il DB
-    
+    """
     if len(data_ne) ==0 and len (data_nc)==0:
         if mese<=12:
             anno_new = anno
@@ -636,7 +718,7 @@ from topo.zone_amiu za where id_zona = %s'''
             logger.error(e)
         
         conn.commit()
-        
+    """    
         
      #logger.debug(versioni)
     # check se c_handller contiene almeno una riga 

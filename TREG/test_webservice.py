@@ -82,8 +82,8 @@ logger = logging.getLogger()
 
 # Create handlers
 c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-#f_handler = logging.StreamHandler()
-f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+f_handler = logging.StreamHandler()
+#f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.ERROR)
@@ -116,13 +116,19 @@ from invio_messaggio import *
 # libreria per scrivere file csv
 import csv
 
-
+import uuid
 
     
      
 
 def main():
-      
+
+    logger.info('Il PID corrente è {0}'.format(os.getpid()))
+    
+    ###################################
+    # Recupero token per autenticazione
+    ###################################
+
     logger.info("START READ WS")
     api_url='{}atrif/api/v1/tobin/auth/login'.format(url_ws_treg)
     payload_treg = {"username": user_ws_treg, "password": pwd_ws_treg, }
@@ -147,25 +153,78 @@ def main():
     token=response.text
     logger.debug(token)
 
+    # check_anno_comune = 0 cancello i dati di un anno dato
+    # check_anno_comune = 1 cancello i dati di un anno dato comune pe comune
+    check_anno_comune = 0
+
+
+    ######################################################
+    # Eliminazione dati caricati su TREG per anno e comune
+    ######################################################
+
+    guid = uuid.uuid4()
+    logger.debug(str(guid))
+
+
+    if check_anno_comune == 1:
+        # connessione a SIT
+        nome_db=db
+        logger.info('Connessione al db {}'.format(nome_db))
+        conn = psycopg2.connect(dbname=nome_db,
+                            port=port,
+                            user=user,
+                            password=pwd,
+                            host=host)
+
+
+        curr = conn.cursor()
+
+        query_code_istat='SELECT cod_istat from topo.comuni'
+
+        try:
+            curr.execute(query_code_istat)
+            codici_istat=curr.fetchall()
+        except Exception as e:
+            check_error=1
+            logger.error(query_code_istat)
+            logger.error(e)
+        
     
+        for ci in codici_istat:
+            code_istat=ci[0]
+            logger.debug('Elimino i dati per il comune con codice istat {}'.format(code_istat))
+
+            body_upload={
+                'id': str(guid),
+                'year': 2025,
+                'istatCode': code_istat
+            }
+            #api_url_reset='{}atrif/api/v1/tobin/b2b/process/rifqt-wastecollections/reset-data/av1'.format(url_ws_treg)          
+            response_reset = requests.post(api_url_reset, json=body_upload, headers={'accept':'*/*', 
+                                                                                    'mde': 'PROD',
+                                                                                    'Authorization': 'EIP {}'.format(token),
+                                                                                    'Content-Type': 'application/json'})
+            logger.debug(response_reset.status_code)
+
+        logger.info("chiudo le connessioni in maniera definitiva")
+        curr.close()
+        conn.close()
+    else:
+        
+        body_upload={
+            'id': str(guid),
+            'year': 2025
+        }
+        api_url_reset='{}atrif/api/v1/tobin/b2b/process/rifqt-overfilledbins/reset-data/av1'.format(url_ws_treg)          
+        response_reset = requests.post(api_url_reset, json=body_upload, headers={'accept':'*/*', 
+                                                                                    'mde': 'PROD',
+                                                                                    'Authorization': 'EIP {}'.format(token),
+                                                                                    'Content-Type': 'application/json'})
+        logger.debug(response_reset.status_code)
+
+
+ 
     #response = requests.get(url_bucher, params={'starttime':starttime, 'endtime': endtime}, headers={'Authorization: EIP {}'.format(token)})
-
-    
-    
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 if __name__ == "__main__":
     main()      

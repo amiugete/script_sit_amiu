@@ -133,8 +133,8 @@ from (
 	string_agg(distinct concat('', lpad(i.id::text, 4, '0'), ' del ', to_char(data_ora, 'DD/MM/YYYY'), ' a cura di ', ispettore),', ') as ispezione,
 	vpd.id_piazzola, vpd.comune, vpd.municipio, vpd.via, vpd.civ, vpd.riferimento,
 	vpd.elementi as elementi_presenti_sit,
-	string_agg(e0.id_elemento::text, ', ') as id_elementi_assenti, 
-	count(e0.id_elemento) as num_elementi,
+	string_agg(distinct e0.id_elemento::text, ', ') as id_elementi_assenti, 
+	count(distinct e0.id_elemento) as num_elementi,
 	concat(tr.nome, ' (', te.nome_stampa,') <font color="red">Id da eliminare: ', string_agg(e0.id_elemento::text, ', '), '</font>') as tipo_elemento, 
 	u.descrizione as ut, 
 	u.mail
@@ -194,7 +194,7 @@ order by ispezione, id_piazzola
                 logger.info(date_obj)
                 testo_foto='''In allegato la foto del {}'''.format(date_obj.strftime("%d/%m/%Y %H:%M"))
             else:
-                print('Unable to get date from exif for %s' % filename)
+                logger.warning('Unable to get date from exif for %s' % filename_foto)
         except Exception as e:
             logger.warning(e)
             testo_foto='Nessuna foto disponibile'
@@ -207,7 +207,7 @@ order by ispezione, id_piazzola
         
         <ul>
         <li> <b>Elementi presenti su SIT:</b><br>{6}</li>
-        <li> <b>Elementi non trovati:</b><br>{7}</li> 
+        <li> <b>Elementi non trovati in fase di ispezione:</b><br>{7}</li> 
         </ul>
         
         Per modificare la piazzola su SIT 
