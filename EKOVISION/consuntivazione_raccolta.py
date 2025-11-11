@@ -46,6 +46,7 @@ import pysftp
 #import requests
 
 import logging
+import uuid
 
 path=os.path.dirname(sys.argv[0]) 
 nome=os.path.basename(__file__).replace('.py','')
@@ -181,6 +182,20 @@ def main():
     
     
             
+            
+    # query per controllo causali
+    query_causale='''select ct.id, ct.descrizione  
+from totem.v_causali ct where id_ekovision = %s '''
+
+
+    query_verifica_causale='''select ve.*, cpra.descr_percorso from raccolta.v_effettuati ve 
+    left join raccolta.cons_percorsi_raccolta_amiu cpra 
+on cpra.id_percorso = ve.idpercorso 
+and ve.datalav between cpra.data_inizio and cpra.data_fine
+where ve.idpercorso =%s  and ve.datalav = to_date(%s, 'YYYYMMDD') 
+and ve.id_causale::int <> %s'''        
+            
+            
     # ciclo su elenco vie / note consuntivate
     
     # questa sarebbe la query corretta ma Tocchi capisce poco quindi ne scriviamo un'altra che corregga i suoi casini
@@ -292,10 +307,27 @@ def main():
 
 
     logger.info('Trovo {} righe consuntivate'.format(len(lista_x_piazzola)))
-    
+    #exit()
     for vv in lista_x_piazzola:
+    
+    
+    
+        # controllo che il percorso sia su ekovision
+        query_chek_percorso_eko='''select * from anagrafe_percorsi.elenco_percorsi ep
+ where ep.ekovision is not true 
+ and cod_percorso = %s
+ and %s between ep.data_inizio_validita and ep.data_fine_validita 
+        '''
+        try:
+            curr.execute(query_chek_percorso_eko, (vv[1], vv[2]))
+            lista_percorsi_non_eko=curr.fetchall()
+        except Exception as e:
+            logger.error(query_chek_percorso_eko)
+            logger.error(e)
+        # temporanemente tolgo i percorsi non presenti su SIT lista not in 
+    
         
-        # temporanemente tolgo i percorsi non presenti su SIT
+        
         
         if vv[1] not in (  '0101355501',
                             '0101355901',
@@ -317,7 +349,7 @@ def main():
                             '0502006201',
                             '0507118001',
                             '0508051001'
-                         ):
+                         ) and len(lista_percorsi_non_eko) == 0:
         
         
             # cerco ID_percorso_sit
@@ -346,6 +378,7 @@ def main():
                 logger.error(query_id_percorso)
                 logger.error('Codice percorso = {}'.format(vv[1]))
                 logger.error('Data rif = {}'.format(vv[2]))
+                
                 error_log_mail(errorfile, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
                 exit()
                 
@@ -460,10 +493,17 @@ def main():
                     qual.append(None) 
                     mail_arr.append(vv[13])                                
 
-                    
+        elif len(lista_percorsi_non_eko)>0: 
+            for f in lista_percorsi_non_eko:
+                descr_perc_w= f[1]
+            messaggio_w1=f'''Il percorso {vv[1]} - {descr_perc_w} del {vv[2]} è stato consuntivato su totem ma non è un percorso di Ekovision. Non invio i dati a Ekovision'''         
+            logger.warning(messaggio_w1)
+            logger.info('Invio messaggio di Warning anche via mail')
+            warning_message_mail(messaggio_w1, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger, 'WARNING consuntivazione totem')
+
         # mi salvo sempre il max_id    
         max_id=vv[0]
-      
+        
     
     
     
@@ -535,7 +575,7 @@ def main():
             if len(letture['schede_lavoro']) == 0:
                 #va creata la scheda di lavoro
                 logger.info('Va creata la scheda di lavoro')
-                
+                """
                 curr.close()
                 curr = conn.cursor()
                 
@@ -554,9 +594,12 @@ def main():
                 for ri in lista_ruid:
                     ruid=ri[0]
 
+
+                
+                """
+                ruid = uuid.uuid4()
                 logger.info('ID richiesta Ekovision (ruid):{}'.format(ruid))
                 curr.close()
-                
                 curr = conn.cursor()
                 giason={
                             "crea_schede_lavoro": [
@@ -585,7 +628,7 @@ def main():
                             (id, cod_percorso, "data", id_scheda_ekovision, "check")
                             VALUES(%s, %s, %s, NULL, %s);'''
                     try:        
-                        curr.execute(query_insert, (int(ruid),cod_percorsi_distinct[k], date_distinct[k], check_creazione_scheda))
+                        curr.execute(query_insert, (str(ruid),cod_percorsi_distinct[k], date_distinct[k], check_creazione_scheda))
                     except Exception as e1:
                         logger.error(query_insert)
                         logger.error(e1)        
@@ -619,7 +662,7 @@ def main():
                             VALUES(%s, %s, %s, NULL, %s);'''
                 try:
                     if check_creazione_scheda ==1:
-                        curr.execute(query_insert, (int(ruid),cod_percorsi_distinct[k], date_distinct[k], id_scheda, check_creazione_scheda))
+                        curr.execute(query_insert, (str(ruid),cod_percorsi_distinct[k], date_distinct[k], id_scheda, check_creazione_scheda))
                         body_mail='''E' arrivata una consuntivazione da totem per il percorso {} - {} in data {}.
                         <br>Origine del dato:{}
                         <br>Non esistendo la scheda per il giorno in questione è stata creata in automatico.
@@ -629,29 +672,97 @@ def main():
                         creazione_scheda_mail(body_mail, mail_arr_distinct[k], os.path.basename(__file__), logger)
                         conn.commit()
                     else:
-                        curr.execute(query_insert, (int(ruid),cod_percorsi_distinct[k], date_distinct[k], check_creazione_scheda))
+                        curr.execute(query_insert, (str(ruid),cod_percorsi_distinct[k], date_distinct[k], check_creazione_scheda))
                         conn.commit()
                 except Exception as e:
                     logger.error(query_insert)
                     logger.error(e)
                     
-                 
+            # in questo caso le schede esistono     
             elif len(letture['schede_lavoro']) > 0 : 
-                id_scheda=letture['schede_lavoro'][0]['id_scheda_lav']
-                try:
-                    if letture['schede_lavoro'][0]['cod_turno_ext'] is None or letture['schede_lavoro'][0]['cod_turno_ext'] =='':
-                        logger.warning('Anomalia. Nessun turno su Eovision per il percorso {0}. Scheda di lavoro {1} del {2}. Turno UO ={3}'.format(cod_percorsi_distinct[k], id_scheda, date_distinct[k], turno_distinct[k]))
-                    else: 
-                        id_turno_ekovision=int(letture['schede_lavoro'][0]['cod_turno_ext'])
-                        logger.info(id_scheda)
-                        if id_turno_ekovision != int(turno_distinct[k]):
-                            logger.warning('Anomalia turni per percorso {0}. Scheda di lavoro {1} del {2}. Turno UO ={3}, Turno Ekovision={4}'.format(cod_percorsi_distinct[k], id_scheda, date_distinct[k], turno_distinct[k], id_turno_ekovision))
-                            warning_log_mail(logfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
-                except Exception as e:
-                    logger.error(e)
-                    logger.error(letture)
-                    logger.error('Errore NON BLOCCANTE turni scheda {}'.format(id_scheda))
-    
+                
+                
+                ss=0
+                while ss < len(letture['schede_lavoro']):
+                                                          
+                    id_scheda=letture['schede_lavoro'][ss]['id_scheda_lav']
+                    
+                    # CONTROLLO SUI TURNI 
+                    try:
+                        if letture['schede_lavoro'][0]['cod_turno_ext'] is None or letture['schede_lavoro'][0]['cod_turno_ext'] =='':
+                            logger.warning('Anomalia. Nessun turno su Ekovision per il percorso {0}. Scheda di lavoro {1} del {2}. Turno UO ={3}'.format(cod_percorsi_distinct[k], id_scheda, date_distinct[k], turno_distinct[k]))
+                        else: 
+                            id_turno_ekovision=int(letture['schede_lavoro'][0]['cod_turno_ext'])
+                            logger.info(id_scheda)
+                            if id_turno_ekovision != int(turno_distinct[k]):
+                                logger.warning('Anomalia turni per percorso {0}. Scheda di lavoro {1} del {2}. Turno UO ={3}, Turno Ekovision={4}'.format(cod_percorsi_distinct[k], id_scheda, date_distinct[k], turno_distinct[k], id_turno_ekovision))
+                                warning_log_mail(logfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                    except Exception as e:
+                        logger.error(e)
+                        logger.error(letture)
+                        logger.error('Errore NON BLOCCANTE turni scheda {}'.format(id_scheda))
+                        
+                    # CONTROLLO SU SCHEDE DICHIARATE COME NON EFFETTUATE E MAIL (aggiunto il 24/10/2025)
+                    logger.info(f'Provo a leggere i dettagli della scheda {id_scheda} per capire che non ci sia il "non eseguita" già attivo')
+        
+                    params2={'obj':'schede_lavoro',
+                            'act' : 'r',
+                            'id': '{}'.format(id_scheda),
+                            }
+                    
+                    response2 = requests.post(eko_url, params=params2, data=data_json, headers=headers)
+                    #letture2 = response2.json()
+                    letture2 = response2.json()
+                    if int(letture2['schede_lavoro'][0]['servizi'][0]['flg_segn_srv_non_effett'])==1:
+                        id_causale_eko=letture2['schede_lavoro'][0]['servizi'][0]['id_caus_srv_non_eseg']
+                        logger.debug(id_causale_eko)
+                        # cerco descrizione
+                        curr2 = connc.cursor()
+                        try:
+                            curr2.execute(query_causale, (int(id_causale_eko),))
+                            row_result=curr2.fetchone()
+                            id_amiu= row_result[0]
+                            descrizione_causale=row_result[1]
+                        except Exception as e:
+                            logger.error(e)
+                            descrizione_causale_eko='CAUSALE EKOVISION NON TROVATA CONTROLLARE LE TABELLE SU HUB'
+                            id_amiu=0
+                        curr2.close()
+                        # verifico se ci sono causali diverse
+                        curr2 = connc.cursor()
+                        try:
+                            curr2.execute(query_verifica_causale, (cod_percorsi_distinct[k],
+                                                                   date_distinct[k], 
+                                                                   int(id_amiu),))
+                            consuntivazioni_diverse=curr2.fetchall()
+                        except Exception as e:
+                            logger.error(e)
+                        curr2.close()
+                        testo_causale_eko=letture2['schede_lavoro'][0]['servizi'][0]['txt_segn_srv_non_effett']
+                        if len(consuntivazioni_diverse) > 0:
+                            for ff in consuntivazioni_diverse:
+                                testo_percorso = ff[10]
+                            testo_warning=f'''La scheda {id_scheda} di RACCOLTA (cod_percorso = {cod_percorsi_distinct[k]} {testo_percorso} del {date_distinct[k]}) risulta non effettuata 
+                            <br>({descrizione_causale} - Note: {testo_causale_eko}). 
+                            <br><b>Le consuntivazioni arrivate da totem saranno ignorate. <font color="red">Su totem ci sono delle differenze di consuntivazione</font>.
+                            Nel caso in cui il servizio sia stato effettuato correggere i dati su Ekovision</b>'''
+                            logger.warning(testo_warning)
+                            warning_message_mail(f'MAIL CHE PER ORA ARRIVA SOLO A NOI, a regime al territorio {mail_arr_distinct[k]}<br><br>{testo_warning}', 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger, 'ATTENZIONE - consuntivazioni totem scheda non effettuata')
+                        else: 
+                            testo_warning=f'''La scheda {id_scheda} di RACCOLTA (cod_percorso = {cod_percorsi_distinct[k]} del {date_distinct[k]}) risulta non effettuata 
+                            <br>({descrizione_causale} - Note: {testo_causale_eko}). 
+                            <br><b>Le consuntivazioni arrivate da totem saranno ignorate.</b> <font color="green">Tutto è congruente</font>'''
+                            logger.warning(testo_warning)
+                            warning_message_mail(f'MAIL CHE PER ORA ARRIVA SOLO A NOI, a regime al territorio {mail_arr_distinct[k]}<br><br>{testo_warning}', 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger, 'ATTENZIONE - consuntivazioni totem scheda non effettuata')
+
+                    # VADO ALLA SCHEDA SEGUENTE (stesso codice percorso)
+                    ss+=1
+                    
+                    
+                    
+                    
+                        
+                            
         k+=1
         # committo l'inserimento nella tabella di creazione delle schede
         conn.commit() 
@@ -713,7 +824,7 @@ def main():
 
 
         
-        logger.info('Invio file con la consuntivazione spazzamento via SFTP')
+        logger.info('Invio file con la consuntivazione raccolta via SFTP')
         try: 
             cnopts = pysftp.CnOpts()
             cnopts.hostkeys = None

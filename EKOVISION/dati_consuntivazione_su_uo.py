@@ -434,6 +434,7 @@ def main():
                                         cur.close() 
                                         cur = con.cursor()
                                         
+                                        #logger.debug(f'Tipo_percorso = {tipo_percorso}')
                                         
                                         if tipo_percorso=='R':
                                             # verifico che non ci sia già qualche altra consuntivazione
@@ -753,14 +754,14 @@ def main():
                                                 
                                                 data_ora_start='{} {}'.format(
                                                     data[i]['cons_ris_umane'][p]['cons_risum_orari'][o]['data_ini'],
-                                                    data[i]['cons_ris_umane'][p]['cons_risum_orari'][o]['ora_ini']
+                                                    data[i]['cons_ris_umane'][p]['cons_risum_orari'][o]['ora_ini'][0:4]
                                                     )
                                                 data_ora_fine='{} {}'.format(
                                                     data[i]['cons_ris_umane'][p]['cons_risum_orari'][o]['data_fine'],
-                                                    data[i]['cons_ris_umane'][p]['cons_risum_orari'][o]['ora_fine']
+                                                    data[i]['cons_ris_umane'][p]['cons_risum_orari'][o]['ora_fine'][0:4]
                                                     )
                                                 
-                                                fmt='%Y%m%d %H%M%S'
+                                                fmt='%Y%m%d %H%M'
                                                 data_ora_start_ok = datetime.strptime(data_ora_start, fmt)
                                                 data_ora_fine_ok = datetime.strptime(data_ora_fine, fmt)
                                                 # calcolo differenza in minuti ()
@@ -828,6 +829,27 @@ def main():
                                     cur = con.cursor()
                                     
                                     # popolamento pesi
+                                    
+                                    # controllo se non ci sono pesi
+                                    if len(data[i]['cons_conferimenti'])==0:
+                                        logger.info('Non ci sono conferimenti. Provo a cancellare eventuali inserimenti antecedenti')
+
+                                        # faccio delete di eventuali pesi arrivati in precedenza
+                                        delete_query_no_pesi = '''DELETE FROM TB_PESI_PERCORSI tpp 
+                                            WHERE PROVENIENZA = 'RIMESSA'
+                                            AND DATA_PERCORSO = to_date(:c1, 'YYYYMMDD') 
+                                            AND ID_SER_PER_UO = :c2
+                                            AND ID_SCHEDA_EKOVISION = :c3'''
+                                        #logger.debug(delete_query)
+                                        try:
+                                            cur.execute(delete_query_no_pesi, (data[i]['data_esecuzione_prevista'], id_ser_per_uo, int(data[i]['id_scheda'])))
+                                        except Exception as e:
+                                            logger.error(e)
+                                            logger.error(delete_query_no_pesi)
+                                            logger.error('1:{}, 2:{}, 3:{}'.format(data[i]['data_esecuzione_prevista'], id_ser_per_uo, int(data[i]['id_scheda'])))
+                                            
+                                    
+                                    
                                     c=0 # conferimenti
                                     
                                     # per delete utilizzo degli array
@@ -849,8 +871,34 @@ def main():
                                         peso_netto=float(data[i]['cons_conferimenti'][c]['peso_netto'])
                                         peso_lordo=float(data[i]['cons_conferimenti'][c]['peso_lordo'])
                                         impianto=data[i]['cons_conferimenti'][c]['cod_sede_dest_ext'].split('_')
-                                        imp_cod_ecos=impianto[0]
-                                        uni_cod_ecos=impianto[1]
+                                        check_pesi=0
+                                        try:
+                                            imp_cod_ecos=impianto[0]
+                                            uni_cod_ecos=impianto[1]
+                                        except: 
+                                            check_pesi=1
+                                            messaggio = '''ERRORE CONFERIMENTI: Nella scheda {0} (cod_percorso = {2}, data={3})  
+                                            è stato selezionato un impianto {1} per cui  
+                                            non riconosciamo il codice nella tabella ANAGR_DESTINAZIONI della UO. 
+                                            <br>Il dato potrebbe già essere stato corretto, in tal caso si può ignorare la mail. 
+                                            <br>Su Ekovision verificare se l'impianto selezionato ha il flag destinatari:<ul>
+                                            <li> se no l'errore è di chi ha selezionato l'impianto. Avvisare l'UT responsabile della scheda e far correggere la destinazione </li>
+                                            <li> se sì l'errore è probabilmente nostro (APPLICATIVI). Aprire i dettagli dell'impianto, nel tab <i>note</i> 
+                                            verificare che sia popolato correttamente il campo <i>Codice aggiuntivo 1
+                                            che dovrebbe essere la concatenazione di 
+                                            imp_cod_ecos e uni_cod_ecos separati da un underscore. Sono codici ECOS che devono essere riportati anche in ANAGR_DESTINAZIONI. 
+                                            Se si faticano a trovare confrontarsi con Scarfò/Morchio</i></li>
+                                            </ul>'''.format(
+                                                int(data[i]['id_scheda']), 
+                                                impianto, 
+                                                data[i]['codice_serv_pred'], 
+                                                data[i]['data_esecuzione_prevista']
+                                            )
+                                            logger.error(messaggio)
+                                            # mando mail e mi fermo
+                                            warning_message_mail(messaggio, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                                            #error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                                            #exit()
                                         #logger.debug('Conferimento {} -  {}, {}, {}, {}, {}, {}'.format(c,data_percorso, data_conferimento, ora_conferimento, imp_cod_ecos, uni_cod_ecos, peso_netto))  
                                         
                                         #exit()
@@ -869,21 +917,21 @@ def main():
                                         #logger.debug(peso_lordo)
                                         
                                         if peso_netto > 40000: 
-                                            messaggio = '''Il percorso {} del {} ha un peso di {}kg anomalo (> 40'000 kg) quindi non è stato inserito il peso sulla tabella TB_PESI_PERCORSI della UO.<br>Verificare il dato su Ekovision ed eventualmente contattare il Responsabile del dato.'''.format(data[i]['codice_serv_pred'],
+                                            messaggio2 = '''Il percorso {} del {} ha un peso di {}kg anomalo (> 40'000 kg) quindi non è stato inserito il peso sulla tabella TB_PESI_PERCORSI della UO.<br>Verificare il dato su Ekovision ed eventualmente contattare il Responsabile del dato.'''.format(data[i]['codice_serv_pred'],
                                                                         data[i]['data_esecuzione_prevista'],
                                                                         peso_netto)
-                                            logger.warning(messaggio)
+                                            logger.warning(messaggio2)
                                             if peso_lordo > 0:
-                                                messaggio= '{} <br><br>Peso inserito a mano dalla rimessa'.format(messaggio)
-                                                warning_message_mail(messaggio, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
+                                                messaggio2= '{} <br><br>Peso inserito a mano dalla rimessa'.format(messaggio2)
+                                                warning_message_mail(messaggio2, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
 
                                             else:
-                                                messaggio= '{} <br> Peso inserito tramite ECOS e lettura foglio pesata'.format(messaggio)
+                                                messaggio2= '{} <br> Peso inserito tramite ECOS e lettura foglio pesata'.format(messaggio2)
                                                 #warning_message_mail(messaggio, 'assterritorio@amiu.genova.it, Matteo.Scarfo@amiu.genova.it, Giuseppe.Morchio@amiu.genova.it', os.path.basename(__file__), logger)
-                                                warning_message_mail(messaggio, 'assterritorio@amiu.genova.it, Matteo.Scarfo@amiu.genova.it, Giuseppe.Morchio@amiu.genova.it', os.path.basename(__file__), logger)
+                                                warning_message_mail(messaggio2, 'assterritorio@amiu.genova.it, Matteo.Scarfo@amiu.genova.it, Giuseppe.Morchio@amiu.genova.it', os.path.basename(__file__), logger)
                                             
                                         
-                                        if peso_lordo > 0 and peso_netto <= 40000:
+                                        if peso_lordo > 0 and peso_netto <= 40000 and check_pesi ==0:
                                             
                                             id_pesata='{}'.format(data[i]['cons_conferimenti'][c]['id'])
                                             
@@ -1076,7 +1124,7 @@ def main():
                                                 error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                                 exit()
                                         else:
-                                            logger.info('Peso proveniente da ECOS. Non lo processo')
+                                            logger.info('Peso proveniente da ECOS o non processabile. Non lo processo')
                                         c+=1    
                                         
                                         
@@ -1181,8 +1229,8 @@ def main():
                                                 #    logger.debug(int(data[i]['cons_works'][t]['pos']))
                                                     
                                                                                             
-                                                if int(data[i]['cons_works'][t]['pos'])>0 and int(data[i]['cons_works'][t]['flg_non_previsto'])==0:
-                                                    
+                                                if int(data[i]['cons_works'][t]['pos'])>0 and (int(data[i]['cons_works'][t]['flg_non_previsto'])==0 or int(data[i]['cons_works'][t]['flg_exec'])==1) :
+                                                    logger.debug(f'Sono alla tappa {t}')
                                                     if int(data[i]['cons_works'][t]['cod_tratto'].strip()) in elenco_codici_via:
                                                         ripasso_sit=elenco_codici_via.count(int(data[i]['cons_works'][t]['cod_tratto'].strip()))
                                                     else:
@@ -1273,6 +1321,8 @@ def main():
                                                                                             ))
                                                         logger.error(e)
                                                     
+                                                    
+                                                    #logger.debug(tappe)
                                                     ct=0
                                                     for tt in tappe:
                                                         ordine=tt[1]
@@ -1292,7 +1342,7 @@ def main():
                                                             #error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                                             #exit()                                       
                                                         ct+=1
-                                                    
+                                                    #logger.debug(f'Sono qua e ct vale {ct}')
                                                     if ct == 0:
                                                         check_tappe_non_trovate=1
                                                         logger.error('Tappa non trovata su SIT')
@@ -1306,7 +1356,7 @@ def main():
                                                         #error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                                         #exit()    
                                                     
-                                                    if nota_via is None:
+                                                    if nota_via is None or nota_via =='':
                                                         nota_via='ND'
                                                     
                                                     query_id_tappa='''SELECT DISTINCT ID_TAPPA, DTA_IMPORT, DATA_PREVISTA 
@@ -1334,6 +1384,17 @@ def main():
                                                                     )
                                                         #cur1.rowfactory = makeDictFactory(cur1)
                                                         tappe_uo=cur.fetchall()
+                                                        '''
+                                                        logger.debug(query_id_tappa)
+                                                        logger.debug('1:{} 2:{} 3:{} 4:{} 5:{} 6:{} 7:{}'.format(data[i]['codice_serv_pred'],
+                                                                                    id_via,
+                                                                                    int(data[i]['cons_works'][t]['cod_tratto'].strip()),
+                                                                                    nota_via.strip(),
+                                                                                    ordine, 
+                                                                                    data[i]['data_pianif_iniziale'], 
+                                                                                    data[i]['codice_serv_pred']
+                                                        ))
+                                                        '''
                                                     except Exception as e:
                                                         logger.error(query_id_tappa)
                                                         logger.error('1:{} 2:{} 3:{} 4:{} 5:{} 6:{} 7:{}'.format(data[i]['codice_serv_pred'],
@@ -1347,7 +1408,19 @@ def main():
                                                         logger.error(e)
                                                         error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                                         exit()
-                                                
+
+                                                    if len(tappe_uo)==0:
+                                                        logger.warning('Non trovo tappa su UO')
+                                                        logger.warning(query_id_tappa)
+                                                        logger.warning('1:{} 2:{} 3:{} 4:{} 5:{} 6:{} 7:{}'.format(data[i]['codice_serv_pred'],
+                                                                                    id_via,
+                                                                                    int(data[i]['cons_works'][t]['cod_tratto'].strip()),
+                                                                                    nota_via.strip(),
+                                                                                    ordine, 
+                                                                                    data[i]['data_pianif_iniziale'], 
+                                                                                    data[i]['codice_serv_pred']
+                                                        ))
+                                                        logger.debug(tappe_uo)
                                                     ct=0
                                                     for ttu in tappe_uo:
                                                         #logger.debug(ttu[0])
@@ -1377,7 +1450,7 @@ def main():
                                                             #exit()
                                                         
                                                         else:     
-                                                            
+                                                            logger.debug('Faccio insert in CONSUNT_SPAZZAMENTO')
                                                             # da fare insert/update
                                                             if int(data[i]['cons_works'][t]['flg_exec'].strip())==1: #and int(data[i]['cons_works'][t]['cod_std_qualita'])==100:
                                                                 causale=100
@@ -1505,7 +1578,7 @@ def main():
                                                 #logger.debug('Consuntivazione raccolta')
                                                 tipo_servizio='RACC'
                                                 #logger.debug(int(data[i]['cons_works'][t]['cod_componente']))
-                                                if int(data[i]['cons_works'][t]['pos'])>0 and int(data[i]['cons_works'][t]['flg_non_previsto'].strip())==0:
+                                                if int(data[i]['cons_works'][t]['pos'])>0 and (int(data[i]['cons_works'][t]['flg_non_previsto'])==0 or int(data[i]['cons_works'][t]['flg_exec'])==1) :
                                                     #logger.debug(int(data[i]['cons_works'][t]['cod_componente']))
                                                     if int(data[i]['cons_works'][t]['cod_componente'].strip()) in elenco_elementi:
                                                         ripasso_sit=elenco_elementi.count(int(data[i]['cons_works'][t]['cod_componente'].strip()))
@@ -1770,7 +1843,7 @@ def main():
                                                         #logger.debug('Sono qua')                                           
                                                         # verificare se nel caso di tipologie diverse la tappa sia diversa o meno (prendi percorso 0101367901)
                                                         
-                                                    if ct>1:
+                                                    if ct>1 and len(tappe) > 0:
                                                             check_tappe_multiple = 1
                                                             logger.error('Trovata più di una tappa')
                                                             logger.error(query_id_tappa)
@@ -1798,12 +1871,13 @@ def main():
                                                         logger.warning('Tappa non trovata su UO. La inserisco nella tabella dei soccorsi')
                                                         logger.warning(query_id_tappa)
                                                         if id_servizio != 114: # se non è botticella
-                                                            logger.warning('{} {} {} {} {}'.format(data[i]['codice_serv_pred'],
+                                                            if len(tappe)>0:
+                                                                logger.warning('{} {} {} {} {}'.format(data[i]['codice_serv_pred'],
                                                                                     id_piazzola,
                                                                                     ripasso,
                                                                                     int(data[i]['cons_works'][t]['cod_componente'].strip()),
                                                                                     data[i]['data_pianif_iniziale']))                                                                          
-                                                        
+                                                            
                                                             # DA VERIFICARE e RIVEDERE con il nuovo tracciato
                                                             
                                                             

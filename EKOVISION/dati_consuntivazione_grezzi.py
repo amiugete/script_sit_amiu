@@ -116,7 +116,17 @@ import fnmatch
 
 from tappa_prevista import tappa_prevista
 
-
+def connessione_sit():
+    # Mi connetto a SIT (PostgreSQL) per poi recuperare le mail
+    nome_db=db
+    logger.info('Connessione al db {}'.format(nome_db))
+    conn = psycopg2.connect(dbname=nome_db,
+                        port=port,
+                        user=user,
+                        password=pwd,
+                        host=host)
+    return conn
+    
 
 def fascia_turno(ora_inizio_lav, ora_fine_lav, ora_inizio_lav_2 ,ora_fine_lav_2):
     '''
@@ -183,6 +193,7 @@ def main():
     # quindi lo riprocessa fino a che non si è risolto l'errore
     debug = 0
     
+    invio_eko=0
     
     
     # Get today's date
@@ -208,17 +219,9 @@ def main():
     
 
 
-    # Mi connetto a SIT (PostgreSQL) per poi recuperare le mail
-    nome_db=db
-    logger.info('Connessione al db {}'.format(nome_db))
-    conn = psycopg2.connect(dbname=nome_db,
-                        port=port,
-                        user=user,
-                        password=pwd,
-                        host=host)
+    
 
 
-    curr = conn.cursor()
     
     
     
@@ -236,13 +239,36 @@ def main():
     cur.execute("ALTER SESSION SET NLS_LANGUAGE = 'ITALIAN'")
     cur.execute("ALTER SESSION SET NLS_TERRITORY = 'ITALY'")
     
+
+    # query per cercare le mail per i percorsi anomali
+    query_mail_anomalie_cons ='''select ep.cod_percorso, ep.descrizione,
+string_agg(u.mail, ', ') as mail
+from anagrafe_percorsi.elenco_percorsi ep 
+join anagrafe_percorsi.percorsi_ut pu 
+	on pu.cod_percorso = ep.cod_percorso 
+	and ep.data_inizio_validita = pu.data_attivazione 
+	and ep.data_fine_validita  = pu.data_disattivazione 
+join anagrafe_percorsi.cons_mapping_uo cmu on cmu.id_uo = pu.id_ut 
+join topo.ut u on u.id_ut = cmu.id_uo_sit 
+where ep.cod_percorso = %s and to_date(%s, 'YYYYMMDD') between ep.data_inizio_validita and ep.data_fine_validita 
+and pu.id_squadra !=15
+group by ep.cod_percorso, ep.descrizione
+    '''
+    
     
     # mi creo una lista in cui mettere codPercorso_data dei percorsi dove ci sono delle tappe consuntivate con 999 
     # scopo è per mandare una sola mail e non una per ogni tappa
     percorsi_tappe_anomale=[]
     
+    percorsi_tappe_non_fatte=[]
     
-    
+    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+
+    data_json={'user': eko_user, 
+        'password': eko_pass,
+        'o2asp' :  eko_o2asp
+        }
+
     
     try: 
         cnopts = pysftp.CnOpts()
@@ -281,6 +307,21 @@ def main():
                     # Opening JSON file
                     f = open(path + "/eko_output2/" + filename)
                     
+                    
+                    
+                    # uso la tabella semaforo per bloccare altri processi che usino queste tabelle in modo da non generare errori
+                    semaforo_1='''UPDATE CONSUNT_EKOVISION_SEMAFORO ces 
+                        SET semaforo = 1, LAST_UPDATE = SYSDATE'''
+                    try:
+                        cur.execute(semaforo_1)
+                    except Exception as e:
+                        logger.error(semaforo_1)
+                        logger.error(e)
+                    con.commit()
+                    cur.close()
+                    cur = con.cursor()
+                    
+                    
                     # returns JSON object as 
                     # a dictionary
                     try:
@@ -314,24 +355,19 @@ def main():
                                     # PARAMETRI GENERALI WS
     
     
-                                    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-
-                                    data_json={'user': eko_user, 
-                                        'password': eko_pass,
-                                        'o2asp' :  eko_o2asp
-                                        }
+                                    
                                         
                                     
                                     
                                 
                                         
-
+                                    logger.info('Start WS per orario')
                                     params={'obj':'schede_lavoro',
                                         'act' : 'r',
                                         'sch_lav_data': data[i]['data_esecuzione_prevista'],
                                         'cod_modello_srv': data[i]['codice_serv_pred'], 
                                         'flg_includi_eseguite': 1,
-                                        'flg_includi_chiuse': 1
+                                        'flg_includi_chiuse': 1                                     
                                         }
 
                                     response = requests.post(eko_url, params=params, data=data_json, headers=headers)
@@ -352,7 +388,7 @@ def main():
                                         check=1
                                     if check<1:
                                         letture = response.json()
-                                        logger.info(letture)
+                                        logger.debug(letture)
                                         if len(letture['schede_lavoro']) > 0 : 
                                             #controllo se la scheda è la stessa (escludo eventuali soccorsi o schede duplicate per sbaglio)
                                             if data[i]['id_scheda']==letture['schede_lavoro'][0]['id_scheda_lav']:
@@ -364,9 +400,9 @@ def main():
                                                 orario_esecuzione='{} - {}'.format(ora_inizio_lav, ora_fine_lav)
                                             else:
                                                 orario_esecuzione='{} - {} / {} - {}'.format(ora_inizio_lav, ora_fine_lav, ora_inizio_lav_2 ,ora_fine_lav_2)   
-                                            logger.info('Orario esecuzione:{}'.format(orario_esecuzione))
+                                            logger.debug('Orario esecuzione:{}'.format(orario_esecuzione))
                                             fascia_t=fascia_turno(ora_inizio_lav, ora_fine_lav, ora_inizio_lav_2 ,ora_fine_lav_2)
-                                            logger.info('Fascia turno :{}'.format(fascia_t))
+                                            logger.debug('Fascia turno :{}'.format(fascia_t))
                                             # calcolo fascia turno
                                             # caso semplice se c 
                                             
@@ -388,58 +424,58 @@ def main():
                                         logger.error(e)
 
                                     con.commit()
-                                                                    
+                                    logger.info('End WS orario')                                
                                     
                                     
                                     
                                     
+                                    # Prima di leggere qualsiasi cosa correggo eventuali inserimenti già fatti
+                            
+                                    update_schede='''UPDATE UNIOPE.CONSUNT_EKOVISION_SPAZZAMENTO 
+                                    SET RECORD_VALIDO = 'N' 
+                                    WHERE ID_SCHEDA = :s1'''
                                     
+                                    try:
+                                        cur.execute(update_schede, (
+                                                data[i]['id_scheda'],
+                                            ))
+                                    except Exception as e:
+                                        check=1
+                                        logger.error(update_schede)
+                                        logger.error('1:{}'.format(
+                                        data[i]['id_scheda']
+                                        ))
+                                        logger.error(e)
+                                        check_lettura+=1
+                                    con.commit()
+                                    
+                                
+                                    update_schede='''UPDATE UNIOPE.CONSUNT_EKOVISION_RACCOLTA 
+                                    SET RECORD_VALIDO = 'N' 
+                                    WHERE ID_SCHEDA = :s1'''
+                                    
+                                    try:
+                                        cur.execute(update_schede, (
+                                                data[i]['id_scheda'],
+                                            ))
+                                    except Exception as e:
+                                        check=1
+                                        logger.error(update_schede)
+                                        logger.error('1:{}'.format(
+                                        data[i]['id_scheda']
+                                        ))
+                                        logger.error(e)
+                                        check_lettura+=1
+                                    con.commit()
+                                        
+                                        
                                     # consuntivazione 
                                     t=0 # contatore tappe
                                     check_cons=0
                                     while t<len(data[i]['cons_works']):
 
 
-                                        # alla prima riga correggo eventuali inserimenti già fatti
-                                        if t==0:
-                                            # devo fare select
-                                            update_schede='''UPDATE UNIOPE.CONSUNT_EKOVISION_SPAZZAMENTO 
-                                            SET RECORD_VALIDO = 'N' 
-                                            WHERE ID_SCHEDA = :s1'''
-                                            
-                                            try:
-                                                cur.execute(update_schede, (
-                                                        data[i]['id_scheda'],
-                                                    ))
-                                            except Exception as e:
-                                                check=1
-                                                logger.error(update_schede)
-                                                logger.error('1:{}'.format(
-                                                data[i]['id_scheda']
-                                                ))
-                                                logger.error(e)
-                                                check_lettura+=1
-                                        con.commit()
                                         
-                                        if t==0:
-                                            # devo fare select
-                                            update_schede='''UPDATE UNIOPE.CONSUNT_EKOVISION_RACCOLTA 
-                                            SET RECORD_VALIDO = 'N' 
-                                            WHERE ID_SCHEDA = :s1'''
-                                            
-                                            try:
-                                                cur.execute(update_schede, (
-                                                        data[i]['id_scheda'],
-                                                    ))
-                                            except Exception as e:
-                                                check=1
-                                                logger.error(update_schede)
-                                                logger.error('1:{}'.format(
-                                                data[i]['id_scheda']
-                                                ))
-                                                logger.error(e)
-                                                check_lettura+=1
-                                        con.commit()
                                         # escludo i NON previsti e NON eseguiti
                                         if int(data[i]['cons_works'][t]['flg_exec'].strip())==1 or  int(data[i]['cons_works'][t]['flg_non_previsto'].strip())==0 :
                                             ################################################################
@@ -469,11 +505,43 @@ def main():
                                                     qualita=0
                                                 except Exception as e:
                                                     check_cons=1
-                                                    logger.warning('ID SCHEDA:{}'.format(data[i]['id_scheda']))
+                                                    invio_eko=1 # invio l'errore anche a Ekovision
+                                                    logger.warning('ID SCHEDA:{} - Componente:{}'.format(data[i]['id_scheda'], data[i]['cons_works'][t]['cod_componente']))
                                                     logger.warning('Causale servizio non effettuato:{}'.format(data[i]['cod_caus_srv_non_eseg_ext']))
                                                     logger.warning('FLG Eseguito:{}'.format(data[i]['cons_works'][t]['flg_exec']))
                                                     logger.warning('PROBLEMA CAUSALE')
                                                     logger.warning(e)
+                                                    try:
+                                                        cp_probemi = data[i]['codice_serv_pred']
+                                                        data_problemi= data[i]['data_esecuzione_prevista']
+                                                        try:
+                                                            if cp_probemi not in percorsi_tappe_non_fatte:
+                                                                percorsi_tappe_non_fatte.append(cp_probemi)
+                                                                conn=connessione_sit()
+                                                                curr2 = conn.cursor()
+                                                                curr2.execute(query_mail_anomalie_cons, (cp_probemi, data_problemi,))
+                                                                row_mail=curr2.fetchone()
+                                                                conn.commit()
+                                                                curr2.close()
+                                                                logger.info("chiudo la connessione al SIT")
+                                                                conn.close()
+                                                                indirizzi_mail_amiu = row_mail[2]
+                                                                descrizione_problemi = row_mail[1]
+                                                                messaggio_ut = f'''Il percorso {cp_probemi} {descrizione_problemi} del {data_problemi}  
+                                                                (id_scheda_ekovision = {data[i]['id_scheda']}) ha delle tappe erroneamente consuntivate come non fatte ma senza causale.
+                                                                <br>Probabilmente si tratta di una scheda in cui è stato flaggato e poi rimosso il flag 'Non effettuato' su ekovision. 
+                                                                <br>La casistica in questione è in corso di risoluzione da ekovision e non succederà più in futuro. 
+                                                                <br>In attesa della soluzione è necessario controllare la scheda e correggere manualmente le tappe indicandole come "fatte", oppure, nel caso in cui siano effettivamente non fatte, indicare la causale. 
+                                                                '''
+                                                                soggetto_mail = f'ATTENZIONE problema consuntivazione ARERA percorso percorso {cp_probemi} del {data_problemi}'
+                                                                warning_message_mail(messaggio_ut, f'{indirizzi_mail_amiu}, assterritorio@amiu.genova.it, andrea.volpi@ekovision.it, francesco.venturi@ekovision.it', os.path.basename(__file__), logger, soggetto_mail)
+                                                                #error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                                                        except Exception as e2:
+                                                            logger.error(query_mail)
+                                                            logger.error(e2)
+                                                        
+                                                    except Exception as e1:
+                                                        logger.error(e1)
                                                     causale=None
                                             # la causale 999, creata per le preconsuntivazione, in realtà non dovrebbe essere usata.. 
                                             # se fosse arrivato qualcosa lo assimilo alla 102 (percorso non previsto)
@@ -847,6 +915,16 @@ def main():
                     #exit()
                     
                     
+                    
+                    # riporto a 0 il semaforo 
+                    semaforo_0='''UPDATE CONSUNT_EKOVISION_SEMAFORO ces 
+                        SET semaforo = 0, LAST_UPDATE = SYSDATE'''
+                    try:
+                        cur.execute(semaforo_0)
+                    except Exception as e:
+                        logger.error(semaforo_0)
+                        logger.error(e)
+                    con.commit()   
                     os.remove(path + "/eko_output2/" + filename)
                     
                     
@@ -887,13 +965,14 @@ def main():
     
     
     # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+    if invio_eko == 1:
+        error_log_mail(errorfile, 'assterritorio@amiu.genova.it, andrea.volpi@ekovision.it, francesco.venturi@ekovision.it', os.path.basename(__file__), logger)
+    else:
+        error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
     
     
-    logger.info("chiudo le connessioni in maniera definitiva")
-    curr.close()
-    conn.close()
     
+    logger.info('Chiudo la connession ORACLE in maniera defintitiva')
     cur.close()
     con.close()
 

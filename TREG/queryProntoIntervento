@@ -1,0 +1,28 @@
+-- name: inserisci_richiesta
+INSERT INTO treg_gap.richieste (scopo, sottoscopo, esito, data_telefonata, cod_ident_segn, tipo_apertura_guasto, data_apert_segn, ora_apert_segn, localita, nomin_segn, 
+                                rec_tel, tipo_richiesta, note_chiusura, data_chius_segn, ora_chius_segn, nomin_tecn_amiu, ident_interv_chius, data_ins, nome_file,
+                                indirizzo, data_arrivo_luogo, data_messa_sic, data_rim_rif, mot_rit, ora_arrivo_luogo, ora_messa_sic, ora_rim_rif, inviato_treg) 
+VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0);
+
+
+-- name: get_richieste
+with causale as 
+(select cd.codice, cd.descrizione as descr_amiu,
+ca.descrizione as descr_arera,
+ca.id_treg
+from etl.cause_disserv cd
+join etl.causali_arera ca on ca.id = cd.id_causale_arera),
+emergenza as (select id, codice, descrizione from treg_gap.tipo_emergenza te)
+select cast(extract(year from r.data_telefonata ) as int) as anno, r.inviato_treg, scopo, sottoscopo, esito, data_telefonata, cod_ident_segn, data_apert_segn, ora_apert_segn, localita, nomin_segn, rec_tel, tipo_richiesta, 
+note_chiusura, data_chius_segn, ora_chius_segn, nomin_tecn_amiu, ident_interv_chius, data_ins, nome_file, c.cod_istat as istat_code, indirizzo, data_arrivo_luogo, data_messa_sic, 
+data_rim_rif, mot_rit, ora_arrivo_luogo, ora_messa_sic, ora_rim_rif, r.id as id_rich, causale.id_treg as causale, emergenza.codice as emerg_type
+FROM treg_gap.richieste r
+left join topo.comuni c on upper(trim(c.descr_comune)) = upper(trim(r.localita))
+left join causale on causale.codice = r.mot_rit
+left join emergenza on trim(UPPER(emergenza.descrizione)) = TRIM(UPPER(r.tipo_apertura_guasto))
+where scopo = 'Pronto intervento' and r.inviato_treg = 0;
+
+-- name: set_inviato
+update treg_gap.richieste r set inviato_treg = 1 where id = %s;
+
+

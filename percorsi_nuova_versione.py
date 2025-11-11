@@ -27,8 +27,8 @@ import holidays
 from workalendar.europe import Italy
 
 
-from credenziali import db, port, user, pwd, host, user_mail, pwd_mail, port_mail, smtp_mail
-
+#from credenziali import *
+import credenziali
 
 #import requests
 
@@ -120,16 +120,18 @@ def main():
     test= 0
     
     if test==1:
-        db_name=db_test
+        db_name=credenziali.db_test
+        host=credenziali.host_test
     else:
-        db_name=db
+        db_name=credenziali.db
+        host=credenziali.host # in realtà è inutile ma lo faccio per chiarezza
         
         
     logger.info('Connessione al db {0}'.format(db_name))
     conn = psycopg2.connect(dbname=db_name,
-                        port=port,
-                        user=user,
-                        password=pwd,
+                        port=credenziali.port,
+                        user=credenziali.user,
+                        password=credenziali.pwd,
                         host=host)
 
     curr = conn.cursor()

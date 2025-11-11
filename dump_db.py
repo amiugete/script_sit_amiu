@@ -4,6 +4,22 @@
 #   Roberto Marzocchi, Roberta Fagandini
 
 
+''''
+ATTENZIONE: 
+
+siccome si usa pg_dump che su questo server non è aggiornato, in caso di modifiche bisogna compilare
+
+pyinstaller --onefile dump_db.py
+
+e poi copiare l'eseguibile (dist/dump_db) sul server sitdb 
+
+scp dist/dump_db assterritorio@172.24.4.39:/home/assterritorio/
+
+
+'''
+
+
+
 
 import os,sys,re #,shutil,glob
 #import time
@@ -100,12 +116,14 @@ for bkp_fld in cartelle_bkp:
     
     # definisco i DB DI AMIUPOSTGRES 
      
-    list_db=['sit', 'sit_prog', 'dwh']
-    schema_da_escludere=["backup", "backup", ""]
+    list_db={'sit': host, 'sit_prog': host_prog, 'dwh': host_dwh, 'consuntivazione':host_totem}
+    schema_da_escludere=["backup", "backup", "", ""]
     i=0
-    for row in list_db:
+    for d, h in list_db.items():
         #se volessi tutti i db
-        nome_db=row
+        nome_db=d
+        host_db = h
+
         # questa parte direi che non serve
         #query2="REVOKE CONNECT ON DATABASE \"{}\" FROM public;".format(nome_db)
         #print(query2)
@@ -130,7 +148,7 @@ for bkp_fld in cartelle_bkp:
                                     port=port,
                                     user=user,
                                     password=pwd,
-                                    host=host) 
+                                    host=host_db) 
                 curr=conn.cursor()
 
             except Exception as e:
@@ -208,7 +226,7 @@ for bkp_fld in cartelle_bkp:
             try:    
                 # faccio il backup del solo schema backup (opzione -n minuscolo fa il contrario di -N)
                 logger.info('faccio il backup dello schema backup')
-                dump_string_backup='pg_dump -h {3} -U {4} -n {5} -F c {0} -f /{2}/{6}/{1}/{1}_{0}_schema_{5}.backup'.format(nome_db,d1,home, host, user, schema_da_escludere[i], bkp_fld)
+                dump_string_backup='pg_dump -h {3} -U {4} -n {5} -F c {0} -f /{2}/{6}/{1}/{1}_{0}_schema_{5}.backup'.format(nome_db,d1,home, host_db, user, schema_da_escludere[i], bkp_fld)
                 ret1=os.system(dump_string_backup)
                 logger.info('Risultato backup di {}: {}'.format(schema_da_escludere[i], ret1))
             except Exception as e:
@@ -229,13 +247,13 @@ for bkp_fld in cartelle_bkp:
         
 
         if schema_da_escludere[i]=='':
-            dump_string='pg_dump -h {3} -U {4} -F c {0} -f /{2}/{5}/{1}/{1}_{0}.backup'.format(row, d1, home,
-                                                                                                    host,
+            dump_string='pg_dump -h {3} -U {4} -F c {0} -f /{2}/{5}/{1}/{1}_{0}.backup'.format(nome_db, d1, home,
+                                                                                                    host_db,
                                                                                                     user,
                                                                                                     bkp_fld)
         else:
-            dump_string='pg_dump -h {3} -U {4} -N {5} -F c {0} -f /{2}/{6}/{1}/{1}_{0}.backup'.format(row, d1, home,
-                                                                                                        host,
+            dump_string='pg_dump -h {3} -U {4} -N {5} -F c {0} -f /{2}/{6}/{1}/{1}_{0}.backup'.format(nome_db, d1, home,
+                                                                                                        host_db,
                                                                                                         user,
                                                                                                         schema_da_escludere[i], 
                                                                                                         bkp_fld)

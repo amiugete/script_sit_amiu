@@ -7,7 +7,7 @@
 '''
 1) Processo i file già in archivio a partire dal 2025. 
 - solo schede chiuse 
-- salvo i dati grezzi su una tabella del DB SIT, chema eko_treg
+- salvo i dati grezzi su una tabella del DB SIT, schema treg_eko
 
 '''
 
@@ -173,6 +173,12 @@ def main():
     
     logger.info('Il PID corrente è {0}'.format(os.getpid()))
     
+    # variabile 
+    # se vale 0 fa tutto come di consueto
+    # se vale 1 processa il file come di consueto ma non lo cancella nè scrive sulla tabella dei file processati,
+    # quindi lo riprocessa fino a che non si è risolto l'errore
+    debug = 0
+
     # Get today's date
     #presentday = datetime.now() # or presentday = datetime.today()
     oggi=datetime.today()
@@ -216,7 +222,7 @@ def main():
     
     
     select_file='''SELECT coalesce(max(last_json), 'sch_lav_consuntivi_20250101')
-                FROM eko_treg.consunt_ekovision
+                FROM treg_eko.consunt_ekovision
                 '''
 
     try:
@@ -323,12 +329,36 @@ def main():
                                             o+=1
                                         p+=1
                                     
-                                    logger.debug(data_ora_ini)
-                                    logger.debug(data_ora_fine)
+                                    #logger.debug(data_ora_ini)
+                                    #logger.debug(data_ora_fine)
                                     
-                                    logger.debug(min(data_ora_ini))
-                                    logger.debug(max(data_ora_fine))    
+                                    #logger.debug(min(data_ora_ini))
+                                    #logger.debug(max(data_ora_fine))    
                                     
+                                    if len(data_ora_ini)==0 or len(data_ora_fine)==0:
+                                        headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+
+                                        data={'user': eko_user, 
+                                            'password': eko_pass,
+                                            'o2asp' :  eko_o2asp
+                                            }
+
+                                        logger.info('Provo a leggere i dettagli della scheda')
+                                        
+                                        
+                                        params2={'obj':'schede_lavoro',
+                                                'act' : 'r',
+                                                'id': '{}'.format(data[i]['id_scheda']),
+                                                }
+                                        
+                                        response2 = requests.post(eko_url, params=params2, data=data, headers=headers)
+                                        letture2 = response2.json()
+                                        data_ora_ini.append(datetime.strptime(f'{letture2["schede_lavoro"][0]["data_inizio_lav"]} {letture2["schede_lavoro"][0]["ora_inizio"]}', 
+                                                              '%Y%m%d %H%M%S'))
+                                        data_ora_fine.append(datetime.strptime(f'{letture2["schede_lavoro"][0]["data_fine_lav"]} {letture2["schede_lavoro"][0]["ora_fine"]}', 
+                                                              '%Y%m%d %H%M%S'))
+                                    
+
                                     
                                     # consuntivazione 
                                     t=0 # contatore tappe
@@ -371,13 +401,15 @@ def main():
                                                     qualita=0
                                                 except Exception as e:
                                                     check_cons=1
-                                                    logger.warning('ID SCHEDA:{}'.format(data[i]['id_scheda']))
-                                                    logger.warning('Causale servizio non effettuato:{}'.format(data[i]['cod_caus_srv_non_eseg_ext']))
-                                                    logger.warning('FLG Eseguito:{}'.format(data[i]['cons_works'][t]['flg_exec']))
-                                                    logger.warning('PROBLEMA CAUSALE')
-                                                    logger.warning(e)
-                                                    causale=None
-                                                    exit()
+                                                    logger.error(f'{filename}')
+                                                    logger.error('ID SCHEDA:{}'.format(data[i]['id_scheda']))
+                                                    logger.error('Causale servizio non effettuato:{}'.format(data[i]['cod_caus_srv_non_eseg_ext']))
+                                                    logger.error('FLG Eseguito:{}'.format(data[i]['cons_works'][t]['flg_exec']))
+                                                    logger.error('PROBLEMA CAUSALE')
+                                                    logger.error(e)
+                                                    causale=-1
+                                                    #error_log_mail(logfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                                                    #exit()
                                             # la causale 999, creata per le preconsuntivazione, in realtà non dovrebbe essere usata.. 
                                             # se fosse arrivato qualcosa lo assimilo alla 102 (percorso non previsto)
                                             previsto = 0
@@ -539,7 +571,7 @@ def main():
                                             if data[i]['cons_works'][t]['tipo_srv_comp'] in ['SPAZZ', 'RACC', 'RACC-LAV']:
                                                 
                                                                 
-                                                upsert_query='''INSERT INTO eko_treg.consunt_ekovision 
+                                                upsert_query='''INSERT INTO treg_eko.consunt_ekovision 
                                                 (id_scheda, codice_servizio_pred,
                                                 data_pianif_iniziale, data_esecuzione_prevista,
                                                 data_ora_inizio, data_ora_fine,
@@ -611,7 +643,7 @@ def main():
                                                             ,filename))
                                                     error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger) 
                                                     exit()           
-                                                logger.debug('Sono arrivato qua senza errori')
+                                                #logger.debug('Sono arrivato qua senza errori')
                                                 #exit()            
                                                 conn.commit()
                                             else:
@@ -621,8 +653,8 @@ def main():
                                                 logger.error('Mi sono fermato alla riga {}'.format(i))
                                                 error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
                                                 exit()
-                                        else:
-                                            logger.debug('Tappa non prevista e non effettuata')
+                                        #else:
+                                        #   logger.debug('Tappa non prevista e non effettuata')
                                         t+=1
                                         conn.commit()
                                     
@@ -658,7 +690,12 @@ def main():
                     
                        
                     
-                    
+                    # in modalità debug non scrivo nella tabella UNIOPE.EKOVISION_LETTURA_CONSUNT 
+                    # in modo da pote processare più volte lo stesso file fino a che non trovo errore
+                    if debug == 1:
+                        logger.warning('Sono in modalità DEBUG. Mi fermo qua senza scrivere in UNIOPE.EKOVISION_LETTURA_CONSUNT')
+                        exit() 
+                        
                     os.remove(path + "/eko_output3/" + filename)
                     
                     
@@ -699,7 +736,7 @@ def main():
     
     
     # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
     
     
     logger.info("chiudo le connessioni in maniera definitiva")

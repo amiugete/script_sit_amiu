@@ -9,6 +9,10 @@
 def tappa_prevista(day,frequenza_binaria):
     '''
     Data una data e una frequenza dice se la tappa è prevista sulla base di quella frequenza o no
+
+    ############################## ATTENZIONE ################################
+        da aggiungere frequenza settimanale per gestire percorsi bisettimanali
+    ##########################################################################
     '''
     # settimanale
     if frequenza_binaria[0]=='S':

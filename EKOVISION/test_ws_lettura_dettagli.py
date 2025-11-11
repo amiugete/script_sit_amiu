@@ -146,7 +146,7 @@ def main():
     
 
     
-    id_scheda =  484922 #502441   #423341 OK #   423319 da problemi
+    id_scheda = 694482 #696205 #478360 #600883  #484922 #502441   #423341 OK #   423319 da problemi
     
     
     
@@ -173,10 +173,32 @@ def main():
     response2 = requests.post(eko_url, params=params2, data=data, headers=headers)
     #letture2 = response2.json()
     letture2 = response2.json()
-   
-    logger.info(letture2)
 
+    #logger.info(letture2)
+    logger.info(letture2["schede_lavoro"][0]["trips"])
+    trips=letture2["schede_lavoro"][0]["trips"]
+    # ciclo sulle aste 
+    componenti_eko=[]
+    tr=0
+    while tr < len(trips):
+        waypoints=letture2['schede_lavoro'][0]['trips'][tr]['waypoints']
+        wid=0
+        while wid < len(waypoints):
+            works=letture2['schede_lavoro'][0]['trips'][tr]['waypoints'][wid]['works'] 
+            # ciclo sugli elementi
+            cc=0
+            while cc < len(works):
+                list=[]
+                list.append(int(letture2['schede_lavoro'][0]['trips'][tr]['waypoints'][wid]['works'][cc]['id_object']))
+                list.append(int(letture2['schede_lavoro'][0]['trips'][tr]['waypoints'][wid]['pos']))
+                list.append(int(letture2['schede_lavoro'][0]['trips'][tr]['waypoints'][wid]['works'][cc]['data_inizio']))
+                list.append(int(letture2['schede_lavoro'][0]['trips'][tr]['waypoints'][wid]['works'][cc]['data_fine']))
+                componenti_eko.append(list)
+                cc+=1
+            wid+=1
+        tr+=1
     
+    logger.info(len(componenti_eko))
     
     
     

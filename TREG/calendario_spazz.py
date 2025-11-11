@@ -52,7 +52,7 @@ import json
 
 #import pymssql
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone, time
 
 import locale
 
@@ -84,13 +84,16 @@ from crea_dizionario_da_query import *
 
 import uuid
 
+giorno_file=datetime.today().strftime('%Y%m%d_%H%M%S')
+
+
 filename = inspect.getframeinfo(inspect.currentframe()).filename
 path=os.path.dirname(sys.argv[0]) 
 path1 = os.path.dirname(os.path.dirname(os.path.abspath(filename)))
 nome=os.path.basename(__file__).replace('.py','')
 #tmpfolder=tempfile.gettempdir() # get the current temporary directory
-logfile='{0}/log/{1}.log'.format(path,nome)
-errorfile='{0}/log/error_{1}.log'.format(path,nome)
+logfile='{0}/log/{2}_{1}.log'.format(path,nome,giorno_file)
+errorfile='{0}/log/{2}_error_{1}.log'.format(path,nome,giorno_file)
 #if os.path.exists(logfile):
 #    os.remove(logfile)
 
@@ -145,7 +148,22 @@ from invio_messaggio import *
 # libreria per scrivere file csv
 import csv
 
-import time
+from decimal import Decimal
+
+def convert_decimal(obj):
+    if isinstance(obj, list):
+        return [convert_decimal(i) for i in obj]
+    elif isinstance(obj, dict):
+        return {k: convert_decimal(v) for k, v in obj.items()}
+    elif isinstance(obj, Decimal):
+        # Se il valore è "intero", converti in int
+        if obj == obj.to_integral_value():
+            return int(obj)
+        # Altrimenti, converti in float
+        else:
+            return float(obj)
+    else:
+        return obj
 
 #variabile che specifica se devo fare test ekovision oppure no
 test_ekovision=0
@@ -180,10 +198,7 @@ def programming_start_ending_date(cursor, data, id_turno, gc):
     La funzione in base a giorno, id_turno e giorno_competenza restituisce un array con la programmingStartDate e la programmingEndingDate 
     nel formato voluto da TREG
     '''
-    
-    
-    
-    
+
     # inizializzo l'array di output
     dates=[]
     
@@ -213,22 +228,31 @@ def programming_start_ending_date(cursor, data, id_turno, gc):
     interval = riga[0]
     h_inizio = riga[1]
     h_fine= riga[2]
+
+    hhi, mmi = map(int, h_inizio.split(':'))
+    hhf, mmf = map(int, h_fine.split(':'))
+    
     #logger.debug(interval)
     #exit()
+    #data = data.astimezone(timezone.utc)
+    data = datetime.combine(data, datetime.min.time())
     if gc == 0:
-        dates.append('{}T{}:00.000Z'.format(data.strftime('%Y-%m-%d'), h_inizio))
-        dates.append('{}T{}:00.000Z'.format((data+timedelta(days=interval)).strftime('%Y-%m-%d'), h_fine))
-        dates.append(data.strftime('%Y'))
+        dt_inizio = data.replace(hour=hhi, minute=mmi, second=0, microsecond=0).astimezone(timezone.utc)
+        dt_fine = data.replace(hour=hhf, minute=mmf, second=0, microsecond=0).astimezone(timezone.utc)
     elif gc == -1: 
         data_inizio= data-timedelta(days=1)
-        dates.append('{}T{}:00.000Z'.format(data_inizio.strftime('%Y-%m-%d'),h_inizio))
-        dates.append('{}T{}:00.000Z'.format((data_inizio+timedelta(days=interval)).strftime('%Y-%m-%d'), h_fine))
-        dates.append(data_inizio.strftime('%Y'))
+        data_fine = data_inizio+timedelta(days=interval)
+        dt_inizio = data_inizio.replace(hour=hhi, minute=mmi, second=0, microsecond=0).astimezone(timezone.utc)
+        dt_fine = data_fine.replace(hour=hhi, minute=mmi, second=0, microsecond=0).astimezone(timezone.utc)
     else: 
         logger.error('Come mai gc vale {}'.format(gc))
         
-        
-    return dates 
+    
+    dates.append(dt_inizio.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z')
+    dates.append(dt_fine.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z')
+    dates.append(dt_inizio.strftime('%Y'))
+
+    return dates
 
 def main():
       
@@ -275,7 +299,7 @@ def main():
       
     # cerco il giono da cui partire
     query_first_day='''SELECT coalesce(max(data_last_calendar)+1, to_date('20250101', 'YYYYMMDD')) as data_last_calendar
-FROM eko_treg.last_import_treg_spazz where commit_code=200; '''
+FROM treg_eko.last_import_treg_spazz where commit_code=200 and deleted = false; '''
 
     try:
         curr.execute(query_first_day)
@@ -290,11 +314,11 @@ FROM eko_treg.last_import_treg_spazz where commit_code=200; '''
         data_start=gma[0]
         logger.debug('{} era {}'.format(data_start, data_start.strftime('%A')))
 
-
-    #fine_ciclo=oggi
+    #data_start = datetime.strptime('2025-02-01', "%Y-%m-%d").date()
+    fine_ciclo=oggi
     
-    fine_ciclo = datetime.strptime('20250630', '%Y%m%d')
-    fine_ciclo=date(fine_ciclo.year, fine_ciclo.month, fine_ciclo.day)
+    #fine_ciclo = datetime.strptime('20250131', '%Y%m%d').date()
+    #fine_ciclo=date(fine_ciclo.year, fine_ciclo.month, fine_ciclo.day)
 
     # qua mi tiro fuori il token TREG 
     
@@ -400,8 +424,8 @@ FROM eko_treg.last_import_treg_spazz where commit_code=200; '''
             
             # cerco quelle di SIT
             query_elementi_percorso='''
-            select codice_modello_servizio as cod_percorso,
-            fo.freq_binaria,
+            select distinct codice_modello_servizio as cod_percorso,
+            1 as in_freq,
             aa.lung_asta/1000 as kilometersTravelled,
             'PRG' as areaType, 
             codice as areaCode, 
@@ -447,10 +471,10 @@ FROM eko_treg.last_import_treg_spazz where commit_code=200; '''
             where
             tab.data_fine > '20250101'
             and objecy_type = 'TRATTO'
+            and treg_eko.verify_daily_frequency(tab.frequenza, to_date(%s, 'YYYYMMDD'), ep2.freq_settimane ) = 1
             and codice_modello_servizio = %s
             and %s between tab.data_inizio and tab.data_fine
             group by codice_modello_servizio,
-            fo.freq_binaria, 
             aa.lung_asta,
             tab.codice,
             aa.id_via ,
@@ -460,7 +484,7 @@ FROM eko_treg.last_import_treg_spazz where commit_code=200; '''
             '''
             
             try:
-                curr.execute(query_elementi_percorso, (data_start.strftime('%Y%m%d'), c, data_start.strftime('%Y%m%d'),))
+                curr.execute(query_elementi_percorso, (data_start.strftime('%Y%m%d'), data_start.strftime('%Y%m%d'), c, data_start.strftime('%Y%m%d'),))
                 elenco_elementi_percorso=curr.fetchall()
             except Exception as e:
                 logger.error(query_elementi_percorso)
@@ -471,29 +495,34 @@ FROM eko_treg.last_import_treg_spazz where commit_code=200; '''
             # popolo tratti_sit
             for eep in elenco_elementi_percorso:
                 # verifico se in frequenza con la solita funzione
-                if tappa_prevista(data_start,  eep[1])==1:
+                #if tappa_prevista(data_start,  eep[1])==1:
                     # questa sarà da passare a TREG, le altre no
-                    curr1 = conn.cursor()
-                    
-                    sweeping={
-                        'traceabilityCode': '{0}_{1}_{2}'.format(eep[4],data_start.strftime('%Y%m%d'),t),
-                        'kilometersTravelled': int(eep[2]),
-                        'areaType':str(eep[3]),
-                        'areaCode': str(eep[4]),
-                        'streetCode': str(eep[5]),
-                        'streetDescription':str(eep[6]),
-                        'programmingStartDate':programming_start_ending_date(curr1, data_start, t, eep[10])[0],
-                        'programmingEndingDate':programming_start_ending_date(curr1, data_start, t, eep[10])[1],
-                        'year':int(programming_start_ending_date(curr1, data_start, t, eep[10])[2]),
-                        'istatCode': str(eep[7]) 
-                    }
-                    list_sweeping.append(sweeping)
+                curr1 = conn.cursor()
+                
+                sweeping={
+                    'traceabilityCode': '{0}_{1}_{2}'.format(eep[4],data_start.strftime('%Y%m%d'),t),
+                    'kilometersTravelled': eep[2],
+                    'areaType':str(eep[3]),
+                    'areaCode': str(eep[4]),
+                    'streetCode': str(eep[5]),
+                    'streetDescription':str(eep[6]),
+                    'programmingStartDate':programming_start_ending_date(curr1, data_start, t, eep[10])[0],
+                    'programmingEndingDate':programming_start_ending_date(curr1, data_start, t, eep[10])[1],
+                    'year':int(programming_start_ending_date(curr1, data_start, t, eep[10])[2]),
+                    'istatCode': str(eep[7]) 
+                }
+                list_sweeping.append(sweeping)
                 
             
-            
+            #logger.debug(f'list spazzamenti = {convert_decimal(list_sweeping)}')
+            #jsonfile='{0}/log/{1}_spazzamento.json'.format(path,c)
+            #with open(jsonfile, 'w', encoding='utf-8') as f:
+            #    json.dump(convert_decimal(list_sweeping), f, ensure_ascii=False, indent=4)
             ########################################################
             # upload di list_wasteCollection di un singolo percorso
             ########################################################
+
+            #exit()
             logger.info('Inizio upload dati del percorso {} del {}'.format(c, data_start))
             api_url_upload='{}atrif/api/v1/tobin/b2b/process/rifqt-sweepings/upload/av1'.format(url_ws_treg)
             # questa sarà da passare a TREG, le altre no
@@ -565,7 +594,7 @@ FROM eko_treg.last_import_treg_spazz where commit_code=200; '''
             logger.info('Fine commit - Risposta TREG: {}'.format(response_commit_upload.text))
               
             
-            query_insert='''INSERT INTO eko_treg.last_import_treg_spazz 
+            query_insert='''INSERT INTO treg_eko.last_import_treg_spazz 
                 (data_last_calendar, last_update,
                 request_id_amiu, importid_treg, 
                 commit_code, commit_message) 
@@ -586,7 +615,7 @@ FROM eko_treg.last_import_treg_spazz where commit_code=200; '''
                   
         else: 
             logger.warning('Sono presenti errori, non faccio il commit')                
-            query_insert='''INSERT INTO eko_treg.last_import_treg_spazz 
+            query_insert='''INSERT INTO treg_eko.last_import_treg_spazz 
                 (data_last_calendar, last_update,
                 request_id_amiu, importid_treg) 
                 VALUES(to_date(%s, 'YYYYMMDD'), now(), 

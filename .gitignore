@@ -12,6 +12,9 @@ TAG/log/*.log
 
 TREG/log/*.log
 TREG/output/*.txt
+TREG/output/*.csv
+TREG/output/09_29_output
+TREG/output/10_23_output
 TREG/download/*.csv
 
 

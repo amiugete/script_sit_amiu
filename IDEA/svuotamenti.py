@@ -44,13 +44,13 @@ import datetime
 import logging
 
 filename = inspect.getframeinfo(inspect.currentframe()).filename
-path = os.path.dirname(os.path.abspath(filename))
+#path = os.path.dirname(os.path.abspath(filename))
 
+path=os.path.dirname(sys.argv[0]) 
+nome=os.path.basename(__file__).replace('.py','')
 #tmpfolder=tempfile.gettempdir() # get the current temporary directory
-logfile='{}/svuotamenti.log'.format(path)
-errorfile='{}/error_svuotamenti.log'.format(path)
-#if os.path.exists(logfile):
-#    os.remove(logfile)
+logfile='{0}/log/{1}.log'.format(path,nome)
+errorfile='{0}/log/error_{1}.log'.format(path,nome)
 
 '''logging.basicConfig(
     #handlers=[logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')],
@@ -133,6 +133,8 @@ def main():
     check=0
     
     #giorno='{}000000'.format((datetime.datetime.today()-datetime.timedelta(days = 1)).strftime('%Y%m%d'))
+    
+    """
     giorno = '20221024000000'
     logger.debug("From date:{}".format(giorno))
     
@@ -163,6 +165,9 @@ def main():
     
     
     
+    
+    """
+    
     query_select='''select 
         coalesce(max(modificato), to_date('20230101', 'YYYYMMDD'))
         from idea.svuotamenti s '''
@@ -179,7 +184,8 @@ def main():
     k=0       
     for ii in max_date0:
         max_date=ii[0]  
-        
+    
+    logger.info(f'Max date ={max_date}')    
     #exit()
     
     while check<1:
@@ -210,6 +216,9 @@ def main():
             check=500
         if check<1:
             letture = response.json()
+            
+            #print(letture)
+            #exit()
             
             colonne=letture['meta']['columns']
             
@@ -245,6 +254,79 @@ def main():
                     desc_percorso=letture['data'][i][17]
                     sportello=letture['data'][i][18]
                     modified=letture['data'][i][19]
+                    # da usare in qualche modo
+                    tipo_record=letture['data'][i][20]
+                    dettaglio_record=letture['data'][i][21]
+                    #logger.debug(tipo_record)
+                    #logger.debug(dettaglio_record)
+                    #exit()
+                    if tipo_record != 0:
+                        messaggio = f'''tipo_record={tipo_record}, 
+                        id_idea = {id_idea}, 
+                        id_pdr = {id_pdr}, 
+                        dettaglio_record = {dettaglio_record}'''
+                        warning_message_mail(messaggio, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger, '''API SVUOTAMENTI ID&A: E' arrivato un evento con tipo != 0 ''')
+                    
+                    if tipo_record in [0,1]:
+                        query_upsert='''INSERT INTO idea.svuotamenti 
+                        (id_idea, id_piazzola, targa_contenitore, 
+                        riempimento, data_ora_svuotamento, peso_netto,
+                        peso_lordo, peso_tara, id_percorso_selezionato,
+                        codice_percorso_selezionato, descrizione_percorso_selezionato, sportello,
+                        modificato, dettaglio_record)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (id_idea)
+                        DO UPDATE  
+                        SET id_piazzola=%s, targa_contenitore=%s, riempimento=%s,
+                        data_ora_svuotamento=%s, peso_netto=%s,  peso_lordo=%s,
+                        peso_tara=%s, id_percorso_selezionato=%s, codice_percorso_selezionato=%s,
+                        descrizione_percorso_selezionato=%s, sportello=%s, modificato=%s,
+                        dettaglio_record=%s
+                        '''
+                        try:
+                            #curr.execute(query_insert, (id_idea, id_pdr, cod_cont, riempimento, data_ora_svuotamento, p_netto, p_lordo, p_tara, lon, lat))
+                            curr.execute(query_upsert, (
+                                id_idea, id_pdr, cod_cont,
+                                riempimento, data_ora_svuotamento, p_netto,
+                                p_lordo, p_tara, id_percorso,
+                                cod_percorso, desc_percorso, sportello,
+                                modified, dettaglio_record,
+                                id_pdr, cod_cont,
+                                riempimento, data_ora_svuotamento, p_netto,
+                                p_lordo, p_tara, id_percorso,
+                                cod_percorso, desc_percorso, sportello,
+                                modified, dettaglio_record
+                                ))
+                        except Exception as e:
+                            logger.error(query_upsert)
+                            logger.error(id_idea, id_pdr, cod_cont, riempimento, data_ora_svuotamento, p_netto, p_lordo, p_tara, id_percorso, cod_percorso, desc_percorso, sportello, modified)
+                            logger.error(e)
+                    
+                    else:
+                        query_upsert='''INSERT INTO idea.svuotamenti_altro (
+                            id_idea, modificato, tipo_record, dettaglio_record, 
+                            geoloc) 
+                            VALUES (%s, %s, %s, %s,
+                            ST_SetSRID(ST_MakePoint(%s, %s),4326)
+                            )
+                            ON CONFLICT (id_idea) DO UPDATE  
+                            SET modificato = EXCLUDED.modificato, 
+                            tipo_record =EXCLUDED.tipo_record
+                            dettaglio_record=EXCLUDED.dettaglio_record, 
+                            geoloc=EXCLUDED.geoloc'''
+                        try:
+                            #curr.execute(query_insert, (id_idea, id_pdr, cod_cont, riempimento, data_ora_svuotamento, p_netto, p_lordo, p_tara, lon, lat))
+                            curr.execute(query_upsert, (
+                                id_idea, modified, tipo_record, dettaglio_record, 
+                                lon, lat
+                                ))
+                        except Exception as e:
+                            logger.error(query_upsert)
+                            logger.error(id_idea, modified, tipo_record, dettaglio_record, lon, lat)
+                            logger.error(e)
+                            
+
+                    """
                     query_select='''SELECT * FROM idea.svuotamenti WHERE id_idea = %s;'''
                     try:
                         curr.execute(query_select, (id_idea,))
@@ -257,11 +339,6 @@ def main():
                     # se c'è già la entry faccio 
                     #logger.debug('Sono qua')
                     if len(conferimento)>0: 
-                        """query_update='''UPDATE idea.svuotamenti
-                        SET id_piazzola=%s, riempimento=%s, peso_netto=%s, peso_lordo=%s, peso_tara=%s
-                        geoloc=st_transform(ST_SetSRID(ST_MakePoint(%s, %s),4326),3003), targa_contenitore=%s, data_ora_svuotamento=%s
-                        WHERE id_idea=%s;'''
-                        """
                         query_update='''UPDATE idea.svuotamenti
                         SET id_piazzola=%s, riempimento=%s, peso_netto=%s, peso_lordo=%s, peso_tara=%s,
                         targa_contenitore=%s, data_ora_svuotamento=%s, id_percorso_selezionato=%s, codice_percorso_selezionato= %s ,
@@ -274,11 +351,6 @@ def main():
                             logger.error(query_update)
                             logger.error(e)
                     else:
-                        """query_insert='''INSERT INTO idea.svuotamenti
-                        (id_idea, id_piazzola, targa_contenitore, riempimento, data_ora_svuotamento, peso_netto, peso_lordo, peso_tara, geoloc)
-                        VALUES(%s, %s, %s, %s, %s, %s, %s, %s, 
-                        st_transform(ST_SetSRID(ST_MakePoint(%s, %s),4326),3003));'''
-                        """
                         query_insert='''INSERT INTO idea.svuotamenti
                         (id_idea, id_piazzola, targa_contenitore, riempimento, data_ora_svuotamento, peso_netto, peso_lordo, peso_tara, 
                         id_percorso_selezionato, codice_percorso_selezionato, descrizione_percorso_selezionato, 
@@ -291,6 +363,8 @@ def main():
                         except Exception as e:
                             logger.error(query_insert, id_idea, id_pdr, cod_cont, riempimento, data_ora_svuotamento, p_netto, p_lordo, p_tara, id_percorso, cod_percorso, desc_percorso, sportello, modified)
                             logger.error(e)
+                            
+                    """
                     ########################################################################################
                     # da testare sempre prima senza fare i commit per verificare che sia tutto OK
                     conn.commit()

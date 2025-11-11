@@ -167,7 +167,8 @@ def main():
     # provo il WS solo con la data 
     params={'obj':'schede_lavoro',
         'act' : 'r',
-        'sch_lav_data': '20240101',
+        'sch_lav_data': '20251023',
+        'cod_modello_srv': '0202244103',
         'flg_includi_eseguite': 1,
         'flg_includi_chiuse': 1
         }
@@ -191,16 +192,17 @@ def main():
         letture = response.json()
         #logger.info(letture)
         logger.info(len(letture['schede_lavoro']))
-        
+        logger.debug(letture['schede_lavoro'])
         exit()
         logger.debug(len(letture['schede_lavoro']))
+        
         if len(letture['schede_lavoro']) == 0:
             #va creata la scheda di lavoro
             logger.info('Andrebbe creata la scheda di lavoro')
             giason={
                         "crea_schede_lavoro": [
                         {
-                            "data_srv": "20231024",
+                            "data_srv": "20231023",
                             "cod_modello_srv": "0500110701",
                             "cod_turno_ext": "997"
                         }
@@ -220,6 +222,7 @@ def main():
             except Exception as e:
                 logger.error(e)
         elif len(letture['schede_lavoro']) > 0 : 
+            logger.debug('La schede di lavoro esiste' )
             id_scheda=letture['schede_lavoro'][0]['id_scheda_lav']
             turno=letture['schede_lavoro'][0]['cod_turno_ext']
             in_lavorazione= letture['schede_lavoro'][0]['flg_in_lavorazione']

@@ -337,7 +337,7 @@ where cod_frequenza not in (select cod_frequenza from etl.frequenze_ok_1)'''
     for fff in frequenze_nuove:
         body = """{0}<br>
         <h2> Nuova frequenza: {1} / {3} ({4} gg a settimana)</h2>
-<h3>Aggiungere ricorrenza {1} a EKOVISION (rif. Marzocchi o Magioncalda) </h3>
+<h3>Aggiungere ricorrenza {1} a EKOVISION (rif. Marzocchi o Fagandini) </h3>
 <ol>
 <li> Servizi --> Anagrafiche --> Configurazione ricorrenze</li>
 <li> Aggiungere la ricorrenza usando come <b><i>codice esterno<7i></b> quello di SIT ({1}) e poi specificare nei dettagli i giorni 

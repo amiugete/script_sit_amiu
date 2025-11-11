@@ -16,6 +16,10 @@ Output
 - lista componente, data_inizo sbagliata che è da inviare a Ekovision per eliminazione di quelle componenti (almeno per il 2025)
 
 
+
+SAREBBE DA GESTIRE IL FATTO CHE NON TUTTI I GIORNI CI SONO LE STESSE TAPPE IN FREQUENZA 
+VEDI QUANTO FATTO PER LO SPAZZAMENTO 
+
 '''
 
 #from msilib import type_short
@@ -96,7 +100,7 @@ f_handler = logging.StreamHandler()
 
 
 c_handler.setLevel(logging.ERROR)
-f_handler.setLevel(logging.DEBUG)
+f_handler.setLevel(logging.INFO)
 
 
 # Add handlers to the logger
@@ -196,6 +200,28 @@ def main():
     percorsi_da_controllare = percorsi_da_controllare_freq + percorsi_da_controllare_nofreq
     
     
+    # il 23/10 abbiamo controllato anche tutti i percorsi di raccolta che non sono da gestire per ARERA 
+    # e che quindi non avevamo tirato fuori dai test_calendario di TREG
+    # sovrascriviamo la lista percorsi_da_controllare
+    select_percorsi_da_controllare='''select distinct ep.cod_percorso from anagrafe_percorsi.elenco_percorsi ep 
+join anagrafe_percorsi.anagrafe_tipo t on t.id  = ep.id_tipo 
+where t.gestione_arera = 'f' and t.tipo_servizio = 'RACCOLTA' 
+and ep.data_fine_validita >= now()'''
+
+    try:
+        curr.execute(select_percorsi_da_controllare)
+        lista_percorsi=curr.fetchall()
+    except Exception as e:
+        logger.error(e)
+        logger.error(select_percorsi_da_controllare)
+
+    percorsi_da_controllare=[]
+    
+    for p in lista_percorsi:
+        percorsi_da_controllare.append(p[0])
+    logger.info(percorsi_da_controllare)
+    #exit()
+    
     query_variazioni_ekovision='''select 
 codice_modello_servizio,
 coalesce((select distinct ordine from anagrafe_percorsi.v_percorsi_elementi_tratti 
@@ -263,13 +289,13 @@ from (
   
   
 
-    outputfile1='{0}/anomalie_output/componenti_da_rimuovere.csv'.format(path,nome)    
+    outputfile1='{0}/anomalie_output/{1}componenti_da_rimuovere.csv'.format(path,oggi_char)    
     f= open(outputfile1, "w")
     f.write('cod_percorso;id_componente_ekovision;data_inizio_sbagliata')
     
     
     
-    
+    # da usare per per
     for pdc in percorsi_da_controllare:
         logger.debug(pdc)
         
@@ -283,17 +309,31 @@ from (
         id_scheda=0
         
         # cerco ultimo id_scheda con cui poi interrogherò i WS
+        """
         query_id_scheda='''SELECT max(id_scheda) as ID_SCHEDA, 
         max(DATA_ESECUZIONE_PREVISTA ) as max_data 
         FROM SCHEDE_ESEGUITE_EKOVISION see 
         WHERE see.CODICE_SERV_PRED = :p1 
         AND see.RECORD_VALIDO = 'S'
         having max(id_scheda) IS NOT NULL'''
+        """
+        # cerco gli ultimi 7 id_scheda con cui poi interrogherò i WS
+        query_id_scheda = '''
+        SELECT a.* FROM (
+        SELECT id_scheda as ID_SCHEDA, 
+        DATA_ESECUZIONE_PREVISTA
+        FROM SCHEDE_ESEGUITE_EKOVISION see 
+        WHERE see.CODICE_SERV_PRED = :p1
+        AND see.RECORD_VALIDO = 'S'
+        ORDER BY 2 DESC) a
+        WHERE rownum < 8
+        '''
         try:
             cur.execute(query_id_scheda,(pdc,))
             max_id_scheda=cur.fetchall()
         except Exception as e:
             logger.error(e)
+            logger.error(f'percorso : {pdc}')
             logger.error(query_id_scheda)
         
         for mdc in max_id_scheda:
@@ -384,7 +424,7 @@ from (
             
             
             
-            #logger.debug(componenti_OK)
+            logger.debug(componenti_OK)
             #exit()
             for ce in componenti_eko:
                 if ce not in componenti_OK:

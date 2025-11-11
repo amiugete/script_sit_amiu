@@ -124,7 +124,14 @@ def main():
     logger.info('Il PID corrente è {0}'.format(os.getpid()))
 
     
+    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+    
+    #headers = {'Content-type': 'application/json;'}
 
+    data={'user': eko_user, 
+        'password': eko_pass,
+        'o2asp' :  eko_o2asp
+        }
     
     
     # Get today's date
@@ -199,18 +206,37 @@ SUBSTR(see.NOMEFILE, 20, 8) = to_char((trunc(sysdate)-1),'YYYYMMDD')
 
     messaggio='<ul>'       
     for lp in lista_percorsi_dt:
-        messaggio='''{0}
+        logger.info('Provo a leggere i dettagli della scheda per vedere se aperta o chiusa')
+    
+    
+        params2={'obj':'schede_lavoro',
+                'act' : 'r',
+                'id': '{}'.format(lp[4]),
+                }
+        
+        response2 = requests.post(eko_url, params=params2, data=data, headers=headers)
+        #letture2 = response2.json()
+        letture2 = response2.json()
+
+        #logger.info(letture2)
+        logger.info(letture2["schede_lavoro"][0]["flg_chiuso"])
+        if letture2["schede_lavoro"][0]["flg_chiuso"]!='1':
+            logger.debug('Devo mandare alert')
+            messaggio='''{0}
             <li>Servizio:{1}
             <br>UO: {2}
             <br>Percorso: {3} - {4} (id_scheda:{5}) del <b> {6}</b></li>
             '''.format(messaggio, lp[2], lp[3], lp[5], lp[6],lp[4],lp[7])
+        #exit()
+        
 
     messaggio='{}</ul>'.format(messaggio)
+    #exit()
     
     if messaggio != '<ul></ul>':
         logger.debug(messaggio)
         
-        subject = "Alert schede Ekovision vecchie modificate"
+        subject = "Alert schede Ekovision vecchie non chiuse modificate"
             
         ##sender_email = user_mail
         receiver_email='assterritorio@amiu.genova.it'

@@ -164,11 +164,20 @@ def main():
     # inserimento manuale id_scheda
     #check_schede=[[483442],[483443]]
     check_schede=[
-        [536525],
-        [536717],
-        [536727],
-        [536728],
-        [536729]
+        [708988],
+[709902],
+[709485],
+[709904],	
+[709102],
+[709104],
+[709106],
+[708989],
+[709903],
+[709486],
+[709905],	
+[709103],
+[709105],
+[709107]
         ]
     
     for id_scheda in check_schede:
@@ -176,13 +185,7 @@ def main():
     
     
     
-    
-    
-
-    
-    
-    
-    
+     
     
    
         logger.info('Provo a leggere i dettagli della scheda {}'.format(id_scheda[0]))
@@ -212,7 +215,7 @@ def main():
         
         
         letture2['schede_lavoro'][0]['servizi'][0]['flg_segn_srv_non_effett']="1"
-        letture2['schede_lavoro'][0]['servizi'][0]['txt_segn_srv_non_effett']="Creata scheda per errata consuntivazione da Totem"
+        letture2['schede_lavoro'][0]['servizi'][0]['txt_segn_srv_non_effett']="Scheda creata per errore a causa di mancata disattivazione su SIT"
         letture2['schede_lavoro'][0]['servizi'][0]['id_caus_srv_non_eseg']='15'
         letture2['schede_lavoro'][0]['flg_eseguito']='1'
         letture2['schede_lavoro'][0]['flg_imposta_eseguito']='1'

@@ -116,7 +116,7 @@ f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.ERROR)
-f_handler.setLevel(logging.DEBUG)
+f_handler.setLevel(logging.INFO)
 
 
 # Add handlers to the logger
@@ -234,10 +234,15 @@ def main():
     curr.close()
     curr = conn.cursor()
     
+    
     # cerco il giono da cui partire
+    """
     query_first_day='''SELECT coalesce(max(data_last_calendar), to_date('20250101', 'YYYYMMDD')) as data_last_calendar
-FROM eko_treg.last_import_treg_racc; '''
+FROM treg_eko.last_import_treg_racc;'''
+    """
 
+    query_first_day='''SELECT to_date('20250707', 'YYYYMMDD') as data_last_calendar
+FROM treg_eko.last_import_treg_racc;'''
     try:
         curr.execute(query_first_day)
         giorno_mese_anno=curr.fetchall()
@@ -246,16 +251,23 @@ FROM eko_treg.last_import_treg_racc; '''
         logger.error(query_first_day)
         logger.error(e)
     
-    
+
     for gma in giorno_mese_anno:
         data_start=gma[0]
-        logger.debug('{} era {}'.format(data_start, data_start.strftime('%A')))
+    logger.debug('{} era {}'.format(data_start, data_start.strftime('%A')))
 
 
-    #fine_ciclo=oggi
+    #########################################################################
+    # IMPOSTO FINE CICLO
     
-    fine_ciclo = datetime.strptime('20250630', '%Y%m%d')
+    # per arrivare ad oggi
+    #fine_ciclo=oggi
+
+    # per fermarmi prima di oggi 
+    fine_ciclo = datetime.strptime('20250714', '%Y%m%d')
     fine_ciclo=date(fine_ciclo.year, fine_ciclo.month, fine_ciclo.day)
+    #########################################################################
+    
     while  data_start <= fine_ciclo:
         logger.info('Processo il giorno {}'.format(data_start))
         if data_start.isocalendar()[1]%2 == 1:
@@ -270,7 +282,7 @@ FROM eko_treg.last_import_treg_racc; '''
             from anagrafe_percorsi.elenco_percorsi ep 
             join anagrafe_percorsi.anagrafe_tipo at2 on at2.id = ep.id_tipo
             join etl.frequenze_ok fo on fo.cod_frequenza = ep.freq_testata 
-            where %s between data_inizio_validita and data_fine_validita 
+            where %s between data_inizio_validita and (data_fine_validita - interval '1' day) 
             and gestione_arera = 't'
             and at2.id_famiglia not in (2,3) /* togliamo servizi igiene */ 
             '''
@@ -362,7 +374,8 @@ FROM eko_treg.last_import_treg_racc; '''
                     dict_percorsi_doppi[c]=data_start
                     ss=0
                     while ss < len(letture['schede_lavoro']):
-                        id_scheda.append(int(letture['schede_lavoro'][ss]['id_scheda_lav']))
+                        if int(letture['schede_lavoro'][ss]['id_scheda_lav']) not in id_scheda:
+                            id_scheda.append(int(letture['schede_lavoro'][ss]['id_scheda_lav']))
                         ss+=1
                 else: 
                     id_scheda.append(int(letture['schede_lavoro'][0]['id_scheda_lav']))
@@ -463,11 +476,9 @@ FROM eko_treg.last_import_treg_racc; '''
             # popolo comp_sit
             for eep in elenco_elementi_percorso:
                 # verifico se in frequenza con la solita funzione
-                #if tappa_prevista(data_start,  eep[1])==1:
+                if tappa_prevista(data_start,  eep[1])==1:
                     # questa sarà da passare a TREG, le altre no
-
-                # per ora per il confronto con ekovision gliele passo tutte
-                comp_sit.append(eep[3])
+                    comp_sit.append(eep[3])
                 
             
             
@@ -534,7 +545,7 @@ FROM eko_treg.last_import_treg_racc; '''
                         logger.error('PROBLEMA CONFRONTO COMPONENTI')
                         logger.error('Percorso {} - Data {}'.format(c, data_start))
                         logger.error('Componente ekovision non trovata: {}'.format(dict_comp_eko_sit[ce]))
-                        lista_comp_anomale.appen(dict_comp_eko_sit[ce])
+                        lista_comp_anomale.append(dict_comp_eko_sit[ce])
                         #exit()
             if len(lista_comp_anomale)>0:
                 dict_componenti_non_trovate[c]=lista_comp_anomale      

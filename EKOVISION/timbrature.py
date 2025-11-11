@@ -173,7 +173,7 @@ def main():
                         port=port,
                         user=user,
                         password=pwd,
-                        host=host)
+                        host=host_dwh)
 
 
     

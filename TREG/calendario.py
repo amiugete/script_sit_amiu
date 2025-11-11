@@ -50,7 +50,7 @@ import json
 
 #import pymssql
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone, time
 
 import locale
 
@@ -83,22 +83,17 @@ from crea_dizionario_da_query import *
 
 import uuid
 
-
+giorno_file=datetime.today().strftime('%Y%m%d_%H%M%S')
 
 filename = inspect.getframeinfo(inspect.currentframe()).filename
 path=os.path.dirname(sys.argv[0]) 
 path1 = os.path.dirname(os.path.dirname(os.path.abspath(filename)))
 nome=os.path.basename(__file__).replace('.py','')
 #tmpfolder=tempfile.gettempdir() # get the current temporary directory
-logfile='{0}/log/{1}.log'.format(path,nome)
-errorfile='{0}/log/error_{1}.log'.format(path,nome)
+logfile='{0}/log/{2}_{1}.log'.format(path,nome,giorno_file)
+errorfile='{0}/log/{2}_error_{1}.log'.format(path,nome,giorno_file)
 #if os.path.exists(logfile):
 #    os.remove(logfile)
-
-
-
-
-
 
 
 # Create a custom logger
@@ -146,7 +141,7 @@ from invio_messaggio import *
 # libreria per scrivere file csv
 import csv
 
-import time
+
 
 
 #variabile che specifica se devo fare test ekovision oppure no
@@ -186,10 +181,7 @@ def programming_start_ending_date(cursor, data, id_turno, gc):
     La funzione in base a giorno, id_turno e giorno_competenza restituisce un array con la programmingStartDate e la programmingEndingDate 
     nel formato voluto da TREG
     '''
-    
-    
-    
-    
+
     # inizializzo l'array di output
     dates=[]
     
@@ -219,21 +211,30 @@ def programming_start_ending_date(cursor, data, id_turno, gc):
     interval = riga[0]
     h_inizio = riga[1]
     h_fine= riga[2]
+
+    hhi, mmi = map(int, h_inizio.split(':'))
+    hhf, mmf = map(int, h_fine.split(':'))
+    
     #logger.debug(interval)
     #exit()
+    #data = data.astimezone(timezone.utc)
+    data = datetime.combine(data, datetime.min.time())
     if gc == 0:
-        dates.append('{}T{}:00.000Z'.format(data.strftime('%Y-%m-%d'), h_inizio))
-        dates.append('{}T{}:00.000Z'.format((data+timedelta(days=interval)).strftime('%Y-%m-%d'), h_fine))
-        dates.append(data.strftime('%Y'))
+        dt_inizio = data.replace(hour=hhi, minute=mmi, second=0, microsecond=0).astimezone(timezone.utc)
+        dt_fine = data.replace(hour=hhf, minute=mmf, second=0, microsecond=0).astimezone(timezone.utc)
     elif gc == -1: 
         data_inizio= data-timedelta(days=1)
-        dates.append('{}T{}:00.000Z'.format(data_inizio.strftime('%Y-%m-%d'),h_inizio))
-        dates.append('{}T{}:00.000Z'.format((data_inizio+timedelta(days=interval)).strftime('%Y-%m-%d'), h_fine))
-        dates.append(data_inizio.strftime('%Y'))
+        data_fine = data_inizio+timedelta(days=interval)
+        dt_inizio = data_inizio.replace(hour=hhi, minute=mmi, second=0, microsecond=0).astimezone(timezone.utc)
+        dt_fine = data_fine.replace(hour=hhi, minute=mmi, second=0, microsecond=0).astimezone(timezone.utc)
     else: 
         logger.error('Come mai gc vale {}'.format(gc))
         
-        
+    
+    dates.append(dt_inizio.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z')
+    dates.append(dt_fine.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z')
+    dates.append(dt_inizio.strftime('%Y'))
+
     return dates
 
 def main():
@@ -285,7 +286,7 @@ def main():
     
     # cerco il giono da cui partire
     query_first_day='''SELECT coalesce(max(data_last_calendar)+1, to_date('20250101', 'YYYYMMDD')) as data_last_calendar
-FROM eko_treg.last_import_treg_racc where commit_code=200'''
+FROM treg_eko.last_import_treg_racc where commit_code=200 and deleted = false'''
 
     try:
         curr.execute(query_first_day)
@@ -300,14 +301,16 @@ FROM eko_treg.last_import_treg_racc where commit_code=200'''
         data_start=gma[0]
         logger.debug('{} era {}'.format(data_start, data_start.strftime('%A')))
 
+    #data_start=datetime.strptime('20251109', '%Y%m%d').date() #per eventuale debug
+    fine_ciclo=oggi
+    
+    #fine_ciclo = datetime.strptime('20250630', '%Y%m%d')
+    #fine_ciclo=date(fine_ciclo.year, fine_ciclo.month, fine_ciclo.day)
+    
+    
+    logger.info(fine_ciclo)
 
-    #fine_ciclo=oggi
-    
-    fine_ciclo = datetime.strptime('20250630', '%Y%m%d')
-    fine_ciclo=date(fine_ciclo.year, fine_ciclo.month, fine_ciclo.day)
-    
-    
-    
+    #exit()
     # qua mi tiro fuori il token TREG 
     
     token=token_treg()
@@ -417,7 +420,7 @@ FROM eko_treg.last_import_treg_racc where commit_code=200'''
             # cerco quelle di SIT
             query_elementi_percorso='''
             select distinct codice_modello_servizio as cod_percorso,
-            fo.freq_binaria, 
+            1 as in_freq, 
             case
                 when ep.id_elemento_privato is null then 'OTH'
                 else 'DOM'
@@ -479,13 +482,13 @@ FROM eko_treg.last_import_treg_racc where commit_code=200'''
             where
             tab.data_fine > '20250101'
             and objecy_type = 'COMP'
+            and treg_eko.verify_daily_frequency(tab.frequenza, to_date(%s, 'YYYYMMDD'), ep2.freq_settimane ) = 1
             and tr.tipo_rifiuto not in (
             /* punto di lavaggio */ 99  
             )
             and codice_modello_servizio = %s
             and %s between tab.data_inizio and tab.data_fine
             group by codice_modello_servizio,
-            fo.freq_binaria, 
             case
                 when ep.id_elemento_privato is null then 'OTH'
                 else 'DOM'
@@ -502,7 +505,7 @@ FROM eko_treg.last_import_treg_racc where commit_code=200'''
             #logger.debug(data_start.strftime('%Y%m%d'))
             #logger.debug(c)
             try:
-                curr.execute(query_elementi_percorso, (data_start.strftime('%Y%m%d'), c, data_start.strftime('%Y%m%d'),))
+                curr.execute(query_elementi_percorso, (data_start.strftime('%Y%m%d'), data_start.strftime('%Y%m%d'), c, data_start.strftime('%Y%m%d'),))
                 elenco_elementi_percorso=curr.fetchall()
             except Exception as e:
                 logger.error(query_elementi_percorso)
@@ -515,29 +518,31 @@ FROM eko_treg.last_import_treg_racc where commit_code=200'''
             
             list_wasteCollection=[]
             # popolo comp_sit
+            codici_percorso = [] # popolo la lista con i codici componente/tratto del percorsoi pèer evitare ripassi (fittizzi e non) con stesso giorno di frequenza
             for eep in elenco_elementi_percorso:
                 #logger.debug(eep[0])  
                 # verifico se in frequenza con la solita funzione
-                if tappa_prevista(data_start,  eep[1])==1:
+                #if tappa_prevista(data_start,  eep[1])==1:
                     
                     
-                    curr1 = conn.cursor()
-                    
-                    wasteCollection={
-                        'traceabilityCode': '{0}_{1}_{2}'.format(eep[3],data_start.strftime('%Y%m%d'),t),
-                        'collectionType':str(eep[2]),
-                        'areaCode': str(eep[3]),
-                        'streetCode': str(eep[5]),
-                        'streetDescription':str(eep[6]),
-                        'cerCode':str(eep[7]),
-                        'wasteDescription':str(eep[8]),
-                        'programmingStartDate':programming_start_ending_date(curr1, data_start, t, eep[12])[0],
-                        'programmingEndingDate':programming_start_ending_date(curr1, data_start, t, eep[12])[1],
-                        'year':int(programming_start_ending_date(curr1, data_start, t, eep[12])[2]),
-                        'istatCode': str(eep[9]) 
-                    }
-                    list_wasteCollection.append(wasteCollection)
-                    #logger.debug(list_wasteCollection)
+                curr1 = conn.cursor()
+                
+                wasteCollection={
+                    'traceabilityCode': '{0}_{1}_{2}'.format(eep[3],data_start.strftime('%Y%m%d'),t),
+                    'collectionType':str(eep[2]),
+                    'areaCode': str(eep[3]),
+                    'streetCode': str(eep[5]),
+                    'streetDescription':str(eep[6]),
+                    'cerCode':str(eep[7]),
+                    'wasteDescription':str(eep[8]),
+                    'programmingStartDate':programming_start_ending_date(curr1, data_start, t, eep[12])[0],
+                    'programmingEndingDate':programming_start_ending_date(curr1, data_start, t, eep[12])[1],
+                    'year':int(programming_start_ending_date(curr1, data_start, t, eep[12])[2]),
+                    'istatCode': str(eep[9]) 
+                }
+                list_wasteCollection.append(wasteCollection)
+                #logger.debug(list_wasteCollection)
+                #exit()
                     
                     
             
@@ -594,7 +599,8 @@ FROM eko_treg.last_import_treg_racc where commit_code=200'''
 
                     if attempt == MAX_RETRIES:
                         logger.error("Tutti i tentativi sono falliti. Operazione interrotta.")
-                        raise ValueError(e)  # fermo l'esecuzione
+                        error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                        exit()  # fermo l'esecuzione
                     else:
                         time.sleep(DELAY_SECONDS)  # Aspetta prima del prossimo tentativo
                         
@@ -625,7 +631,7 @@ FROM eko_treg.last_import_treg_racc where commit_code=200'''
             logger.info('Fine commit - Risposta TREG: {}'.format(response_commit_upload.text))
               
             
-            query_insert='''INSERT INTO eko_treg.last_import_treg_racc 
+            query_insert='''INSERT INTO treg_eko.last_import_treg_racc 
                 (data_last_calendar, last_update,
                 request_id_amiu, importid_treg, 
                 commit_code, commit_message) 
@@ -646,7 +652,7 @@ FROM eko_treg.last_import_treg_racc where commit_code=200'''
                   
         else: 
             logger.warning('Sono presenti errori, non faccio il commit')                
-            query_insert='''INSERT INTO eko_treg.last_import_treg_racc 
+            query_insert='''INSERT INTO treg_eko.last_import_treg_racc 
                 (data_last_calendar, last_update,
                 request_id_amiu, importid_treg) 
                 VALUES(to_date(%s, 'YYYYMMDD'), now(), 
@@ -672,7 +678,7 @@ FROM eko_treg.last_import_treg_racc where commit_code=200'''
     
     
     # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
     
     
     logger.info("chiudo le connessioni in maniera definitiva")
