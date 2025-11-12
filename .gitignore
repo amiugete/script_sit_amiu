@@ -2,7 +2,6 @@ credenziali.py
 
 log/*.log
 log/*.txt
-log/ping_output.txt
 
 variazioni/*.csv
 variazioni/*.xlsx
