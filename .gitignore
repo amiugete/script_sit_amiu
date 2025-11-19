@@ -24,6 +24,7 @@ EKOVISION/timbrature/*.csv
 EKOVISION/assenze/*.csv
 EKOVISION/pesi/*.csv
 EKOVISION/log/*.log
+EKOVISION/log/*.csv
 EKOVISION/eko_output/*.json
 EKOVISION/eko_output2/*.json
 EKOVISION/eko_output3/*.json
