@@ -300,7 +300,7 @@ def main():
     curr_c = conn_c.cursor()
     upsert=''' INSERT INTO raccolta.effettuati_amiu (
         id, 
-        id_tappa, data_inserimento, 
+        tappa, data_inserimento, 
         datalav, codice, 
         id_causale, fatto,
         nota) VALUES (
@@ -310,8 +310,8 @@ def main():
         %s, %s,
         %s
         )
-        ON CONFLICT (id) /* or you may use [DO NOTHING;] */ DO UPDATE  
-        SET id_tappa=EXCLUDED.id_tappa, data_inserimento=EXCLUDED.data_inserimento,
+        ON CONFLICT (tappa, datalav, codice) /* or you may use [DO NOTHING;] */ DO UPDATE  
+        SET tappa=EXCLUDED.tappa, data_inserimento=EXCLUDED.data_inserimento,
         datalav=EXCLUDED.datalav, codice=EXCLUDED.codice,
         id_causale=EXCLUDED.id_causale, fatto=EXCLUDED.fatto,
         nota=EXCLUDED.nota'''
