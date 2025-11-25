@@ -193,7 +193,13 @@ def main():
     cartella_sftp_eko='sch_lav_cons/out/archive'    
     logger.info('Leggo e scarico file SFTP da cartella {}'.format(cartella_sftp_eko))
     
-
+    
+    ###########################################################################################################################
+    debug_mode=0  # 1 per processare solo un file (per debug)
+    file_da_processare='sch_lav_consuntivi_20250527_144843_6835b4c393792.json'
+    ###########################################################################################################################
+    
+        
 
     # Mi connetto a SIT (PostgreSQL) per poi recuperare le mail
     nome_db=db
@@ -223,9 +229,20 @@ def main():
     # cerco l'ultimo file STANDARD letto 
     # STANDARD --> uso REGEXP_LIKE(REGEXP_SUBSTR(filename, '[^_]+', 1, 4), '^\d+$')
     
+    # seleziono l'ultimo file letto
     query_select=''' SELECT max(substr(filename, 0,34)) 
 FROM UNIOPE.HIST_SERVIZI_MEZZI_OK
 WHERE REGEXP_LIKE(REGEXP_SUBSTR(filename, '[^_]+', 1, 4),'^\d+$') '''
+    
+    
+    # riprocesso tutto il 2025
+    query_select='''SELECT min(substr(see.nomefile,0,34)) 
+FROM SCHEDE_ESEGUITE_EKOVISION see 
+WHERE see.DATA_ESECUZIONE_PREVISTA >= '20250101' 
+AND see.RECORD_VALIDO = 'S'
+AND substr(see.nomefile,0,34) IS NOT null'''
+    
+    
     
     try:
         cur.execute(query_select)
@@ -248,7 +265,11 @@ WHERE REGEXP_LIKE(REGEXP_SUBSTR(filename, '[^_]+', 1, 4),'^\d+$') '''
         with srv.cd(cartella_sftp_eko): #chdir to public
             #print(srv.listdir('./'))
             tutti_file = srv.listdir('./')  # lista tutti i file
-            file_filtrati = sorted(f for f in tutti_file if f > filtro)
+            if debug_mode ==0:
+                file_filtrati = sorted(f for f in tutti_file if f > filtro)
+            else:
+                file_filtrati = [file_da_processare]
+            
             
             for filename in file_filtrati:
                 
@@ -339,11 +360,12 @@ WHERE REGEXP_LIKE(REGEXP_SUBSTR(filename, '[^_]+', 1, 4),'^\d+$') '''
                                 
                                 # faccio inserimenti
                                 if data[i]['cod_caus_srv_non_eseg_ext']=='' and len(data[i]['cons_ris_tecniche'])>0 and check_ditta_terza==0:
-                                    if data[i]['cons_ris_tecniche'][0]['id_giustificativo'] == 0 or data[i]['cons_ris_tecniche'][0]['id_risorsa_tecnica'] > 0:
-                                        tt=0
-                                        while  tt<len(data[i]['cons_ris_tecniche']):
+                                    
+                                    tt=0
+                                    while  tt<len(data[i]['cons_ris_tecniche']):
+                                        if data[i]['cons_ris_tecniche'][tt]['id_giustificativo'] == 0 or data[i]['cons_ris_tecniche'][tt]['id_risorsa_tecnica'] > 0:
                                             sportello=data[i]['cons_ris_tecniche'][tt]['cod_matricola_ristec']
-                                            logger.debug(sportello)
+                                            logger.debug(f'Sportello{sportello}')
                                             
                                             
                                             cur2 = con.cursor()
@@ -361,13 +383,15 @@ WHERE REGEXP_LIKE(REGEXP_SUBSTR(filename, '[^_]+', 1, 4),'^\d+$') '''
                                                     )
                                                 
                                                 fmt='%Y%m%d %H%M'
+                                                #logger.debug('Data inizio: {}'.format(data_ora_start))
+                                                #logger.debug('Data fine: {}'.format(data_ora_fine))
                                                 data_ora_start_ok = datetime.strptime(data_ora_start, fmt)
                                                 data_ora_fine_ok = datetime.strptime(data_ora_fine, fmt)
                                                 # calcolo differenza in minuti ()
                                                 durata+=(data_ora_fine_ok - data_ora_start_ok).total_seconds() / 60.0
                                                 
                                                 o+=1
-                                            logger.debug(durata)
+                                            logger.debug(f'Durata = {durata} minuti')
                                             
                                             
                                             
@@ -440,7 +464,8 @@ WHERE REGEXP_LIKE(REGEXP_SUBSTR(filename, '[^_]+', 1, 4),'^\d+$') '''
                                             """    
                                             cur2.close()    
                                             con.commit()
-                                            tt+=1 
+                                        # incremento tt indipendentemente dal fatto che abbia fatto o meno l'inserimento
+                                        tt+=1 
                                 
                                 
                             else:
