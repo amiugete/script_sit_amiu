@@ -148,8 +148,9 @@ def main():
             
         
         except Exception as e:
-            logger.error('Verificare il seguente utenti su SIT e aggiungere la MAIL, perchè non si riesce a configurare in maniera automatica')
-            logger.error(user1)
+            logger.error(f'Non si riesce a configurare in maniera automatica la mail per l\'utente:{user1}')
+            logger.error('Verificare il seguente utenti su SIT e aggiungere la MAIL alla tabella util.sys_users, perchè non si riesce a configurare in maniera automatica')
+            logger.error(f'Errore riscontrato:{e}')
             #logger.error(e)
     
 
