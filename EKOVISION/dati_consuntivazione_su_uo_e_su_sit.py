@@ -740,9 +740,9 @@ def main():
                                     curr1.close()
 
                                     if data[i]['cod_caus_srv_non_eseg_ext']=='' and len(data[i]['cons_ris_tecniche'])>0 and check_ditta_terza==0:
-                                        if data[i]['cons_ris_tecniche'][0]['id_giustificativo'] == 0 or data[i]['cons_ris_tecniche'][0]['id_risorsa_tecnica'] > 0:
-                                            tt=0
-                                            while  tt<len(data[i]['cons_ris_tecniche']):
+                                        tt=0
+                                        while  tt<len(data[i]['cons_ris_tecniche']):
+                                            if data[i]['cons_ris_tecniche'][tt]['id_giustificativo'] == 0 or data[i]['cons_ris_tecniche'][tt]['id_risorsa_tecnica'] > 0:
                                                 sportello=data[i]['cons_ris_tecniche'][tt]['cod_matricola_ristec']
                                                 logger.debug('{} - lo sportello è {}'.format(tt, sportello))
                                                 
@@ -832,7 +832,8 @@ def main():
                                                 con.commit()
                                                 curr2.close()    
                                                 conn.commit()
-                                                tt+=1 
+                                            # incremento tt indipendentemente dal fatto che abbia fatto o meno l'inserimento
+                                            tt+=1 
                                     
                                     ################################################
                                     # RISORSE UMANE
