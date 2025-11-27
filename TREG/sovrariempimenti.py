@@ -181,10 +181,13 @@ def main():
     curr = conn.cursor()
       
     # cerco il giono da cui partire
+
     query_new_ispez= '''select * from sovrariempimenti.ispezioni ii
                         where ii.id not in (
                             select split_part(ic.traciabilitycode, '_', 2)::numeric from treg_sov.ispezioni_caricate ic 
                         ) and ii.data_inserimento::date < CURRENT_DATE'''
+
+    #query_new_ispez= 'select * from sovrariempimenti.ispezioni i where i.id = 699'
 
     try:
         curr.execute(query_new_ispez)
@@ -200,210 +203,300 @@ def main():
     #new_ispezioni = []
 
     if len(new_ispezioni) != 0:
-        logger.info('Ci sono {0} ispezioni da caricare'.format(len(new_ispezioni)))
+        logger.info('Ci sono {0} ispezioni da caricare su TREG'.format(len(new_ispezioni)))
         for ni in new_ispezioni:
             id_ispezione=ni[0]
             data_ins = ni[4]
             logger.debug('Processo ispezione con id {} esguita il {}'.format(id_ispezione, data_ins))
+
+            query_elementi = 'select * from sovrariempimenti.ispezione_elementi ie where ie.id_ispezione  = %s'
+            try:
+                curr.execute(query_elementi, (id_ispezione,))
+                elementi=curr.fetchall()
+            except Exception as e:
+                check_error=1
+                logger.error(query_elementi)
+                logger.error(e)
+
+            if len(elementi) != 0:
             
-            ########################
-            #recupero import id TREG
-            ########################
-            guid = uuid.uuid4()
-            logger.debug(str(guid))
-            #logger.debug(guid.type)
-            #json_id={'id': '{}'.format(str(guid))}
-            json_id={'id': str(guid)}
-            api_url_begin_upload='{}atrif/api/v1/tobin/b2b/process/rifqt-overfilledbins/begin-upload/av1'.format(url_ws_treg)    
-        
-            response = requests.post(api_url_begin_upload, json=json_id, headers={'accept':'*/*', 
+                ########################
+                #recupero import id TREG
+                ########################
+                guid = uuid.uuid4()
+                logger.debug(str(guid))
+                #logger.debug(guid.type)
+                #json_id={'id': '{}'.format(str(guid))}
+                json_id={'id': str(guid)}
+                api_url_begin_upload='{}atrif/api/v1/tobin/b2b/process/rifqt-overfilledbins/begin-upload/av1'.format(url_ws_treg)    
+            
+                response = requests.post(api_url_begin_upload, json=json_id, headers={'accept':'*/*', 
+                                                                                        'mde': 'PROD',
+                                                                                        'Authorization': 'EIP {}'.format(token),
+                                                                                        'Content-Type': 'application/json'})
+                importId=response.json()['importId']
+                #exit()
+                
+                logger.info('ImportId = {}'.format(importId))
+
+                
+                # inizializzo un check 
+                # dovrebbe rimanere 0 per garantirmi di fare il commit solo di roba pulita 
+                check_error_upload=0
+                
+                
+                ##################################
+                # procedo con il recupero dati
+                ##################################
+
+            
+                query_ispezioni='''
+                    select concat(p.id_piazzola,'_',i.id) as traceabilityCode,
+                    a.id_asta as areaCode,
+                    --i.ispettore as ispezione_eseguita_da,
+                    to_char(date_trunc('day', i.data_ora AT TIME ZONE 'Europe/Rome') AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as programmingStartDate,
+                    to_char(date_trunc('day', i.data_ora AT TIME ZONE 'Europe/Rome') AT TIME ZONE 'UTC' + interval '23 hours 59 minutes', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as programmingEndingDate,
+                    to_char((i.data_ora AT TIME ZONE 'Europe/Rome') AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS controlStartDate,
+                    CASE 
+                        WHEN i.data_inserimento - i.data_ora <= interval '10 minutes' THEN to_char((i.data_inserimento AT TIME ZONE 'Europe/Rome')  AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+                        ELSE to_char((i.data_ora AT TIME ZONE 'Europe/Rome') AT TIME ZONE 'UTC'  + interval '10 minutes', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+                    END AS controlEndingDate,
+                    count(distinct ie.id_elemento) as programmedBins,
+                    count(distinct ie.id_elemento) as controlledBins,
+                    count(distinct ie.id_elemento) filter (where ie.sovrariempito) as overfilledBins,
+                    coalesce(pe.anno, extract(year from i.data_ora)) as anno,
+                    c.cod_istat
+                    from sovrariempimenti.ispezioni i 
+                    inner join sovrariempimenti.ispezione_elementi ie on ie.id_ispezione = i.id 
+                    join (select id_elemento, id_asta, tipo_elemento from elem.elementi
+                        union 
+                        select id_elemento, id_asta, tipo_elemento from history.elementi) e on ie.id_elemento = e.id_elemento
+                    left join sovrariempimenti.programmazione_ispezioni pe on i.id_piazzola = pe.id_piazzola
+                    left join elem.piazzole p on p.id_piazzola = i.id_piazzola 
+                    join elem.aste a on a.id_asta = coalesce(p.id_asta, e.id_asta) 
+                    join topo.vie v on v.id_via = a.id_via 
+                    join topo.comuni c on c.id_comune = v.id_comune 
+                    where i.id = %s and (pe.anno = extract(year from i.data_ora) or (pe.anno is null and extract(year from i.data_ora)= extract(year from now())))
+                    group by 
+                    p.id_piazzola, i.id, pe.anno, c.cod_istat, a.id_asta
+                '''
+
+                try:
+                    curr.execute(query_ispezioni, (id_ispezione,))
+                    #curr.execute(query_ispezioni, (867,))
+                    ispezione=curr.fetchall()
+                except Exception as e:
+                    check_error=1
+                    logger.error(query_ispezioni)
+                    logger.error(e)
+                            
+                logger.debug(ispezione)
+                #exit()
+                
+                list_overfilled=[]
+                # popolo tratti_sit
+                for isp in ispezione:
+                    overfilled={
+                        'traceabilityCode': str(isp[0]),
+                        'areaCode': str(isp[1]),
+                        'programmingStartDate': str(isp[2]),
+                        'programmingEndingDate': str(isp[3]),
+                        'controlStartDate': str(isp[4]),
+                        'controlEndingDate':str(isp[5]),
+                        'programmedBins':int(isp[6]),
+                        'controlledBins':int(isp[7]),
+                        'overfilledBins':int(isp[8]),
+                        'year':int(isp[9]),
+                        'istatCode': str(isp[10]) 
+                    }
+                    list_overfilled.append(overfilled)
+                        
+                    logger.debug(list_overfilled)
+                    
+                    ########################################################
+                    # upload di list_wasteCollection di un singolo percorso
+                    ########################################################
+                    logger.info('Inizio upload dati')
+                    api_url_upload='{}atrif/api/v1/tobin/b2b/process/rifqt-overfilledbins/upload/av1'.format(url_ws_treg)
+                    # questa sarà da passare a TREG, le altre no
+                    
+                    body_upload={
+                        'id': str(guid),
+                        'importId': str(importId),
+                        'entities': list_overfilled
+                    }
+                    
+                    
+                    
+                    for attempt in range(1, MAX_RETRIES + 1):
+                        try:
+                            
+                            if attempt> 1:
+                                logger.warning(f"Tentativo {attempt}")
+                            
+                            # 🔁 CODICE CHE PUÒ FALLIRE
+                            response_upload = requests.post(api_url_upload, json=body_upload, headers={'accept':'*/*', 
                                                                                     'mde': 'PROD',
                                                                                     'Authorization': 'EIP {}'.format(token),
                                                                                     'Content-Type': 'application/json'})
-            importId=response.json()['importId']
-            #exit()
-            
-            logger.info('ImportId = {}'.format(importId))
+                            
+                            logger.debug(response_upload.text)
+                            #logger.debug(response_upload.json()['errorCount'])
+                            #exit()
+                            
+                            # controllo che non ci siano errori (nel caso mi stoppo)
+                        
+                            if response_upload.json()['errorCount']!=0:
+                                logger.error(list_overfilled)   
+                                logger.error(list_overfilled.text)
+                                
+                                
+                                # butto il dato su check_error_upload          
+                                check_error_upload+=response_upload.json()['errorCount']
+                            # ✅ Se funziona, esci dal ciclo
+                            break
 
-            
-            # inizializzo un check 
-            # dovrebbe rimanere 0 per garantirmi di fare il commit solo di roba pulita 
-            check_error_upload=0
-            
-            
-            ##################################
-            # procedo con il recupero dati
-            ##################################
+                        except Exception as e:
+                            logger.warning(e)
 
-        
-            query_ispezioni='''
-                select concat(p.id_piazzola,'_',i.id) as traceabilityCode,
-                a.id_asta as areaCode,
-                --i.ispettore as ispezione_eseguita_da,
-                to_char(date_trunc('day', i.data_ora AT TIME ZONE 'Europe/Rome') AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as programmingStartDate,
-                to_char(date_trunc('day', i.data_ora AT TIME ZONE 'Europe/Rome') AT TIME ZONE 'UTC' + interval '23 hours 59 minutes', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as programmingEndingDate,
-                to_char((i.data_ora AT TIME ZONE 'Europe/Rome') AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS controlStartDate,
-                CASE 
-                    WHEN i.data_inserimento - i.data_ora <= interval '10 minutes' THEN to_char((i.data_inserimento AT TIME ZONE 'Europe/Rome')  AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
-                    ELSE to_char((i.data_ora AT TIME ZONE 'Europe/Rome') AT TIME ZONE 'UTC'  + interval '10 minutes', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
-                END AS controlEndingDate,
-                count(distinct ie.id_elemento) as programmedBins,
-                count(distinct ie.id_elemento) as controlledBins,
-                count(distinct ie.id_elemento) filter (where ie.sovrariempito) as overfilledBins,
-                pe.anno,
-                c.cod_istat
-                from sovrariempimenti.programmazione_ispezioni pe 
-                join sovrariempimenti.ispezioni i on i.id_piazzola = pe.id_piazzola
-                inner join sovrariempimenti.ispezione_elementi ie on ie.id_ispezione = i.id 
-                join (select id_elemento, id_asta, tipo_elemento from elem.elementi
-                    union 
-                    select id_elemento, id_asta, tipo_elemento from history.elementi) e on ie.id_elemento = e.id_elemento
-                left join elem.piazzole p on p.id_piazzola = i.id_piazzola 
-                join elem.aste a on a.id_asta = coalesce(p.id_asta, e.id_asta) 
-                join topo.vie v on v.id_via = a.id_via 
-                join topo.comuni c on c.id_comune = v.id_comune 
-                where i.id = %s and pe.anno = extract(year from i.data_ora)
-                group by 
-                p.id_piazzola, i.id, pe.anno, c.cod_istat, a.id_asta
-            '''
-
-            try:
-                curr.execute(query_ispezioni, (id_ispezione,))
-                #curr.execute(query_ispezioni, (867,))
-                ispezione=curr.fetchall()
-            except Exception as e:
-                check_error=1
-                logger.error(query_ispezioni)
-                logger.error(e)
-                         
-            logger.debug(ispezione)
-            #exit()
-            list_overfilled=[]
-            # popolo tratti_sit
-            for isp in ispezione:
-                overfilled={
-                    'traceabilityCode': str(isp[0]),
-                    'areaCode': str(isp[1]),
-                    'programmingStartDate': str(isp[2]),
-                    'programmingEndingDate': str(isp[3]),
-                    'controlStartDate': str(isp[4]),
-                    'controlEndingDate':str(isp[5]),
-                    'programmedBins':int(isp[6]),
-                    'controlledBins':int(isp[7]),
-                    'overfilledBins':int(isp[8]),
-                    'year':int(isp[9]),
-                    'istatCode': str(isp[10]) 
-                }
-                list_overfilled.append(overfilled)
+                            if attempt == MAX_RETRIES:
+                                logger.error("Tutti i tentativi sono falliti. Operazione interrotta.")
+                                raise ValueError(e)  # fermo l'esecuzione
+                            else:
+                                time.sleep(DELAY_SECONDS)  # Aspetta prima del prossimo tentativo 
                     
-                logger.debug(list_overfilled)
-                
-                ########################################################
-                # upload di list_wasteCollection di un singolo percorso
-                ########################################################
-                logger.info('Inizio upload dati')
-                api_url_upload='{}atrif/api/v1/tobin/b2b/process/rifqt-overfilledbins/upload/av1'.format(url_ws_treg)
-                # questa sarà da passare a TREG, le altre no
-                
-                body_upload={
-                    'id': str(guid),
-                    'importId': str(importId),
-                    'entities': list_overfilled
-                }
-                
-                
-                
-                for attempt in range(1, MAX_RETRIES + 1):
+                    query_insert='''INSERT INTO treg_sov.ispezioni_caricate
+                                    (traciabilitycode, areacode, 
+                                    programmingstartdate, programmingendingdate, 
+                                    controlstartdate, controlendingdate, 
+                                    programmedbins, controlledbins, 
+                                    overfilledbins, "year", 
+                                    istatcode, data_caricamento)
+                                    VALUES(%s, %s,
+                                    to_timestamp(%s, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), to_timestamp(%s, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+                                    to_timestamp(%s, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), to_timestamp(%s, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), 
+                                    %s, %s, 
+                                    %s, %s, 
+                                    %s, now()); 
+                                '''
                     try:
+                        curr.execute(query_insert, (isp[0], isp[1],
+                                                    isp[2], isp[3],
+                                                    isp[4], isp[5],
+                                                    isp[6], isp[7],
+                                                    isp[8], isp[9],
+                                                    isp[10],))
                         
-                        if attempt> 1:
-                            logger.warning(f"Tentativo {attempt}")
-                        
-                        # 🔁 CODICE CHE PUÒ FALLIRE
-                        response_upload = requests.post(api_url_upload, json=body_upload, headers={'accept':'*/*', 
-                                                                                'mde': 'PROD',
-                                                                                'Authorization': 'EIP {}'.format(token),
-                                                                                'Content-Type': 'application/json'})
-                        
-                        logger.debug(response_upload.text)
-                        #logger.debug(response_upload.json()['errorCount'])
-                        #exit()
-                        
-                        # controllo che non ci siano errori (nel caso mi stoppo)
-                    
-                        if response_upload.json()['errorCount']!=0:
-                            logger.error(list_overfilled)   
-                            logger.error(list_overfilled.text)
-                            
-                            
-                            # butto il dato su check_error_upload          
-                            check_error_upload+=response_upload.json()['errorCount']
-                        # ✅ Se funziona, esci dal ciclo
-                        break
-
+                        conn.commit()
                     except Exception as e:
-                        logger.warning(e)
+                        logger.error(query_insert)
+                        logger.error(e)  
 
-                        if attempt == MAX_RETRIES:
-                            logger.error("Tutti i tentativi sono falliti. Operazione interrotta.")
-                            raise ValueError(e)  # fermo l'esecuzione
-                        else:
-                            time.sleep(DELAY_SECONDS)  # Aspetta prima del prossimo tentativo 
+                #exit()
+                ####################################
+                # commit upload
+                ####################################
+                logger.info('Inizio il commit degli upload su TREG')
                 
-                query_insert='''INSERT INTO treg_sov.ispezioni_caricate
-                                (traciabilitycode, areacode, 
-                                programmingstartdate, programmingendingdate, 
-                                controlstartdate, controlendingdate, 
-                                programmedbins, controlledbins, 
-                                overfilledbins, "year", 
-                                istatcode, data_caricamento)
-                                VALUES(%s, %s,
-                                to_timestamp(%s, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), to_timestamp(%s, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
-                                to_timestamp(%s, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), to_timestamp(%s, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), 
-                                %s, %s, 
-                                %s, %s, 
-                                %s, now()); 
-                            '''
+                if check_error_upload==0:
+                    api_url_commit_upload='{}atrif/api/v1/tobin/b2b/process/rifqt-overfilledbins/commit-upload/av1'.format(url_ws_treg)
+                    # questa sarà da passare a TREG, le altre no
+                    
+                    body_commit_upload={
+                        'id': str(guid),
+                        'importId': str(importId)
+                    }
+                    
+                    
+                    response_commit_upload = requests.post(api_url_commit_upload, json=body_commit_upload, headers={'accept':'*/*', 
+                                                                                    'mde': 'PROD',
+                                                                                    'Authorization': 'EIP {}'.format(token),
+                                                                                    'Content-Type': 'application/json'})
+                    logger.info('Fine commit - Risposta TREG: {}'.format(response_commit_upload.text))
+            
+                else: 
+                    logger.warning('Sono presenti errori, non faccio il commit')
+            else:
+                logger.warning('Attenzione! l\'ispezione {} del {} non ha elementi e verrà spostata nelle ispezioni eliminate'.format(id_ispezione, ni[2].strftime("%d-%m-%Y %H:%M:%S")))
+
+                query_insert_eliminate = '''
+                INSERT INTO sovrariempimenti.ispezioni_eliminate
+                (id, id_piazzola, 
+                data_ora, ispettore, 
+                data_inserimento, data_ultima_modifica, 
+                data_eliminazione, motivazione, id_user)
+                VALUES(
+                %s, %s, 
+                %s, %s, 
+                %s, %s, 
+                now(), 'mancanza elementi', 0);
+                '''
                 try:
-                    curr.execute(query_insert, (isp[0], isp[1],
-                                                isp[2], isp[3],
-                                                isp[4], isp[5],
-                                                isp[6], isp[7],
-                                                isp[8], isp[9],
-                                                isp[10],))
+                    curr.execute(query_insert_eliminate, (id_ispezione, ni[1],
+                                                ni[2], ni[3],
+                                                ni[4], ni[5],))
                     
                     conn.commit()
                 except Exception as e:
-                    logger.error(query_insert)
-                    logger.error(e)  
+                    logger.error(query_insert_eliminate)
+                    logger.error(e)
+                    exit()
+                
+                query_remove_ispezioni = 'DELETE FROM sovrariempimenti.ispezioni WHERE id=%s'
+                try:
+                    curr.execute(query_remove_ispezioni , (id_ispezione,))
+                    
+                    conn.commit()
+                except Exception as e:
+                    logger.error(query_insert_eliminate)
+                    logger.error(e)
+                    #exit()
 
-            #exit()
-            ####################################
-            # commit upload
-            ####################################
-            logger.info('Inizio il commit degli upload su TREG')
-            
-            if check_error_upload==0:
-                api_url_commit_upload='{}atrif/api/v1/tobin/b2b/process/rifqt-overfilledbins/commit-upload/av1'.format(url_ws_treg)
-                # questa sarà da passare a TREG, le altre no
-                
-                body_commit_upload={
-                    'id': str(guid),
-                    'importId': str(importId)
-                }
-                
-                
-                response_commit_upload = requests.post(api_url_commit_upload, json=body_commit_upload, headers={'accept':'*/*', 
-                                                                                'mde': 'PROD',
-                                                                                'Authorization': 'EIP {}'.format(token),
-                                                                                'Content-Type': 'application/json'})
-                logger.info('Fine commit - Risposta TREG: {}'.format(response_commit_upload.text))
-        
-            else: 
-                logger.warning('Sono presenti errori, non faccio il commit')                
+                query_mail = """select email from util.sys_users where name ilike %s"""
+                try:
+                    curr.execute(query_mail , (ni[3],))
+                    result = curr.fetchone()
+                    mail_ispettore = result[0]
+                except Exception as e:
+                    logger.error(query_mail)
+                    logger.error(e)
 
+                logger.info('Invio comunicazione a {}'.format(ni[3]))
+
+                
+                #mail_ispettore='roberta.fagandini@amiu.genova.it'
+
+                # Create a multipart message and set headers
+                message = MIMEMultipart()
+                message["From"] = sender_email
+                message["To"] = mail_ispettore
+                message["CC"] = 'assterritorio@amiu.genova.it'
+                message["Subject"] = "Ispezione automaticamente eliminata"
+                #message["Bcc"] = debug_email  # Recommended for mass emails
+                #message.preamble = f"Ispezione con id {id_ispezione} è stata eliminata"
+
+                body = f"""
+                    <html>
+                    <head></head>
+                    <body>
+                        <p>
+                            L'ispezione <strong>{id_ispezione}</strong> della piazzola n. <strong>{ni[1]}</strong> effettuata il <strong>{ni[2].strftime("%d-%m-%Y %H:%M:%S")}</strong> da <strong>{ni[3]}</strong> è stata automaticamente eliminata
+                            dal momento che non sono stati trovati elementi ispezionati ad essa associati.<br><br>
+                            Per qualsiasi dubbio o chiarimento contattare <a href="mailto:assterritorio@amiu.genova.it">assterritorio@amiu.genova.it</a>.
+                        </p>
+                    </body>
+                    </html>
+                """
+                                
+                # Add body to email
+                message.attach(MIMEText(body, "html", "utf-8"))
+
+                # -- Invio --
+                logger.info("Richiamo la funzione per inviare mail")
+                invio=invio_messaggio(message)
+                logging.info(invio)
     else:
-        logger.info('NON ci sono ispezioni da caricare')
+        logger.info('NON ci sono ispezioni da caricare su TREG')
 
     query_del_ispez='''select concat(ie.id_piazzola,'_',ie.id) from sovrariempimenti.ispezioni_eliminate ie 
                         where ie.id in (
@@ -423,7 +516,7 @@ def main():
        
 
     if len(del_ispezioni) != 0:
-        logger.info('ci sono {0} ispezioni da eliminare'.format(len(del_ispezioni)))
+        logger.info('ci sono {0} ispezioni da eliminare da TREG'.format(len(del_ispezioni)))
 
         for di in del_ispezioni:
             traciabilityCode_del.append(di[0])
@@ -455,7 +548,7 @@ def main():
 
 
     else:
-        logger.info('NON ci sono ispezioni da eliminare')
+        logger.info('NON ci sono ispezioni da eliminare da TREG')
 
     
     

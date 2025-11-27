@@ -142,10 +142,7 @@ def main():
     
     #headers = {'Content-type': 'application/json;'}
 
-    data={'user': eko_user, 
-        'password': eko_pass,
-        'o2asp' :  eko_o2asp
-        }
+    auth_data_eko={'user': eko_user, 'password': eko_pass, 'o2asp' :  eko_o2asp}
     
     
     
@@ -264,7 +261,7 @@ ORDER BY giorno
                     }
         try:
             #requests.Cache.remove(eko_url)
-            response = requests.post(eko_url, headers=headers, params=params, data=data)
+            response = requests.post(eko_url, headers=headers, params=params, data=auth_data_eko)
         except Exception as err:
             logger.error(f'Errore in connessione: {err}')
             error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)

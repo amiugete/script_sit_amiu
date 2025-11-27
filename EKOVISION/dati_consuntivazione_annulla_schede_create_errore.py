@@ -142,10 +142,7 @@ def main():
     
     #headers = {'Content-type': 'application/json;'}
 
-    data={'user': eko_user, 
-        'password': eko_pass,
-        'o2asp' :  eko_o2asp
-        }
+    auth_data_eko={'user': eko_user, 'password': eko_pass, 'o2asp' :  eko_o2asp}
     
     
     
@@ -196,7 +193,7 @@ def main():
                 'id': '{}'.format(id_scheda[0]),
                 }
         
-        response2 = requests.post(eko_url, params=params2, data=data, headers=headers)
+        response2 = requests.post(eko_url, params=params2, data=auth_data_eko, headers=headers)
         #letture2 = response2.json()
         letture2 = response2.json()
         #logger.info(letture2)
@@ -233,7 +230,7 @@ def main():
                 'json': json.dumps(letture2, ensure_ascii=False).encode('utf-8')
                 }
         #exit()
-        response2 = requests.post(eko_url, params=params2, data=data, headers=headers)
+        response2 = requests.post(eko_url, params=params2, data=auth_data_eko, headers=headers)
         result2 = response2.json()
         if result2['status']=='error':
             logger.error('Id_scheda = {}'.format(id_scheda))

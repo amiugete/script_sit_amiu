@@ -263,10 +263,7 @@ def main():
     
     # credenziali WS Ekovision
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-    data={'user': eko_user, 
-        'password': eko_pass,
-        'o2asp' :  eko_o2asp
-        }
+    auth_data_eko={'user': eko_user, 'password': eko_pass, 'o2asp' :  eko_o2asp}
     
     
 

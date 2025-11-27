@@ -139,10 +139,7 @@ def main():
     
     #headers = {'Content-type': 'application/json;'}
 
-    data={'user': eko_user, 
-        'password': eko_pass,
-        'o2asp' :  eko_o2asp
-        }
+    auth_data_eko={'user': eko_user, 'password': eko_pass, 'o2asp' :  eko_o2asp}
     
     
     
@@ -342,7 +339,7 @@ ORDER BY 3"""
                 'flg_esponi_consunt' : 1
                 }
         
-        response2 = requests.post(eko_url, params=params2, data=data, headers=headers)
+        response2 = requests.post(eko_url, params=params2, data=auth_data_eko, headers=headers)
         #letture2 = response2.json()
         #try: 
         letture2 = response2.json()
@@ -377,7 +374,7 @@ ORDER BY 3"""
                 'json': json.dumps(letture2, ensure_ascii=False).encode('utf-8')
                 }
         #exit()
-        response2 = requests.post(eko_url, params=params2, data=data, headers=headers)
+        response2 = requests.post(eko_url, params=params2, data=auth_data_eko, headers=headers)
         try:
             result2 = response2.json()
             if result2['status']=='error':

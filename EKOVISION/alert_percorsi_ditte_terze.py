@@ -128,10 +128,7 @@ def main():
     
     #headers = {'Content-type': 'application/json;'}
 
-    data={'user': eko_user, 
-        'password': eko_pass,
-        'o2asp' :  eko_o2asp
-        }
+    auth_data_eko={'user': eko_user, 'password': eko_pass, 'o2asp' :  eko_o2asp}
     
     
     # Get today's date
@@ -214,7 +211,7 @@ SUBSTR(see.NOMEFILE, 20, 8) = to_char((trunc(sysdate)-1),'YYYYMMDD')
                 'id': '{}'.format(lp[4]),
                 }
         
-        response2 = requests.post(eko_url, params=params2, data=data, headers=headers)
+        response2 = requests.post(eko_url, params=params2, data=auth_data_eko, headers=headers)
         #letture2 = response2.json()
         letture2 = response2.json()
 

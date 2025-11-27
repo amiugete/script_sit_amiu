@@ -173,10 +173,7 @@ def main():
     
     # credenziali WS Ekovision
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-    data={'user': eko_user, 
-        'password': eko_pass,
-        'o2asp' :  eko_o2asp
-        }
+    auth_data_eko={'user': eko_user, 'password': eko_pass, 'o2asp' :  eko_o2asp}
     
     
 
@@ -341,7 +338,7 @@ FROM treg_eko.last_import_treg_racc;'''
                 'flg_includi_eseguite': 1,
                 'flg_includi_chiuse': 1
                 }
-            response = requests.post(eko_url, params=params, data=data, headers=headers)
+            response = requests.post(eko_url, params=params, data=auth_data_eko, headers=headers)
             #response.json()
             #logger.debug(response.status_code)
             check=0
@@ -490,7 +487,7 @@ FROM treg_eko.last_import_treg_racc;'''
                     'act' : 'r',
                     'id': ids
                     }
-                response = requests.post(eko_url, params=params, data=data, headers=headers)
+                response = requests.post(eko_url, params=params, data=auth_data_eko, headers=headers)
                 #response.json()
                 #logger.debug(response.status_code)
                 check=0

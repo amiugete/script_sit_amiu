@@ -136,10 +136,7 @@ def main():
     
     #headers = {'Content-type': 'application/json;'}
 
-    data={'user': eko_user, 
-        'password': eko_pass,
-        'o2asp' :  eko_o2asp
-        }
+    auth_data_eko={'user': eko_user, 'password': eko_pass, 'o2asp' :  eko_o2asp}
     
     
     
@@ -213,7 +210,7 @@ ORDER BY 1"""
                     }
         try:
             #requests.Cache.remove(eko_url)
-            response = requests.post(eko_url, headers=headers, params=params, data=data)
+            response = requests.post(eko_url, headers=headers, params=params, data=auth_data_eko)
         except Exception as err:
             logger.error(f'Errore in connessione: {err}')
             error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
@@ -260,7 +257,7 @@ ORDER BY 1"""
                 'id': '{}'.format(id_scheda),
                 }
         
-        response2 = requests.post(eko_url, params=params2, data=data, headers=headers)
+        response2 = requests.post(eko_url, params=params2, data=auth_data_eko, headers=headers)
         #letture2 = response2.json()
         letture2 = response2.json()
         logger.info(letture2)
@@ -293,7 +290,7 @@ ORDER BY 1"""
                 'json': json.dumps(letture2, ensure_ascii=False).encode('utf-8')
                 }
         #exit()
-        response2 = requests.post(eko_url, params=params2, data=data, headers=headers)
+        response2 = requests.post(eko_url, params=params2, data=auth_data_eko, headers=headers)
         result2 = response2.json()
         if result2['status']=='error':
             logger.error('Id_scheda = {}'.format(id_scheda))
