@@ -180,10 +180,7 @@ def main():
 
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
 
-    data={'user': eko_user, 
-        'password': eko_pass,
-        'o2asp' :  eko_o2asp
-        }
+    auth_data_eko={'user': eko_user, 'password': eko_pass, 'o2asp' :  eko_o2asp}
     
     
     
@@ -196,7 +193,7 @@ def main():
             'tipo_record': 'V'
             }
     
-    response2 = requests.post(eko_url, params=params2, data=data, headers=headers)
+    response2 = requests.post(eko_url, params=params2, data=auth_data_eko, headers=headers)
     letture2 = response2.json()
     letture2 = empty_to_none(letture2)
     logger.info(letture2)

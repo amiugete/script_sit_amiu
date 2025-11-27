@@ -138,10 +138,7 @@ def main():
 
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
 
-    data={'user': eko_user, 
-        'password': eko_pass,
-        'o2asp' :  eko_o2asp
-        }
+    auth_data_eko={'user': eko_user, 'password': eko_pass, 'o2asp' :  eko_o2asp}
     
     
     
@@ -166,7 +163,7 @@ def main():
         'flg_includi_eseguite': 1,
         'flg_includi_chiuse': 1
         }"""
-    response = requests.post(eko_url, params=params, data=data, headers=headers)
+    response = requests.post(eko_url, params=params, data=auth_data_eko, headers=headers)
     #response.json()
     logger.debug(response.status_code)
     try:      

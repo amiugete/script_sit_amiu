@@ -44,6 +44,9 @@ import logging
 # per scaricare file da EKOVISION
 import pysftp
 
+import paramiko
+import stat
+
 import json
 
 
@@ -76,8 +79,8 @@ logger = logging.getLogger()
 
 # Create handlers
 c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-#f_handler = logging.StreamHandler()
-f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+f_handler = logging.StreamHandler()
+#f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.WARNING)
@@ -177,7 +180,9 @@ def main():
     # se vale 0 fa tutto come di consueto
     # se vale 1 processa il file come di consueto ma non lo cancella nè scrive sulla tabella dei file processati,
     # quindi lo riprocessa fino a che non si è risolto l'errore
-    debug = 0
+    debug = 1
+    nome_file_debug = 'sch_lav_consuntivi_20251126_124633_6926e8aaabcca.json'
+    
 
     # Get today's date
     #presentday = datetime.now() # or presentday = datetime.today()
@@ -237,23 +242,32 @@ def main():
         
     #exit()
     try: 
+        
+        
+        '''VECCHIA LIBRERIA
         cnopts = pysftp.CnOpts()
         cnopts.hostkeys = None
         srv = pysftp.Connection(host=url_ev_sftp, username=user_ev_sftp,
     password=pwd_ev_sftp, port= port_ev_sftp,  cnopts=cnopts,
     log="/tmp/pysftp.log")
+        '''
+        
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect(url_ev_sftp, username=user_ev_sftp, password=pwd_ev_sftp, port= port_ev_sftp)
 
-        with srv.cd(cartella_sftp_eko): #chdir to public
-            #print(srv.listdir('./'))
-            for filename in srv.listdir('./'):
-                #logger.debug(filename)
-                
-                                    
-                # se non ho già letto il file
-                #if len(check_filename)==0 and fnmatch.fnmatch(filename, "sch_lav_consuntivi*"):
-                if filename > check_filename[0]:
+        srv = client.open_sftp()
+        
+        
+        for f in srv.listdir_attr(cartella_sftp_eko):
+            logger.debug(f'f = {f}')
+            filename = f.filename
+            if stat.S_ISREG(f.st_mode) and ((debug == 0 and filename.startswith("sch_lav_consuntivi")) or (debug == 1 and filename==nome_file_debug)):
+                if (debug ==0 and filename > check_filename[0]) or (debug == 1 and filename==nome_file_debug):
+        
                     logger.debug(f'Devo iniziare a leggere il file {filename}')
-                    srv.get(filename, path + "/eko_output3/" + filename)
+                    #exit()
+                    srv.get(cartella_sftp_eko + '/' +filename, path + "/eko_output3/" + filename)
                     logger.info('Scaricato file {}'.format(filename))
                     
                     
@@ -290,14 +304,14 @@ def main():
                                     -   cons_works
                                             da cui ricavo i isultati della consuntivazione su Ekovision 
                                     '''
-                                    
-                                
+                                    logger.debug('Processo la scheda {}'.format(data[i]['id_scheda']))
                                     # recupero ora scheda 
                                     
                                     # mi creo 2 array con data_ora_inzio e data_ora_fine
                                     data_ora_ini = []
                                     data_ora_fine = []
                                     
+                                    logger.debug('Leggo orari risorse tecniche')
                                     t=0 # ristorsa Tecnica
                                     while t<len(data[i]['cons_ris_tecniche']):
                                         o=0
@@ -313,7 +327,7 @@ def main():
                                             o+=1
                                         t+=1
                                     
-                                    
+                                    logger.debug('Leggo orari risorse umane')
                                     p=0 # risorsa Umana
                                     while p<len(data[i]['cons_ris_umane']):
                                         o=0
@@ -335,31 +349,36 @@ def main():
                                     #logger.debug(min(data_ora_ini))
                                     #logger.debug(max(data_ora_fine))    
                                     
+                                    id_scheda=int(data[i]['id_scheda'])
                                     if len(data_ora_ini)==0 or len(data_ora_fine)==0:
                                         headers = {'Content-Type': 'application/x-www-form-urlencoded'}
 
-                                        data={'user': eko_user, 
+                                        auth_data_eko={'user': eko_user, 
                                             'password': eko_pass,
                                             'o2asp' :  eko_o2asp
                                             }
 
-                                        logger.info('Provo a leggere i dettagli della scheda')
+                                        logger.info('Provo a leggere i dettagli della scheda tramite API Ekovision per recuperare orari inizio e fine')
                                         
                                         
                                         params2={'obj':'schede_lavoro',
                                                 'act' : 'r',
-                                                'id': '{}'.format(data[i]['id_scheda']),
+                                                'id': '{}'.format(id_scheda),
                                                 }
                                         
-                                        response2 = requests.post(eko_url, params=params2, data=data, headers=headers)
+                                        response2 = requests.post(eko_url, params=params2, data=auth_data_eko, headers=headers)
+                                        logger.debug('Response API Ekovision: {}'.format(response2.status_code))
                                         letture2 = response2.json()
+                                        logger.debug(letture2)
                                         data_ora_ini.append(datetime.strptime(f'{letture2["schede_lavoro"][0]["data_inizio_lav"]} {letture2["schede_lavoro"][0]["ora_inizio"]}', 
                                                               '%Y%m%d %H%M%S'))
+                                        logger.debug('Data e ora inizio recuperata da API Ekovision: {}'.format(data_ora_ini[-1]))
                                         data_ora_fine.append(datetime.strptime(f'{letture2["schede_lavoro"][0]["data_fine_lav"]} {letture2["schede_lavoro"][0]["ora_fine"]}', 
                                                               '%Y%m%d %H%M%S'))
+                                  
                                     
 
-                                    
+                                    logger.debug('Inizio a leggere la consuntivazione delle tappe')
                                     # consuntivazione 
                                     t=0 # contatore tappe
                                     check_cons=0
@@ -370,13 +389,13 @@ def main():
                                 
                                         elif data[i]['cons_works'][t]['tipo_srv_comp']=='SPAZZ':
                                             codice_eko=int(data[i]['cons_works'][t]['cod_tratto'].strip())
+                                        logger.debug('Leggo consuntivazione tappa {} codice Ekovision {}'.format(t, codice_eko))
                                         # escludo i NON previsti e NON eseguiti
                                         if int(data[i]['cons_works'][t]['flg_exec'].strip())==1 or  int(data[i]['cons_works'][t]['flg_non_previsto'].strip())==0 :
                                             ################################################################
                                             # Preparo i dati da inserire 
-                                            
+                                            logger.debug('Cerco la causale e la qualità')
                                             # causale
-                                            # il primo if era dopo ma l'ho sposato sopra (28/11/2024 sarebbero da riprocessare un po di dati)
                                             if int(data[i]['flg_segn_srv_non_effett'].strip())==1:
                                                 causale=int(data[i]['cod_caus_srv_non_eseg_ext'].strip())
                                                 qualita=0
@@ -413,6 +432,8 @@ def main():
                                             # la causale 999, creata per le preconsuntivazione, in realtà non dovrebbe essere usata.. 
                                             # se fosse arrivato qualcosa lo assimilo alla 102 (percorso non previsto)
                                             previsto = 0
+                                            logger.debug('Causale trovata: {}'.format(causale))
+                                            logger.debug('Controllo se la causale è 999')
                                             if causale == 999:
                                                 causale = 102
                                                 if '{}_{}'.format(data[i]['codice_serv_pred'],data[i]['data_esecuzione_prevista']) not in percorsi_tappe_anomale:
@@ -543,14 +564,17 @@ def main():
                                                 #else:
                                                     # non faccio nulla 
                                                     
-                                                        
+                                            logger.debug('Controllo causale 999 terminato')
+                                            
+                                            logger.debug('Controllo se la consuntivazione arriva da totem')          
                                             # vedo se consuntivazione arriva da totem o meno (per ora non lo salvo su SIT)
                                             if int(data[i]['cons_works'][t]['ts_exec']) == 0:
                                                 totem=0
                                             else :
                                                 totem=1
                                             
-                                            
+                                            logger.debug('Controllo totem terminato')
+                                            logger.debug('Controllo riprogrammazione')
                                             # riprogrammato
                                             try:
                                                 if int(data[i]['cons_works'][t]['flg_riprogrammato']) == 0:
@@ -560,14 +584,18 @@ def main():
                                             except Exception as e:
                                                 riprogrammato=None
                                                     
-                                            
+                                            logger.debug('Controllo riprogrammazione terminato')
+                                            logger.debug('Controllo note')
                                             # note
                                             if data[i]['cons_works'][t]['note'] =='':
                                                 note=None
                                             else :
                                                 note=data[i]['cons_works'][t]['note']
-                                                    
-                                                    
+                                            
+                                            logger.debug('Controllo note terminato')            
+                                             
+                                            # inserisco i dati nella tabella treg_eko.consunt_ekovision
+                                            logger.debug('Inserisco/aggiorno i dati della tappa consuntivata nella tabella treg_eko.consunt_ekovision')      
                                             if data[i]['cons_works'][t]['tipo_srv_comp'] in ['SPAZZ', 'RACC', 'RACC-LAV']:
                                                 
                                                                 
@@ -662,10 +690,11 @@ def main():
                                     
                                     
                                 else:
-                                    if data[i]['data_esecuzione_prevista']>=data_start_treg:
+                                    if data[i]['data_esecuzione_prevista']<data_start_treg:
+                                        logger.debug('Data esecuzione prevista della scheda {} è {}'.format(data[i]['id_scheda'], data[i]['data_esecuzione_prevista']))
                                         logger.debug('Non processo la scheda perchè antecedente alla data di partenza di TREG {}'.format(data_start_treg))
-                                    elif data[i]['flg_chiuso'] == '1':
-                                        logger.debug('Non processo la scheda {} perchè non è chiusa'.format(data[i]['id_scheda']))
+                                    elif data[i]['flg_chiuso'] != '1':
+                                        logger.debug('Non processo la scheda {} perchè è eseguita, ma aperta'.format(data[i]['id_scheda']))
                             except Exception as e:
                                 check=1
                                 logger.error('File:{}'.format(filename))

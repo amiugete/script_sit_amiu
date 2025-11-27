@@ -5,12 +5,7 @@
 # Roberto Marzocchi
 
 '''
-Lo script si occupa della pulizia dell'elenco percorsi generato dai JOB spoon realizzati per Ekovision
 
-In particolare fa: 
-
-- controllo ed eliminazione percorsi duplicati (non dovrebbe più servire a valle di una modifica al job)
-- versionamento dei percorsi come da istruzioni 
 
 
 '''
@@ -121,19 +116,13 @@ import uuid
 
 def main():
       
+    check=0   
+    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+    
+    #headers = {'Content-type': 'application/json;'}
 
-
+    auth_data_eko={'user': eko_user, 'password': eko_pass, 'o2asp' :  eko_o2asp}
     
-
-    
-    test= {"name": "école '& c/o aaa", 
-        "location": "New York"}
-    
-    json_data = json.dumps(test , ensure_ascii=False).encode('utf-8')
-    
-    #print(json_data)
-    
-    #exit()
     
     # Get today's date
     #presentday = datetime.now() # or presentday = datetime.today()
@@ -143,21 +132,88 @@ def main():
     logging.debug('Oggi {}'.format(oggi))
     
     
-    check=0
+    test=True
+    if test:
+        eko_url=eko_url_test
+        logger.debug('Uso ambiente di TEST')
+    else:
+        eko_url=eko_url
     
-    
+    #exit()
 
     
-    id_scheda =  641828   #423341 OK #   423319 da problemi
-    
-    
-    
+    datalav= '20251121'  #oggi.strftime('%Y%m%d')
+    cod_percorso= '0508077701'
 
-    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+    # cerco id della scheda da modificare
     
-    #headers = {'Content-type': 'application/json;'}
+    params={'obj':'schede_lavoro',
+        'act' : 'r',
+        'sch_lav_data': datalav,
+        'cod_modello_srv': cod_percorso,
+        'flg_includi_eseguite': 1,
+        'flg_includi_chiuse': 1
+        }
+    
+    
+    response = requests.post(eko_url, params=params, data=auth_data_ekodata, headers=headers)
+    #response.json()
+    logger.debug(response.status_code)
+    try:      
+        response.raise_for_status()
+        # access JSOn content
+        #jsonResponse = response.json()
+        #print("Entire JSON response")
+        #print(jsonResponse)
+    except HTTPError as http_err:
+        logger.error(f'HTTP error occurred: {http_err}')
+        check=1
+    except Exception as err:
+        logger.error(f'Other error occurred: {err}')
+        logger.error(response.json())
+        check=1
+    if check<1:
+        letture = response.json()
+        #logger.info(letture)
+        logger.info(len(letture['schede_lavoro']))
+        logger.debug(letture['schede_lavoro'])
+        exit()
+        
+        if len(letture['schede_lavoro']) == 0:
+            #va creata la scheda di lavoro
+            logger.info('Andrebbe creata la scheda di lavoro')
+            giason={
+                        "crea_schede_lavoro": [
+                        {
+                            "data_srv": "20231024",
+                            "cod_modello_srv": "0500110701",
+                            "cod_turno_ext": "997"
+                        }
+                        ]
+                        } 
+            params2={'obj':'crea_schede_lavoro',
+                    'act' : 'w',
+                    'ruid': '0000004',
+                    'json': json.dumps(giason)
+                    }
+            exit()
+            response2 = requests.post(eko_url, params=params2, data=data, headers=headers)
+            letture2 = response2.json()
+            logger.info(letture2)
+            try: 
+                id_scheda=letture['crea_schede_lavoro'][0]['id']
+            except Exception as e:
+                logger.error(e)
+        elif len(letture['schede_lavoro']) > 0 : 
+            id_scheda=letture['schede_lavoro'][0]['id_scheda_lav']
+            turno=letture['schede_lavoro'][0]['cod_turno_ext']
+            in_lavorazione= letture['schede_lavoro'][0]['flg_in_lavorazione']
+            eseguita=letture['schede_lavoro'][0]['flg_eseguito']
+            chiusa= letture['schede_lavoro'][0]['flg_chiuso'] 
+            logger.info(id_scheda)
+            logger.info(turno)
+      
 
-    auth_data_eko={'user': eko_user, 'password': eko_pass, 'o2asp' :  eko_o2asp}
     
     
     
@@ -170,7 +226,7 @@ def main():
             'flg_esponi_consunt': 1
             }
     
-    response2 = requests.post(eko_url_test, params=params2, data=auth_data_eko, headers=headers)
+    response2 = requests.post(eko_url_test, params=params2, data=data, headers=headers)
     #letture2 = response2.json()
     letture2 = response2.json()
     #logger.info(letture2)
@@ -216,7 +272,7 @@ def main():
             'json': json.dumps(letture2, ensure_ascii=False).encode('utf-8')
             }
     #exit()
-    response2 = requests.post(eko_url_test, params=params2, data=auth_data_eko, headers=headers)
+    response2 = requests.post(eko_url_test, params=params2, data=data, headers=headers)
     result2 = response2.json()
     if result2['status']=='error':
         logger.error('Id_scheda = {}'.format(id_scheda))

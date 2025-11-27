@@ -146,7 +146,7 @@ def main():
     
 
     
-    id_scheda = 694482 #696205 #478360 #600883  #484922 #502441   #423341 OK #   423319 da problemi
+    id_scheda = 768204 #696205 #478360 #600883  #484922 #502441   #423341 OK #   423319 da problemi
     
     
     
@@ -155,10 +155,7 @@ def main():
     
     #headers = {'Content-type': 'application/json;'}
 
-    data={'user': eko_user, 
-        'password': eko_pass,
-        'o2asp' :  eko_o2asp
-        }
+    auth_data_eko={'user': eko_user, 'password': eko_pass, 'o2asp' :  eko_o2asp}
     
     
     
@@ -170,7 +167,7 @@ def main():
             'id': '{}'.format(id_scheda),
             }
     
-    response2 = requests.post(eko_url, params=params2, data=data, headers=headers)
+    response2 = requests.post(eko_url, params=params2, data=auth_data_eko, headers=headers)
     #letture2 = response2.json()
     letture2 = response2.json()
 

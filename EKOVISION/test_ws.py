@@ -143,10 +143,7 @@ def main():
 
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
 
-    data={'user': eko_user, 
-        'password': eko_pass,
-        'o2asp' :  eko_o2asp
-        }
+    auth_data_eko={'user': eko_user, 'password': eko_pass, 'o2asp' :  eko_o2asp}
     
     
     
@@ -172,7 +169,7 @@ def main():
         'flg_includi_eseguite': 1,
         'flg_includi_chiuse': 1
         }
-    response = requests.post(eko_url, params=params, data=data, headers=headers)
+    response = requests.post(eko_url, params=params, data=auth_data_eko, headers=headers)
     #response.json()
     logger.debug(response.status_code)
     try:      
@@ -214,7 +211,7 @@ def main():
                     'json': json.dumps(giason)
                     }
             exit()
-            response2 = requests.post(eko_url, params=params2, data=data, headers=headers)
+            response2 = requests.post(eko_url, params=params2, data=auth_data_eko, headers=headers)
             letture2 = response2.json()
             logger.info(letture2)
             try: 
