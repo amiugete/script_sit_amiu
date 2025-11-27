@@ -162,6 +162,9 @@ def main():
                         host=host)
 
 
+   # Mi connetto al DB consuntivazione (PostgreSQL) - HUB
+    # commentato il 27/11/2025 --> ora lavoro sul DB totem
+    '''
     nome_db=db_consuntivazione
     logger.info('Connessione al db {}'.format(nome_db))
     connc = psycopg2.connect(dbname=nome_db,
@@ -169,6 +172,19 @@ def main():
                         user=user_consuntivazione,
                         password=pwd_consuntivazione,
                         host=host_hub)
+    
+    '''
+    
+    
+    # Mi connetto al DB consuntivazione (PostgreSQL) - HUB
+    nome_db=db_totem
+    logger.info('Connessione al db {}'.format(nome_db))
+    connc = psycopg2.connect(dbname=nome_db,
+                        port=port,
+                        user=user_totem,
+                        password=pwd_totem,
+                        host=host_totem)
+    
     
     curr = conn.cursor()
     curr1 = conn.cursor()
@@ -960,12 +976,20 @@ and ve.id_causale <> %s'''
     currc1.close()
     connc.close()
     
+    nome_db=db_totem
     logger.info('Ri-connessione al db {}'.format(nome_db))
-    connc = psycopg2.connect(dbname=nome_db,
+    """connc = psycopg2.connect(dbname=nome_db,
                         port=port,
                         user=user_consuntivazione,
                         password=pwd_consuntivazione,
                         host=host_hub)
+    
+    """
+    connc = psycopg2.connect(dbname=nome_db,
+                    port=port,
+                    user=user_totem,
+                    password=pwd_totem,
+                    host=host_totem)
     currc = connc.cursor()
     
     
