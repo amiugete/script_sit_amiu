@@ -168,6 +168,9 @@ def main():
                         host=host)
 
 
+    # Mi connetto al DB consuntivazione (PostgreSQL) - HUB
+    # commentato il 27/11/2025 --> ora lavoro sul DB totem
+    '''
     nome_db=db_consuntivazione
     logger.info('Connessione al db {}'.format(nome_db))
     connc = psycopg2.connect(dbname=nome_db,
@@ -175,6 +178,19 @@ def main():
                         user=user_consuntivazione,
                         password=pwd_consuntivazione,
                         host=host_hub)
+    
+    '''
+    
+    
+    # Mi connetto al DB consuntivazione (PostgreSQL) - 
+    nome_db=db_totem
+    logger.info('Connessione al db {}'.format(nome_db))
+    connc = psycopg2.connect(dbname=nome_db,
+                        port=port,
+                        user=user_totem,
+                        password=pwd_totem,
+                        host=host_totem)
+    
     
     curr = conn.cursor()
     curr1 = conn.cursor()
@@ -188,7 +204,7 @@ def main():
 from totem.v_causali ct where id_ekovision = %s '''
 
 
-    query_verifica_causale='''select ve.*, cpra.descr_percorso from raccolta.v_effettuati ve 
+    query_verifica_causale='''select ve.*, cpra.desc_percorso from raccolta.v_effettuati ve 
     left join raccolta.cons_percorsi_raccolta_amiu cpra 
 on cpra.id_percorso = ve.idpercorso 
 and ve.datalav between cpra.data_inizio and cpra.data_fine
@@ -270,7 +286,37 @@ and ve.id_causale::int <> %s'''
 	order by 1'''
  
     
-
+    # query che parte dal DB totem a partire da 27/11/2025
+    
+    query_effettuati_totem='''select distinct 
+	e.id, 
+	t.id_percorso,
+	e.datalav::date as datalav,
+	t.id_piazzola, 
+	t.num_elementi, 
+    t.cronologia,
+    e.fatto,
+	vc.descrizione as descr_causale,
+	e.id_causale as causale,
+	concat('TOTEM Badge ', e.codice, ' - Matr. ', vpes.matricola::text, ' - ', vpes.cognome, ' ', vpes.nome) as sorgente_dati, 
+	e.datainsert as data_insert, 
+    t.id_tappa as tappa, 
+    e.nota as note_totem /* è il campo con le note*/,
+    mu.mail
+	from raccolta.cons_percorsi_raccolta_amiu t
+	join raccolta.effettuati_amiu e on e.tappa::bigint =  t.id_tappa::bigint
+	join totem.v_causali vc on vc.id = e.id_causale 
+ 	--left join raccolta.effettuati_correzione_date ecd on e.id_percorso=ecd.id_percorso and e.datalav= ecd.datalav_errata 
+  	left join totem.v_personale_ekovision_step1 vpes on vpes.codice_badge::text = e.codice 
+	--left join raccolta.causali_testi ct on trim(replace(e.causale, ' - (no in questa giornata)', '')) ilike trim(ct.descrizione)
+    left join servizi.mail_ut mu on mu.id_uo::int  = t.id_uo::int
+	where 
+	/*(trim(replace(e.causale, ' - (no in questa giornata)', '')) != '' /*or e.fatto >0*/) 
+	and*/ datalav >= '2024-01-29'
+    and codice not in ('1111', '2222', '3333', '4444', '8888', '9998', '9999')
+    and e.id > (select coalesce(max(max_id),0) from raccolta.invio_consuntivazioni_ekovision ice)
+	order by 1'''
+    
     
     
     # prima di tutto faccio un controllo che non ci siano causali che non so gestire e nel caso fermo tutto il passaggio dati e lancio allarme
@@ -451,12 +497,21 @@ and ve.id_causale::int <> %s'''
                     esec=0;
                     caus=vv[8]
                 
-                
+                # versione hub
                 query_check='''select *  
                     from raccolta.effettuati_amiu e 
                     where id_percorso = %s
                     and to_char(datalav, 'YYYY-MM-DD') = %s
                     and id_tappa=%s
+                    and id <> %s 
+                    and left(codice,2) ilike 'ut'
+                    '''
+                # versione totem
+                query_check='''select *  
+                    from raccolta.v_effettuati e 
+                    where idpercorso = %s
+                    and to_char(datalav, 'YYYY-MM-DD') = %s
+                    and tappa=%s
                     and id <> %s 
                     and left(codice,2) ilike 'ut'
                     '''
@@ -846,12 +901,21 @@ and ve.id_causale::int <> %s'''
         currc1.close()
         connc.close()
         
+        
+        nome_db=db_totem
         logger.info('Ri-connessione al db {}'.format(nome_db))
-        connc = psycopg2.connect(dbname=nome_db,
+        """connc = psycopg2.connect(dbname=nome_db,
                             port=port,
                             user=user_consuntivazione,
                             password=pwd_consuntivazione,
                             host=host_hub)
+        
+        """
+        connc = psycopg2.connect(dbname=nome_db,
+                        port=port,
+                        user=user_totem,
+                        password=pwd_totem,
+                        host=host_totem)
         currc = connc.cursor()
         
         
