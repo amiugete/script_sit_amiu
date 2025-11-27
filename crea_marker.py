@@ -167,8 +167,8 @@ from elem.tipi_rifiuto where tipo_rifiuto > 1 order by tipo_rifiuto'''
         logger.debug(rr[0])
         k=0
         while k< len(lista_file):
-            file_originale= "{}/img_sit/markers/0-{}.png".format(path, lista_file[k])
-            filename="{0}/img_sit/markers/{1}-{2}.png".format(path, rr[0], lista_file[k])
+            file_originale= "{0}/img_sit/markers/0-{1}.png".format(path, lista_file[k])
+            filename_creato="{0}/img_sit/markers/{1}-{2}.png".format(path, rr[0], lista_file[k])
             
             #logger.debug(filename)
             #logger.info(os.path.exists(filename))
@@ -179,8 +179,8 @@ from elem.tipi_rifiuto where tipo_rifiuto > 1 order by tipo_rifiuto'''
                 logger.debug('''Devo creare file {0} per rifiuto {1} di colore {2}'''.format(filename, rr[0], rr[1]))
                 
                 
-                shutil.copy(file_originale, filename)
-                picture = Image.open(filename)
+                shutil.copy(file_originale, filename_creato)
+                picture = Image.open(filename_creato)
 
                 picture = picture.convert("RGBA")
                 pixdata = picture.load()
@@ -224,7 +224,7 @@ from elem.tipi_rifiuto where tipo_rifiuto > 1 order by tipo_rifiuto'''
                         #logger.debug(color_rgb)
                         picture.putpixel( (x,y), color_rgb)
                         '''
-                picture.save(filename)
+                picture.save(filename_creato)
                 picture.close
                 #exit()
                 
