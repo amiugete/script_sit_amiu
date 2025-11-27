@@ -5,13 +5,9 @@
 # Roberto Marzocchi
 
 '''
-Lo script si occupa della pulizia dell'elenco percorsi generato dai JOB spoon realizzati per Ekovision
+Lo script si occupa di scaricare elenco mezzi da EKOVISION e di scriverlo sul DB del totem
 
-In particolare fa: 
-
-- controllo ed eliminazione percorsi duplicati (non dovrebbe più servire a valle di una modifica al job)
-- versionamento dei percorsi come da istruzioni 
-
+Ci serve per sapere ID ekovision e targa del mezzo associato
 
 '''
 
@@ -204,9 +200,8 @@ def main():
     logger.info(letture2)
     logger.info('Letti {} record del personale'.format(len(letture2['data'][0]['personale'])))
     
-    # scrivo i dati sul totem 
-    
-    
+    # scrivo i dati sul DB del totem 
+        
     k=0
     while k <len(letture2['data'][0]['personale']):
         #logger.debug(k)
