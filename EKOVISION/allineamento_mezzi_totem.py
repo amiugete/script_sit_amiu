@@ -75,8 +75,8 @@ logger = logging.getLogger()
 
 # Create handlers
 c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-f_handler = logging.StreamHandler()
-#f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+#f_handler = logging.StreamHandler()
+f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.ERROR)
@@ -204,7 +204,7 @@ def main():
     k=0
     while k <len(letture2['data'][0]['risorse_tecniche']):
         #logger.debug(k)
-        logger.debug(letture2['data'][0]['risorse_tecniche'][k]['id'])
+        #logger.debug(letture2['data'][0]['risorse_tecniche'][k]['id'])
         query_upsert_personale= '''
         INSERT INTO totem.mezzi_ekovision (
             id_ekovision, 
