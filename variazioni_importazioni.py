@@ -1153,7 +1153,7 @@ from (
                         to_import=0
                     elif len (tappe_uo) ==0:
                         logger.info( 'Su UO non ci sono ancora tappe. Ora le importo')
-                    elif len(tappe_uo) > 0 and cfr_tappe(tappe_sit, tappe_uo, logger)==0 :
+                    elif len(tappe_uo) > 0 and cfr_tappe(tappe_sit, tappe_uo, logger)==0 :                       
                         logger.info('Percorso {} già importato con data antecedente. Non ci sono state modifiche sostanziali.'.format(vv[0]))
                         stato_importazione.append('Percorso già importato con data  antecedente. Non ci sono state modifiche sostanziali.')
                         to_import=0
