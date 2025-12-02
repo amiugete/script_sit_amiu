@@ -168,10 +168,25 @@ def main():
     
     """
     
-    query_select='''select 
-        coalesce(max(modificato), to_date('20230101', 'YYYYMMDD'))
-        from idea.svuotamenti s '''
-        
+    query_select='''
+        with a as (
+            select 
+            coalesce(max(modificato), to_date('20230101', 'YYYYMMDD')) as max_date
+            from idea.svuotamenti s 
+            union 
+            select 
+            coalesce(max(modificato), to_date('20230101', 'YYYYMMDD')) as max_date
+            from idea.svuotamenti_altro s
+        ) select max(max_date) from a    
+        '''
+    
+    
+    # temporaneamente 
+    #query_select='''select 
+    #    to_timestamp('20251202', 'YYYYMMDD')::timestamp,
+    #    coalesce(max(modificato), to_date('20230101', 'YYYYMMDD'))
+    #    from idea.svuotamenti s'''
+    
     try:
         curr.execute(query_select)
         max_date0=curr.fetchall()
@@ -241,8 +256,12 @@ def main():
                     #id_isola
                     id_idea=int(letture['data'][i][0])
                     id_pdr=letture['data'][i][1]
-                    lat=float(letture['data'][i][4])
-                    lon=float(letture['data'][i][5])
+                    if letture['data'][i][4] is None:
+                        lat = 0.0
+                        lon = 0.0
+                    else:
+                        lat=float(letture['data'][i][4])
+                        lon=float(letture['data'][i][5])
                     cod_cont=letture['data'][i][6]
                     riempimento=letture['data'][i][11]
                     data_ora_svuotamento=datetime.datetime.strptime(letture['data'][i][10], "%Y%m%d%H%M%S").strftime("%Y/%m/%d %H:%M:%S")
@@ -265,8 +284,8 @@ def main():
                         id_idea = {id_idea}, 
                         id_pdr = {id_pdr}, 
                         dettaglio_record = {dettaglio_record}'''
-                        warning_message_mail(messaggio, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger, '''API SVUOTAMENTI ID&A: E' arrivato un evento con tipo != 0 ''')
-                    
+                        #warning_message_mail(messaggio, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger, '''API SVUOTAMENTI ID&A: E' arrivato un evento con tipo != 0 ''')
+                        logger.info(messaggio)
                     if tipo_record in [0,1]:
                         query_upsert='''INSERT INTO idea.svuotamenti 
                         (id_idea, id_piazzola, targa_contenitore, 
@@ -304,25 +323,26 @@ def main():
                     
                     else:
                         query_upsert='''INSERT INTO idea.svuotamenti_altro (
-                            id_idea, modificato, tipo_record, dettaglio_record, 
+                            id_idea, data_ora, modificato, tipo_record, dettaglio_record, 
                             geoloc) 
-                            VALUES (%s, %s, %s, %s,
+                            VALUES (%s, %s, %s, %s, %s,
                             ST_SetSRID(ST_MakePoint(%s, %s),4326)
                             )
                             ON CONFLICT (id_idea) DO UPDATE  
-                            SET modificato = EXCLUDED.modificato, 
-                            tipo_record =EXCLUDED.tipo_record
+                            SET data_ora =  EXCLUDED.data_ora, 
+                            modificato = EXCLUDED.modificato, 
+                            tipo_record =EXCLUDED.tipo_record,
                             dettaglio_record=EXCLUDED.dettaglio_record, 
                             geoloc=EXCLUDED.geoloc'''
                         try:
                             #curr.execute(query_insert, (id_idea, id_pdr, cod_cont, riempimento, data_ora_svuotamento, p_netto, p_lordo, p_tara, lon, lat))
                             curr.execute(query_upsert, (
-                                id_idea, modified, tipo_record, dettaglio_record, 
+                                id_idea, data_ora_svuotamento, modified, tipo_record, dettaglio_record, 
                                 lon, lat
                                 ))
                         except Exception as e:
                             logger.error(query_upsert)
-                            logger.error(id_idea, modified, tipo_record, dettaglio_record, lon, lat)
+                            logger.error(id_idea, data_ora_svuotamento, modified, tipo_record, dettaglio_record, lon, lat)
                             logger.error(e)
                             
 
