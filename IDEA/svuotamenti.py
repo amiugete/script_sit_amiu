@@ -182,10 +182,11 @@ def main():
     
     
     # temporaneamente 
-    #query_select='''select 
-    #    to_timestamp('20251202', 'YYYYMMDD')::timestamp,
-    #    coalesce(max(modificato), to_date('20230101', 'YYYYMMDD'))
-    #    from idea.svuotamenti s'''
+    """query_select='''select 
+        to_timestamp('20251203', 'YYYYMMDD')::timestamp,
+        coalesce(max(modificato), to_date('20230101', 'YYYYMMDD'))
+        from idea.svuotamenti s'''
+    """
     
     try:
         curr.execute(query_select)
@@ -292,15 +293,20 @@ def main():
                         riempimento, data_ora_svuotamento, peso_netto,
                         peso_lordo, peso_tara, id_percorso_selezionato,
                         codice_percorso_selezionato, descrizione_percorso_selezionato, sportello,
-                        modificato, dettaglio_record)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        modificato, dettaglio_record, 
+                        tipo_record, geoloc)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, ST_SetSRID(ST_MakePoint(%s, %s),4326))
                         ON CONFLICT (id_idea)
                         DO UPDATE  
-                        SET id_piazzola=%s, targa_contenitore=%s, riempimento=%s,
-                        data_ora_svuotamento=%s, peso_netto=%s,  peso_lordo=%s,
-                        peso_tara=%s, id_percorso_selezionato=%s, codice_percorso_selezionato=%s,
-                        descrizione_percorso_selezionato=%s, sportello=%s, modificato=%s,
-                        dettaglio_record=%s
+                        SET id_piazzola=EXCLUDED.id_piazzola, targa_contenitore=EXCLUDED.targa_contenitore, riempimento=EXCLUDED.riempimento,
+                        data_ora_svuotamento=EXCLUDED.data_ora_svuotamento, peso_netto=EXCLUDED.peso_netto,  peso_lordo=EXCLUDED.peso_lordo,
+                        peso_tara=EXCLUDED.peso_tara, id_percorso_selezionato=EXCLUDED.id_percorso_selezionato,
+                        codice_percorso_selezionato=EXCLUDED.codice_percorso_selezionato,
+                        descrizione_percorso_selezionato=EXCLUDED.descrizione_percorso_selezionato,
+                        sportello=EXCLUDED.sportello, modificato=EXCLUDED.modificato,
+                        dettaglio_record=EXCLUDED.dettaglio_record, tipo_record = EXCLUDED.tipo_record, 
+                        geoloc = EXCLUDED.geoloc
                         '''
                         try:
                             #curr.execute(query_insert, (id_idea, id_pdr, cod_cont, riempimento, data_ora_svuotamento, p_netto, p_lordo, p_tara, lon, lat))
@@ -310,15 +316,14 @@ def main():
                                 p_lordo, p_tara, id_percorso,
                                 cod_percorso, desc_percorso, sportello,
                                 modified, dettaglio_record,
-                                id_pdr, cod_cont,
-                                riempimento, data_ora_svuotamento, p_netto,
-                                p_lordo, p_tara, id_percorso,
-                                cod_percorso, desc_percorso, sportello,
-                                modified, dettaglio_record
+                                tipo_record, lon, lat
                                 ))
                         except Exception as e:
                             logger.error(query_upsert)
-                            logger.error(id_idea, id_pdr, cod_cont, riempimento, data_ora_svuotamento, p_netto, p_lordo, p_tara, id_percorso, cod_percorso, desc_percorso, sportello, modified)
+                            logger.error(id_idea, id_pdr, cod_cont, riempimento, data_ora_svuotamento,
+                                         p_netto, p_lordo, p_tara, id_percorso, cod_percorso, desc_percorso, 
+                                         sportello, modified, dettaglio_record,
+                                tipo_record, lon, lat)
                             logger.error(e)
                     
                     else:
