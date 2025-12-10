@@ -321,12 +321,14 @@ def CreaListaInterventi(lista):
     lista_interventi = []
 
     nomi_file = [] #file che hanno dei valori obbligatori mancanti
+    richieste_anomale = {}
     
     for i in lista:
-        
+        #aggiungere un conytrollo sul sottoscopo = chiusura segnalazione con invio mail per ora a noi per richiedere verifica del dato
         if i["cod_ident_segn"] is None or i["data_telefonata"] is None or i["emerg_type"] is None or i["istat_code"] is None:
             nomi_file.append(i["id_rich"])
-            logger.error("Richiesta con dati obbligatori mancanti, id richiesta: {}".format(i["id_rich"]))
+            richieste_anomale[i["id_rich"]] = 'data apertura segnalazione {} - indirizzo {} - file CSV {}'.format(i["data_apert_segn"], i["indirizzo"], i["nome_file"])
+            logger.info("Richiesta con dati obbligatori mancanti, id richiesta: {}".format(i["id_rich"]))
         else:
             receptionDate = to_iso_z(i["data_telefonata"])
             arrivalDateTime = to_iso_z(i["data_arrivo_luogo"], i["ora_arrivo_luogo"]) if i["data_arrivo_luogo"] else None
@@ -349,6 +351,40 @@ def CreaListaInterventi(lista):
             }
 
             lista_interventi.append(intervento)
+
+    if nomi_file:
+        # Create a multipart message and set headers
+        message = MIMEMultipart()
+        message["From"] = sender_email
+        message["To"] = 'assterritorio@amiu.genova.it'
+        #message["CC"] = 'assterritorio@amiu.genova.it'
+        message["Subject"] = "Richiesta PIN con dati obbligatori mancanti"
+        #message["Bcc"] = debug_email  # Recommended for mass emails
+        #message.preamble = f"Ispezione con id {id_ispezione} è stata eliminata"
+        ids_list = "".join(f"<li>{key}: {value}</li>" for key, value in richieste_anomale.items())
+        body = f"""
+            <html>
+            <head></head>
+            <body>
+                <p>
+                    Nei file CSV, inviati settimanalmente da GAP, sono presenti richieste di Pronto Intervento con dati obbligatori mancanti.<br>
+                    Di seguito l'elenco degli ID delle richieste con i dati mancanti:<br>
+                    <ul>
+                        {ids_list}
+                    </ul>
+                    <p>Si prega di verificare e segnalare l'anomalia al fornitore.</p>
+                </p>
+            </body>
+            </html>
+        """
+                        
+        # Add body to email
+        message.attach(MIMEText(body, "html", "utf-8"))
+
+        # -- Invio --
+        logger.info("Richiamo la funzione per inviare mail")
+        invio=invio_messaggio(message)
+        logging.info(invio)
 
     return lista_interventi, nomi_file
 

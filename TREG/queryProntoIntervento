@@ -26,3 +26,5 @@ where scopo = 'Pronto intervento' and r.inviato_treg = 0;
 update treg_gap.richieste r set inviato_treg = 1 where id = %s;
 
 
+-- name: get_last_file
+select split_part(max(nome_file), '_', 1) as year, split_part(max(nome_file), '_', 3) as week from treg_gap.richieste r
