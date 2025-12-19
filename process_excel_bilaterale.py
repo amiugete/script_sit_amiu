@@ -10,7 +10,13 @@ ATTENZIONE:
 
 In caso di modifiche allo script bisogna compilarlo di nuovo con pyinstaller:
 
-pyinstaller --onefile process_excel_bilaterale.py
+ATTTENZIONE pyinstaller non è cross-platform, va eseguito sullo stesso sistema operativo su cui si vuole eseguire il file compilato.
+
+# questo crea unico file
+python -m PyInstaller --clean --onefile process_excel_bilaterale.py
+
+# questo cartella con dipendenze
+python -m PyInstaller --clean --onefile process_excel_bilaterale.py
 
 '''
 
@@ -22,12 +28,15 @@ import os
 import sys
 import logging
 
-filename = inspect.getframeinfo(inspect.currentframe()).filename
-path = os.path.dirname(os.path.abspath(filename))
 
+path=os.path.dirname(sys.argv[0]) 
+nome=os.path.basename(__file__).replace('.py','')
 #tmpfolder=tempfile.gettempdir() # get the current temporary directory
-logfile='{}/{}.log'.format(path, filename)
-errorfile='{}/{}_error.log'.format(path, filename)
+logfile='{0}/{1}.log'.format(path,nome)
+errorfile='{0}/error_{1}.log'.format(path,nome)
+
+
+
 
 # Create a custom logger
 logging.basicConfig(
@@ -57,6 +66,9 @@ cc_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
 
 c_handler.setFormatter(cc_format)
 f_handler.setFormatter(cc_format)
+
+
+
 
 def main():
 
@@ -107,7 +119,8 @@ def main():
                 df_finale = pd.concat(lista_df, ignore_index=True)
 
                 # Esporta il file finale
-                df_finale.to_excel("unico_{}".format(file), index=False)
+                file_output = "{0}/unico_{1}".format(path,file)
+                df_finale.to_excel(file_output, index=False)
             except Exception as e:
                 logger.error(e)
         else:
