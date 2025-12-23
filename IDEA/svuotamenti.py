@@ -288,6 +288,14 @@ def main():
                         #warning_message_mail(messaggio, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger, '''API SVUOTAMENTI ID&A: E' arrivato un evento con tipo != 0 ''')
                         logger.info(messaggio)
                     if tipo_record in [0,1]:
+                        if tipo_record==1 and cod_cont is None:
+                            messaggio = f'''ATTENZIONE - svuotamento senza targa contenitore. 
+                            tipo_record={tipo_record}, 
+                            id_idea = {id_idea}, 
+                            id_pdr = {id_pdr}, 
+                            dettaglio_record = {dettaglio_record}'''
+                            warning_message_mail(messaggio, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger, '''API SVUOTAMENTI ID&A: manca targa contenitore in svuotamento''')
+                        # faccio inserimento
                         query_upsert='''INSERT INTO idea.svuotamenti 
                         (id_idea, id_piazzola, targa_contenitore, 
                         riempimento, data_ora_svuotamento, peso_netto,
