@@ -79,8 +79,8 @@ logger = logging.getLogger()
 
 # Create handlers
 c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-f_handler = logging.StreamHandler()
-#f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+#f_handler = logging.StreamHandler()
+f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.WARNING)
@@ -180,7 +180,7 @@ def main():
     # se vale 0 fa tutto come di consueto
     # se vale 1 processa il file come di consueto ma non lo cancella nè scrive sulla tabella dei file processati,
     # quindi lo riprocessa fino a che non si è risolto l'errore
-    debug = 1
+    debug = 0
     nome_file_debug = 'sch_lav_consuntivi_20251126_124633_6926e8aaabcca.json'
     
 
