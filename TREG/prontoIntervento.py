@@ -37,6 +37,63 @@ from email.mime.image import MIMEImage
 from email.mime.text import MIMEText
 from invio_messaggio import *
 
+import inspect 
+
+
+
+
+
+# Create a custom logger
+giorno_file=datetime.today().strftime('%Y%m%d_%H%M%S')
+filename = inspect.getframeinfo(inspect.currentframe()).filename
+path=os.path.dirname(sys.argv[0]) 
+path1 = os.path.dirname(os.path.dirname(os.path.abspath(filename)))
+nome=os.path.basename(__file__).replace('.py','')
+#tmpfolder=tempfile.gettempdir() # get the current temporary directory
+logfile='{0}/log/{2}_{1}.log'.format(path,nome,giorno_file)
+errorfile='{0}/log/{2}_error_{1}.log'.format(path,nome,giorno_file)
+#if os.path.exists(logfile):
+#    os.remove(logfile)
+
+
+# Create a custom logger
+logging.basicConfig(
+    level=logging.DEBUG,
+    handlers=[
+    ]
+)
+
+logger = logging.getLogger()
+
+# Create handlers
+c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
+#f_handler = logging.StreamHandler()
+f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+
+
+c_handler.setLevel(logging.ERROR)
+f_handler.setLevel(logging.DEBUG)
+
+
+# Add handlers to the logger
+logger.addHandler(c_handler)
+logger.addHandler(f_handler)
+
+
+cc_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
+
+c_handler.setFormatter(cc_format)
+f_handler.setFormatter(cc_format)
+
+download = f"{path}/download"
+
+destinatari = ["matteo.scarfo@amiu.genova.it", "AssTerritorio@amiu.genova.it"]
+
+
+
+
+
+
 
 def clean(val):
     if val in ('', ' ', None, 'NULL'):
@@ -327,7 +384,7 @@ def CreaListaInterventi(lista):
         #aggiungere un conytrollo sul sottoscopo = chiusura segnalazione con invio mail per ora a noi per richiedere verifica del dato
         if i["cod_ident_segn"] is None or i["data_telefonata"] is None or i["emerg_type"] is None or i["istat_code"] is None:
             nomi_file.append(i["id_rich"])
-            richieste_anomale[i["id_rich"]] = 'data apertura segnalazione {} - indirizzo {} - file CSV {}'.format(i["data_apert_segn"], i["indirizzo"], i["nome_file"])
+            richieste_anomale[i["id_rich"]] = 'data apertura segnalazione {} - indirizzo {}'.format(i["data_apert_segn"], i["indirizzo"])
             logger.info("Richiesta con dati obbligatori mancanti, id richiesta: {}".format(i["id_rich"]))
         else:
             receptionDate = to_iso_z(i["data_telefonata"])
@@ -356,8 +413,8 @@ def CreaListaInterventi(lista):
         # Create a multipart message and set headers
         message = MIMEMultipart()
         message["From"] = sender_email
-        message["To"] = 'assterritorio@amiu.genova.it'
-        #message["CC"] = 'assterritorio@amiu.genova.it'
+        message["To"] = 'roberto.longo@amiu.genova.it, Alessia.Magni@amiu.genova.it, Lupi@amiu.genova.it'
+        message["CC"] = 'assterritorio@amiu.genova.it, Matteo.Relli@amiu.genova.it'
         message["Subject"] = "Richiesta PIN con dati obbligatori mancanti"
         #message["Bcc"] = debug_email  # Recommended for mass emails
         #message.preamble = f"Ispezione con id {id_ispezione} è stata eliminata"
@@ -372,7 +429,7 @@ def CreaListaInterventi(lista):
                     <ul>
                         {ids_list}
                     </ul>
-                    <p>Si prega di verificare e segnalare l'anomalia al fornitore.</p>
+                    <p>Si prega di verificare i dati a <a href='https://amiugis.amiu.genova.it/sit_addons/report_pin_arera.php'>questo link</a> e segnalare l'anomalia al fornitore.</p>
                 </p>
             </body>
             </html>
@@ -432,54 +489,7 @@ def token_treg():
     token=response.text
     return token
 
-import inspect 
 
-
-# Create a custom logger
-giorno_file=datetime.today().strftime('%Y%m%d_%H%M%S')
-filename = inspect.getframeinfo(inspect.currentframe()).filename
-path=os.path.dirname(sys.argv[0]) 
-path1 = os.path.dirname(os.path.dirname(os.path.abspath(filename)))
-nome=os.path.basename(__file__).replace('.py','')
-#tmpfolder=tempfile.gettempdir() # get the current temporary directory
-logfile='{0}/log/{2}_{1}.log'.format(path,nome,giorno_file)
-errorfile='{0}/log/{2}_error_{1}.log'.format(path,nome,giorno_file)
-#if os.path.exists(logfile):
-#    os.remove(logfile)
-
-
-# Create a custom logger
-logging.basicConfig(
-    level=logging.DEBUG,
-    handlers=[
-    ]
-)
-
-logger = logging.getLogger()
-
-# Create handlers
-c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-#f_handler = logging.StreamHandler()
-f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
-
-
-c_handler.setLevel(logging.ERROR)
-f_handler.setLevel(logging.DEBUG)
-
-
-# Add handlers to the logger
-logger.addHandler(c_handler)
-logger.addHandler(f_handler)
-
-
-cc_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
-
-c_handler.setFormatter(cc_format)
-f_handler.setFormatter(cc_format)
-
-download = "TREG/download"
-
-destinatari = ["matteo.scarfo@amiu.genova.it", "AssTerritorio@amiu.genova.it"]
 
 def main():
     try:        
@@ -498,19 +508,24 @@ def main():
         ftp.login(credenziali.userGi, credenziali.pwdGi)
         ftp.prot_p() 
 
-        # verifico che i file csv siano aggiornati alla settimana attuale
-        logger.info("Verifico se i file csv sono aggiornati alla settimana attuale")
-        checkFile = checkFileArchive(cursor, logger)
-        logger.info("Check file csv: {}".format(checkFile))
-        if checkFile[0] == False:
-            messaggio = "I file csv presenti su FTP non sono aggiornati alla settimana attuale. Ultimo file caricato: anno {} settimana {}".format(checkFile[1], checkFile[2])
-            logger.warning(messaggio)
-            warning_message_mail(messaggio, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)   
+        oggi = date.today()
+        logger.info("Oggi è: {}".format(oggi.weekday()))
+        if oggi.weekday() >= 3:
+            # il giovedì verifico che i file csv siano aggiornati alla settimana attuale
+            logger.info("Verifico se i file csv sono aggiornati alla settimana attuale")
+            checkFile = checkFileArchive(cursor, logger)
+            logger.info("Check file csv: {}".format(checkFile))
+            if checkFile[0] == False:
+                messaggio = "La settimana dell'ultimo file processato (anno {} settimana {}) non corrisponde con quella attuale. Verificare che su FTP sia stato caricato il file csv della settimana attuale.".format(checkFile[1], checkFile[2])
+                logger.warning(messaggio)
+                warning_message_mail(messaggio, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)   
 
         #download dei file       
 
         lista = GetListaFiles(ftp) #mi ricavo i nomi dei file da scaricare 
         lista = [f for f in lista if f.endswith(".csv")]   
+
+        logger.info("Lista file da scaricare: {}".format(lista))
         
         if lista:     
             logger.info("Download dei file") 

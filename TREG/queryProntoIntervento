@@ -20,7 +20,7 @@ FROM treg_gap.richieste r
 left join topo.comuni c on upper(trim(c.descr_comune)) = upper(trim(r.localita))
 left join causale on causale.codice = r.mot_rit
 left join emergenza on trim(UPPER(emergenza.descrizione)) = TRIM(UPPER(r.tipo_apertura_guasto))
-where scopo = 'Pronto intervento' and r.inviato_treg = 0;
+where scopo = 'Pronto intervento' and sottoscopo not ilike 'chiusura segnalazione' and r.inviato_treg = 0;
 
 -- name: set_inviato
 update treg_gap.richieste r set inviato_treg = 1 where id = %s;
