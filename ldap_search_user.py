@@ -99,6 +99,22 @@ c_handler.setFormatter(cc_format)
 f_handler.setFormatter(cc_format)
 
 
+# update con la mail
+query_update='UPDATE util.sys_users SET email= %s WHERE id_user=%s'
+
+
+# upsert della tabella sys_users_addons (poi sarà da spostare)
+query_upsert_addons="""INSERT INTO etl.sys_users_addons 
+(id_user, 
+esternalizzati, sovrariempimenti,
+sovrariempimenti_admin,
+coge, utenze) 
+VALUES (%s, 
+NULL, NULL, 
+NULL, 
+NULL, NULL) ON CONFLICT DO NOTHING;"""
+
+
 
 def main():
      #################################################################
@@ -142,8 +158,11 @@ def main():
             sAn=result[0][1]['sAMAccountName'][0].decode('utf-8')
             #print(sAn)
             mail=result[0][1]['mail'][0].decode('utf-8')
-            query_update='UPDATE util.sys_users SET email= %s WHERE id_user=%s'
+            
+            # update mail
             curr.execute(query_update,(mail, id1,))
+            
+            
             conn.commit()
             
         
@@ -153,7 +172,25 @@ def main():
             logger.error(f'Errore riscontrato:{e}')
             #logger.error(e)
     
-
+    
+    # faccio secondo giro su tutti utenti 
+    query_select2="select * from util.sys_users su where domain_name = 'DSI' "
+    try:
+        curr.execute(query_select2)
+        users=curr.fetchall()
+    except Exception as e:
+        logging.error(e)
+    
+    for uu in users:
+        user1=uu[1]
+        id1=uu[4]
+        # upsert sys_users_addons
+        curr.execute(query_upsert_addons,(id1,))
+        
+        conn.commit()
+        
+        
+    
     # check se c_handller contiene almeno una riga 
     error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
     logger.info("chiudo le connessioni in maniera definitiva")
