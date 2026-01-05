@@ -189,7 +189,7 @@ where anno::text||lpad(mese::text,2,'0')::text =
     if mese_anno_eko == mese_anno_oggi: 
         logger.info('Non devo fare nessuna verifica. Tutti i mesi precedenti sono chiusi')
         exit()
-    elif (oggi-data_eko).days<=36:
+    elif (oggi-data_eko).days<35:
         logger.info('Inizio le verifiche dal 5 o il 6 del mese successivo')
         exit()
     else: 
@@ -242,8 +242,8 @@ where anno::text||lpad(mese::text,2,'0')::text =
     end_anno_mail=end_date_mail.year
     
     
-    logger.debug(end_mese_mail)
-    logger.debug(end_anno_mail)
+    logger.debug(f'end_mese_mail = {end_mese_mail}')
+    logger.debug(f'end_anno_mail = {end_anno_mail}')
     #exit()
     
     
@@ -324,8 +324,15 @@ where anno::text||lpad(mese::text,2,'0')::text =
 
 
     # aggiorno il DB per il prossimo giro
-
+    logger.debug('DATA_NC:')
+    logger.debug(data_nc)
+    logger.debug('************************************************************')
+    
+    
+    
     curr = conn.cursor()
+
+    
     anno_new=int(min(data_nc)[0:4])
     mese_new=int(min(data_nc)[4:6])
     logger.debug(anno_new)
@@ -335,8 +342,10 @@ where anno::text||lpad(mese::text,2,'0')::text =
     mese_mail=data_mail.strftime('%B')
     
 
-    logger.debug(mese_mail)
+    logger.debug(f'mese_mail={mese_mail}')
     
+    logger.debug(f'anno_new={anno_new}')
+    logger.debug(f'mese_new={mese_new}')    
     
     
     
@@ -363,10 +372,12 @@ where anno::text||lpad(mese::text,2,'0')::text =
     logger.debug(incipit)
     #exit()
     
+    
+    
     # ora devo processare gli array
     curr = conn.cursor()
     
-    # seleziono tutti i percorsi con frequenze quindicinali
+    
 
     
     query_ut="""SELECT pu.cod_percorso,
@@ -393,6 +404,8 @@ where anno::text||lpad(mese::text,2,'0')::text =
     
     ut_ne=[]
     zone_ne=[]   
+    
+    schede_eseguire_automaticamente=[]
     sne=0
     while sne<len(id_scheda_ne):
         #logger.info('cod_servizio_ne[sne] {}'.format(cod_servizio_ne[sne]))
@@ -414,12 +427,19 @@ where anno::text||lpad(mese::text,2,'0')::text =
             check_rimessa=1
             #exit()
         for une in lista_ut_ne:
+            
+            
             if check_rimessa == 1: # in questo caso salvo solo la rimessa e non l'UT
                 if une[2] == 5:
                     ut_ne.append((une[1]))
                     zone_ne.append((une[2]))
+                    
                 else:
                     logger.warning(f"Nessuna rimessa trovata per scheda {id_scheda_ne[sne]}")
+            elif une[1] == 804: # caso della piattaforma volpara
+                # in questo caso devo eseguire le schede
+                #logger.info(f'Scheda {id_scheda_ne[sne]} da eseguire su piattaforma Volpara, non invio mail')
+                schede_eseguire_automaticamente.append(id_scheda_ne[sne])
             else: 
                 ut_ne.append((une[1]))
                 zone_ne.append((une[2]))
@@ -427,6 +447,16 @@ where anno::text||lpad(mese::text,2,'0')::text =
         
 
     curr.close()
+    
+    if len(schede_eseguire_automaticamente)>0:
+        import dati_consuntivazione_annulla_schede_ut_dismesse
+        # lancio funzione per eseguire automaticamente le schede su piattaforma volpara
+        logger.debug(schede_eseguire_automaticamente)
+        logger.info('Richiamo la funzione per eseguire automaticamente le schede su piattaforma volpara')
+        dati_consuntivazione_annulla_schede_ut_dismesse.main(check_schede=schede_eseguire_automaticamente)
+    else:
+        logger.info('Nessuna scheda da eseguire automaticamente su piattaforma volpara, procedo direttamente con l\'invio mail')
+    
     #logger.debug('ut_ne len: {}'.format(len(ut_ne)))
     #logger.debug('id_scheda_ne len: {}'.format(len(id_scheda_ne)))
     #exit()
@@ -439,6 +469,8 @@ where anno::text||lpad(mese::text,2,'0')::text =
     logger.info('UT con schede non eseguite: {}'.format(uts))
     
     
+    
+    #exit()
     
     #Invio le mail alle UT
     
