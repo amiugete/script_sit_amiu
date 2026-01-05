@@ -141,7 +141,7 @@ cartelle_da_pulire=[logpath, variazioni, idea, ecopunti, utenze,
                     eko_pesi, backup_db, csv_comune_ge, treg_log]
 
 giorni_pulizia = [ 14, 14, 7, 14, 14,
-          7, 7, 7, 7, 1,
+          1, 7, 1, 1, 1,
           1, 1, 1, 7, 7,
           7, 7, 20, 7]
 
