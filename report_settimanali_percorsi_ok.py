@@ -206,7 +206,7 @@ def main(arg1, arg2, arg3, arg4):
     
     
     try: 
-        if arg4 is None or arg4==0:
+        if arg4 is None or int(arg4)==0:
             logger.info ('Non è stato specificato il numero di giorni')
             arg4=0
         else :
@@ -274,6 +274,37 @@ p.stagionalita,
 fo.descrizione_long,
 data_attivazione
     '''
+    
+    
+    
+    query_variazioni='''select su."name", 
+            to_char(sh.datetime, 'DD/MM/YYYY HH24:MI:SS') as data_ora, 
+            sh.description, 
+            coalesce(sh.id_piazzola, e.id_piazzola) as id_piazzola, sh.id_elemento,
+            c.descr_comune, v.nome, 
+            coalesce(p2.numero_civico, '') as numero_civico, 
+            p2.riferimento, 
+            concat(te.descrizione, ' (', tr.nome ,')' ) as tipo_elem 
+            from util.sys_history sh 
+            join util.sys_users su on sh.id_user=su.id_user
+            left join
+            (select id_elemento, tipo_elemento, id_piazzola, id_asta from elem.elementi
+			union 
+			select id_elemento, tipo_elemento, id_piazzola, id_asta from history.elementi) e
+            	on e.id_elemento = sh.id_elemento 
+            left join elem.piazzole p2  on p2.id_piazzola = coalesce(sh.id_piazzola, e.id_piazzola) 
+            left join elem.aste a on a.id_asta = coalesce(p2.id_asta, e.id_asta)
+            left join topo.vie v on v.id_via = a.id_via 
+            left join topo.comuni c on c.id_comune = v.id_comune 
+            left join elem.tipi_elemento te on te.tipo_elemento = e.tipo_elemento 
+            left join elem.tipi_rifiuto tr on tr.tipo_rifiuto  = te.tipo_rifiuto 
+            where sh.id_percorso
+            in (select max(id_percorso) from elem.percorsi p 
+            where cod_percorso = %s )
+            and datetime > (now()::date - interval '%s' day)
+            and sh.id_user != 0
+            order by datetime desc'''
+    
     
     try:
         curr.execute(query, (codice,))
@@ -693,23 +724,10 @@ order by min(ap.num_seq) asc'''
     
     # cerco se le variazioni sono di qualche utente o se sono di procedure id_user=0
     
-    if  check_m==1 and arg4>0:
-        query_variazioni='''select su."name", 
-            to_char(sh.datetime, 'DD/MM/YYYY HH24:MI:SS') as data_ora, 
-            sh.description, 
-            sh.id_piazzola, sh.id_elemento 
-            from util.sys_history sh 
-            join util.sys_users su on sh.id_user=su.id_user
-            where sh.id_percorso
-            in (select max(id_percorso) from elem.percorsi p 
-            where cod_percorso = %s )
-            and datetime > (now()::date - interval '%s' day)
-            and sh.id_user != 0
-            order by datetime desc'''
-        
+    if  check_m==1 and int(arg4)>0:
         
         try:
-            curr.execute(query_variazioni, (codice,arg4))
+            curr.execute(query_variazioni, (codice,int(arg4),))
             lista_variazioni=curr.fetchall()
         except Exception as e:
             logger.error(e)
@@ -721,11 +739,11 @@ order by min(ap.num_seq) asc'''
         if len(lista_variazioni)> 0:
             variazioni='<ul>'
         for vv in lista_variazioni: 
-            variazioni ='{0}<li> Data e ora: {1} User SIT: {2} - Descrizione: {3}'.format(variazioni, vv[1], vv[0], vv[2])
+            variazioni ='{0}<li><b>Data e ora</b>: {1} <br><b>User SIT</b>: {2} <br><b>Descrizione intervento</b>: {3}'.format(variazioni, vv[1], vv[0], vv[2])
             if vv[3] is not None:
-                variazioni='{0} - Piazz {1}'.format(variazioni, vv[3])
+                variazioni='{0} <br><b>Piazzola</b>: {1} - Comune {2} Indirizzo: {3}, {4} - Rif {5},'.format(variazioni, vv[3], vv[5], vv[6], vv[7], vv[8])
             if vv[4] is not None:
-                variazioni='{0} - Elem {1}'.format(variazioni, vv[4])
+                variazioni='{0} <br><b>Elemento</b>: {1} - {2}'.format(variazioni, vv[4], vv[9])
             variazioni='{0}</li>'.format(variazioni)
         if len(lista_variazioni)> 0:
             variazioni='{0}</ul>'.format(variazioni)
@@ -748,7 +766,7 @@ order by min(ap.num_seq) asc'''
         debug_email='roberto.marzocchi@amiu.genova.it'
         
         
-        body = """Il percorso {0} - {1} è variato. 
+        body = """Il percorso <b>{0}</b> - <b><i>{1}</i></b> è variato. 
         Di seguito le variazioni avvenute nei {3} giorni precedenti:
         {4}       
         <br>In allegato il nuovo report.
