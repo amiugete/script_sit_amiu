@@ -80,7 +80,7 @@ utenze/*.xlsx
 utenze/input/*.xlsx
 output/input/*.xlsx
 
-
+./*.pdf
 
 report/*.xlsx
 correzioni_grafo/*.xlsx
