@@ -296,13 +296,13 @@ and ve.id_causale::int <> %s'''
 	t.num_elementi, 
     t.cronologia,
     e.fatto,
-	vc.descrizione as descr_causale,
+	string_agg(vc.descrizione, ', ') as descr_causale,
 	e.id_causale as causale,
 	concat('TOTEM Badge ', e.codice, ' - Matr. ', vpes.matricola::text, ' - ', vpes.cognome, ' ', vpes.nome) as sorgente_dati, 
 	e.datainsert as data_insert, 
     t.id_tappa as tappa, 
     e.nota as note_totem /* è il campo con le note*/,
-    mu.mail
+    string_agg(mu.mail, ', ') as mail
 	from raccolta.cons_percorsi_raccolta_amiu t
 	join raccolta.effettuati_amiu e on e.tappa::bigint =  t.id_tappa::bigint
 	join totem.v_causali vc on vc.id = e.id_causale 
@@ -315,7 +315,21 @@ and ve.id_causale::int <> %s'''
 	and*/ datalav >= '2024-01-29'
     and codice not in ('1111', '2222', '3333', '4444', '8888', '9998', '9999')
     and e.id > (select coalesce(max(max_id),0) from raccolta.invio_consuntivazioni_ekovision ice)
-	order by 1'''
+	group by 
+    e.id, 
+	t.id_percorso,
+	e.datalav::date ,
+	t.id_piazzola, 
+	t.num_elementi, 
+    t.cronologia,
+    e.fatto,
+	--vc.descrizione as descr_causale,
+	e.id_causale ,
+	concat('TOTEM Badge ', e.codice, ' - Matr. ', vpes.matricola::text, ' - ', vpes.cognome, ' ', vpes.nome) , 
+	e.datainsert , 
+    t.id_tappa, 
+    e.nota
+    order by 1'''
     
     
     
