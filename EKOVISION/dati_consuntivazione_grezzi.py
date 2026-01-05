@@ -45,7 +45,11 @@ import logging
 #path=os.path.dirname(sys.argv[0]) 
 
 # per scaricare file da EKOVISION
-import pysftp
+
+#import pysftp
+import paramiko
+import stat
+
 
 import json
 
@@ -193,6 +197,10 @@ def main():
     # quindi lo riprocessa fino a che non si è risolto l'errore
     debug = 0
     
+    
+    
+    
+    
     invio_eko=0
     
     
@@ -269,684 +277,712 @@ group by ep.cod_percorso, ep.descrizione
         'o2asp' :  eko_o2asp
         }
 
+
+
     
     try: 
-        cnopts = pysftp.CnOpts()
-        cnopts.hostkeys = None
-        srv = pysftp.Connection(host=url_ev_sftp, username=user_ev_sftp,
-    password=pwd_ev_sftp, port= port_ev_sftp,  cnopts=cnopts,
-    log="/tmp/pysftp.log")
+        #cnopts = pysftp.CnOpts()
+        #cnopts.hostkeys = None
+        #srv = pysftp.Connection(host=url_ev_sftp, username=user_ev_sftp,
+            #password=pwd_ev_sftp, port= port_ev_sftp,  cnopts=cnopts,
+            #log="/tmp/pysftp.log")
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect(url_ev_sftp, username=user_ev_sftp, password=pwd_ev_sftp, port= port_ev_sftp)
 
-        with srv.cd(cartella_sftp_eko): #chdir to public
-            #print(srv.listdir('./'))
-            for filename in srv.listdir('./'):
-                #logger.debug(filename)
-                select_file='''SELECT * FROM UNIOPE.EKOVISION_LETTURA_CONSUNT 
-                WHERE FILENAME=:f1 and da_riprocessare IS NULL'''
-
-                try:
-                    cur.execute(select_file, (filename,))
-                    check_filename=cur.fetchall()
-                except Exception as e:
-                    logger.error(select_file)
-                    logger.error(e)
-                                    
-                # se non ho già letto il file
-                if len(check_filename)==0 and fnmatch.fnmatch(filename, "sch_lav_consuntivi*"):
-                    srv.get(filename, path + "/eko_output2/" + filename)
-                    logger.info('Scaricato file {}'.format(filename))
-                    
-                    
-                    
-                    logger.info ('Inizio processo file'.format(filename))   
-                    
-                    # imposto a 0 un controllo sulla lettura del file
-                    check_lettura=0
-                    
-                    
-                    # Opening JSON file
-                    f = open(path + "/eko_output2/" + filename)
-                    
-                    
-                    
-                    # uso la tabella semaforo per bloccare altri processi che usino queste tabelle in modo da non generare errori
-                    semaforo_1='''UPDATE CONSUNT_EKOVISION_SEMAFORO ces 
-                        SET semaforo = 1, LAST_UPDATE = SYSDATE'''
-                    try:
-                        cur.execute(semaforo_1)
-                    except Exception as e:
-                        logger.error(semaforo_1)
-                        logger.error(e)
-                    con.commit()
-                    cur.close()
-                    cur = con.cursor()
-                    
-                    
-                    # returns JSON object as 
-                    # a dictionary
-                    try:
-                        data = json.load(f)
-                     
-                        
-                        
-                        i=0
-                        while i<len(data):
-                            try:
-                                logger.info('{} - Leggo dati della scheda di lavoro {}'.format(i, data[i]['id_scheda']))
-                                check=0                    
-                                
-                                if data[i]['data_esecuzione_prevista']>=data_start_ekovision:
-                                    ''' devo leggere quello che c'è in
-                                    -   cons_conferimenti 
-                                            --> pesi percorsi
-                                    -   cons_ris_tecniche
-                                    -   cons_ris_umane
-                                            --> hist_servizi
-                                    -   cons_works
-                                            tipo_rec - TRATTI STRADALI   
-                                            --> 
-                                    '''
-                                    
-                                    # popolamento hist_servizi
-                                    
-                                    
-                                    #interrogo il WS e ricavo la fascia turno
-                                    
-                                    # PARAMETRI GENERALI WS
-    
-    
-                                    
-                                        
-                                    
-                                    
-                                
-                                        
-                                    logger.info('Start WS per orario')
-                                    params={'obj':'schede_lavoro',
-                                        'act' : 'r',
-                                        'sch_lav_data': data[i]['data_esecuzione_prevista'],
-                                        'cod_modello_srv': data[i]['codice_serv_pred'], 
-                                        'flg_includi_eseguite': 1,
-                                        'flg_includi_chiuse': 1                                     
-                                        }
-
-                                    response = requests.post(eko_url, params=params, data=data_json, headers=headers)
-                                    #response.json()
-                                    #logger.debug(response.status_code)
-                                    try:      
-                                        response.raise_for_status()
-                                        # access JSOn content
-                                        #jsonResponse = response.json()
-                                        #print("Entire JSON response")
-                                        #print(jsonResponse)
-                                    except HTTPError as http_err:
-                                        logger.error(f'HTTP error occurred: {http_err}')
-                                        check=1
-                                    except Exception as err:
-                                        logger.error(f'Other error occurred: {err}')
-                                        logger.error(response.json())
-                                        check=1
-                                    if check<1:
-                                        letture = response.json()
-                                        logger.debug(letture)
-                                        if len(letture['schede_lavoro']) > 0 : 
-                                            #controllo se la scheda è la stessa (escludo eventuali soccorsi o schede duplicate per sbaglio)
-                                            if data[i]['id_scheda']==letture['schede_lavoro'][0]['id_scheda_lav']:
-                                                ora_inizio_lav=letture['schede_lavoro'][0]['ora_inizio_lav']
-                                                ora_inizio_lav_2=letture['schede_lavoro'][0]['ora_inizio_lav_2']
-                                                ora_fine_lav=letture['schede_lavoro'][0]['ora_fine_lav']
-                                                ora_fine_lav_2=letture['schede_lavoro'][0]['ora_fine_lav_2']
-                                            if ora_inizio_lav_2=='000000' and ora_fine_lav_2=='000000' :
-                                                orario_esecuzione='{} - {}'.format(ora_inizio_lav, ora_fine_lav)
-                                            else:
-                                                orario_esecuzione='{} - {} / {} - {}'.format(ora_inizio_lav, ora_fine_lav, ora_inizio_lav_2 ,ora_fine_lav_2)   
-                                            logger.debug('Orario esecuzione:{}'.format(orario_esecuzione))
-                                            fascia_t=fascia_turno(ora_inizio_lav, ora_fine_lav, ora_inizio_lav_2 ,ora_fine_lav_2)
-                                            logger.debug('Fascia turno :{}'.format(fascia_t))
-                                            # calcolo fascia turno
-                                            # caso semplice se c 
-                                            
-                                    
-                                    update_testata='''UPDATE UNIOPE.SCHEDE_ESEGUITE_EKOVISION 
-                                        SET ORARIO_ESECUZIONE= :s1, FASCIA_TURNO = :s2
-                                        WHERE ID_SCHEDA=:s3'''
-                                    
-                                    try:
-                                        cur.execute(update_testata, (
-                                                    orario_esecuzione, fascia_t, data[i]['id_scheda']
-                                                ))
-                                    except Exception as e:
-                                        check=1
-                                        logger.error(update_testata)
-                                        logger.error('1:{}, 2:{}, 3:{}'.format(
-                                            orario_esecuzione, fascia_t, data[i]['id_scheda']
-                                        ))
-                                        logger.error(e)
-
-                                    con.commit()
-                                    logger.info('End WS orario')                                
-                                    
-                                    
-                                    
-                                    
-                                    # Prima di leggere qualsiasi cosa correggo eventuali inserimenti già fatti
-                            
-                                    update_schede='''UPDATE UNIOPE.CONSUNT_EKOVISION_SPAZZAMENTO 
-                                    SET RECORD_VALIDO = 'N' 
-                                    WHERE ID_SCHEDA = :s1'''
-                                    
-                                    try:
-                                        cur.execute(update_schede, (
-                                                data[i]['id_scheda'],
-                                            ))
-                                    except Exception as e:
-                                        check=1
-                                        logger.error(update_schede)
-                                        logger.error('1:{}'.format(
-                                        data[i]['id_scheda']
-                                        ))
-                                        logger.error(e)
-                                        check_lettura+=1
-                                    con.commit()
-                                    
-                                
-                                    update_schede='''UPDATE UNIOPE.CONSUNT_EKOVISION_RACCOLTA 
-                                    SET RECORD_VALIDO = 'N' 
-                                    WHERE ID_SCHEDA = :s1'''
-                                    
-                                    try:
-                                        cur.execute(update_schede, (
-                                                data[i]['id_scheda'],
-                                            ))
-                                    except Exception as e:
-                                        check=1
-                                        logger.error(update_schede)
-                                        logger.error('1:{}'.format(
-                                        data[i]['id_scheda']
-                                        ))
-                                        logger.error(e)
-                                        check_lettura+=1
-                                    con.commit()
-                                        
-                                        
-                                    # consuntivazione 
-                                    t=0 # contatore tappe
-                                    check_cons=0
-                                    while t<len(data[i]['cons_works']):
-
-
-                                        
-                                        # escludo i NON previsti e NON eseguiti
-                                        if int(data[i]['cons_works'][t]['flg_exec'].strip())==1 or  int(data[i]['cons_works'][t]['flg_non_previsto'].strip())==0 :
-                                            ################################################################
-                                            # Preparo i dati da inserire 
-                                            
-                                            # causale
-                                            # il primo if era dopo ma l'ho sposato sopra (28/11/2024 sarebbero da riprocessare un po di dati)
-                                            if int(data[i]['flg_segn_srv_non_effett'].strip())==1:
-                                                causale=int(data[i]['cod_caus_srv_non_eseg_ext'].strip())
-                                                qualita=0
-                                            elif int(data[i]['cons_works'][t]['flg_exec'].strip())==1:
-                                                if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC' or data[i]['cons_works'][t]['tipo_srv_comp']=='SPAZZ':
-                                                    causale=100
-                                                elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
-                                                    causale=110
-                                                if data[i]['cons_works'][t]['tipo_srv_comp']=='SPAZZ':
-                                                    qualita=int(data[i]['cons_works'][t]['cod_std_qualita'].strip())
-                                            #lo sposto prima perchè ci sono alcuni casi in cui int(data[i]['cons_works'][t]['flg_exec'].strip())==1 
-                                            # anche se il servizio non è stato effettuato
-                                            # elif int(data[i]['flg_segn_srv_non_effett'].strip())==1:
-                                            #    causale=int(data[i]['cod_caus_srv_non_eseg_ext'].strip())
-                                            #    qualita=0
-                                            # se il servizio non fosse stato completato
-                                            else :
-                                                try:
-                                                    causale=int(data[i]['cons_works'][t]['cod_giustificativo_ext'].strip())
-                                                    qualita=0
-                                                except Exception as e:
-                                                    check_cons=1
-                                                    invio_eko=1 # invio l'errore anche a Ekovision
-                                                    logger.warning('ID SCHEDA:{} - Componente:{}'.format(data[i]['id_scheda'], data[i]['cons_works'][t]['cod_componente']))
-                                                    logger.warning('Causale servizio non effettuato:{}'.format(data[i]['cod_caus_srv_non_eseg_ext']))
-                                                    logger.warning('FLG Eseguito:{}'.format(data[i]['cons_works'][t]['flg_exec']))
-                                                    logger.warning('PROBLEMA CAUSALE')
-                                                    logger.warning(e)
-                                                    try:
-                                                        cp_probemi = data[i]['codice_serv_pred']
-                                                        data_problemi= data[i]['data_esecuzione_prevista']
-                                                        try:
-                                                            if cp_probemi not in percorsi_tappe_non_fatte:
-                                                                percorsi_tappe_non_fatte.append(cp_probemi)
-                                                                conn=connessione_sit()
-                                                                curr2 = conn.cursor()
-                                                                curr2.execute(query_mail_anomalie_cons, (cp_probemi, data_problemi,))
-                                                                row_mail=curr2.fetchone()
-                                                                conn.commit()
-                                                                curr2.close()
-                                                                logger.info("chiudo la connessione al SIT")
-                                                                conn.close()
-                                                                indirizzi_mail_amiu = row_mail[2]
-                                                                descrizione_problemi = row_mail[1]
-                                                                messaggio_ut = f'''Il percorso {cp_probemi} {descrizione_problemi} del {data_problemi}  
-                                                                (id_scheda_ekovision = {data[i]['id_scheda']}) ha delle tappe erroneamente consuntivate come non fatte ma senza causale.
-                                                                <br>Probabilmente si tratta di una scheda in cui è stato flaggato e poi rimosso il flag 'Non effettuato' su ekovision. 
-                                                                <br>La casistica in questione è in corso di risoluzione da ekovision e non succederà più in futuro. 
-                                                                <br>In attesa della soluzione è necessario controllare la scheda e correggere manualmente le tappe indicandole come "fatte", oppure, nel caso in cui siano effettivamente non fatte, indicare la causale. 
-                                                                '''
-                                                                soggetto_mail = f'ATTENZIONE problema consuntivazione ARERA percorso percorso {cp_probemi} del {data_problemi}'
-                                                                warning_message_mail(messaggio_ut, f'{indirizzi_mail_amiu}, assterritorio@amiu.genova.it, andrea.volpi@ekovision.it, francesco.venturi@ekovision.it', os.path.basename(__file__), logger, soggetto_mail)
-                                                                #error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
-                                                        except Exception as e2:
-                                                            logger.error(query_mail)
-                                                            logger.error(e2)
-                                                        
-                                                    except Exception as e1:
-                                                        logger.error(e1)
-                                                    causale=None
-                                            # la causale 999, creata per le preconsuntivazione, in realtà non dovrebbe essere usata.. 
-                                            # se fosse arrivato qualcosa lo assimilo alla 102 (percorso non previsto)
-                                            previsto = 0
-                                            if causale == 999:
-                                                
-                                                causale = 102
-                                                if '{}_{}'.format(data[i]['codice_serv_pred'],data[i]['data_esecuzione_prevista']) not in percorsi_tappe_anomale:
-                                                    
-                                                    logger.info('Verifico se componente {} del percorso {} è prevista il {}'
-                                                             .format(int(data[i]['cons_works'][t]['cod_componente'].strip()),
-                                                                    data[i]['codice_serv_pred'], 
-                                                                    data[i]['data_esecuzione_prevista'] 
-                                                                    )
-                                                    )
-                                                    # qua dovrei verificare se la componente o il tratto stradale è previsto o meno in quel giorno 
-                                                    
-                                                    # per le componenti 
-                                                    
-                                                    if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC' or data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
-                                                        query_raccolta='''SELECT id_elemento, frequenza
-                                                        FROM cons_micro_tappa c
-                                                        WHERE c.ID_MACRO_TAPPA IN 
-                                                        (
-                                                        SELECT ID_TAPPA  FROM CONS_PERCORSI_VIE_TAPPE cpvt 
-                                                        JOIN CONS_MACRO_TAPPA cmt ON cmt.ID_MACRO_TAPPA=cpvt.ID_TAPPA
-                                                        WHERE ID_PERCORSO IN (
-                                                            :cod_percorso
-                                                        ) AND DATA_PREVISTA = 
-                                                        (SELECT max(DATA_PREVISTA) FROM CONS_PERCORSI_VIE_TAPPE cpvt1 WHERE  cpvt1.id_percorso =cpvt.ID_PERCORSO  
-                                                        AND DATA_PREVISTA <= to_date(:dataperc, 'YYYYMMDD')
-                                                        )
-                                                        ) AND UNIOPE.ISDATEINFREQ(to_date(:dataperc, 'YYYYMMDD'), c.FREQUENZA)=1
-                                                        AND id_elemento = :cod_componente'''
-                                                        
-                                                        
-                                                        try:
-                                                            cur.execute(query_raccolta, (data[i]['codice_serv_pred'], 
-                                                                                    data[i]['data_esecuzione_prevista'],
-                                                                                    data[i]['data_esecuzione_prevista'], 
-                                                                                    int(data[i]['cons_works'][t]['cod_componente'].strip())
-                                                                                    )
-                                                                        )
-                                                            check_componente_previsto=cur.fetchall()
-                                                            #logger.debug(query_raccolta)
-                                                            #logger.debug(check_componente_previsto)
-                                                            if len(check_componente_previsto)>0:
-                                                                previsto = 1
-                                                            logger.debug(previsto)
-                                                        except Exception as e:
-                                                            logger.error(query_raccolta)
-                                                            logger.error(e)
-                                                            
-                                                            
-                                                    elif data[i]['cons_works'][t]['tipo_srv_comp']=='SPAZZ':
-                                                        query_spazzamento = '''SELECT id_asta, frequenza
-                                                        FROM cons_macro_tappa c
-                                                        WHERE c.ID_MACRO_TAPPA IN 
-                                                        (
-                                                        SELECT ID_TAPPA  FROM CONS_PERCORSI_VIE_TAPPE cpvt 
-                                                        JOIN CONS_MACRO_TAPPA cmt ON cmt.ID_MACRO_TAPPA=cpvt.ID_TAPPA
-                                                        WHERE ID_PERCORSO IN (
-                                                            :cod_percorso
-                                                        ) AND DATA_PREVISTA = 
-                                                        (SELECT max(DATA_PREVISTA) FROM CONS_PERCORSI_VIE_TAPPE cpvt1 WHERE  cpvt1.id_percorso =cpvt.ID_PERCORSO  
-                                                        /*----------------------------------------------------------------
-                                                        --data consuntivazione*/
-                                                        AND DATA_PREVISTA <= to_date(:dataperc, 'YYYYMMDD')
-                                                        /*AND (SELECT UNIOPE.ISDATEINFREQ(to_date(:dataperc, 'YYYYMMDD'), cmt.FREQUENZA) FROM dual)>0*/
-                                                        )
-                                                        ) AND UNIOPE.ISDATEINFREQ(to_date(:dataperc, 'YYYYMMDD'), c.FREQUENZA)=1
-                                                        AND id_asta = :cod_tratto'''
-                                                        
-                                                        
-                                                        try:
-                                                            cur.execute(query_spazzamento, (data[i]['codice_serv_pred'], 
-                                                                                    data[i]['data_esecuzione_prevista'],
-                                                                                    data[i]['data_esecuzione_prevista'], 
-                                                                                    int(data[i]['cons_works'][t]['cod_tratto'].strip())
-                                                                                    )
-                                                                        )
-                                                            check_tratto_previsto=cur.fetchall()
-                                                            if len(check_tratto_previsto)>0:
-                                                                previsto = 1
-                                                        except Exception as e:
-                                                            logger.error(query_spazzamento)
-                                                            logger.error(e)
-                                                            
-                                                        
-                                                    
-                                                    if previsto > 0 :
-                                                        # faccio append
-                                                        percorsi_tappe_anomale.append('{}_{}'.format(data[i]['codice_serv_pred'],data[i]['data_esecuzione_prevista']))
-                                                        # invio mail warning 
-                                                        messaggio = '''Per il percorso {0} del {1} (id_scheda = {2})
-                                                        sono state consuntivate alcune tappe previste 
-                                                        con la causale "<i>Frequenza non prevista</i>" (999) 
-                                                        che non andrebbe usata se non per le tappe effettivamente non previste da SIT.<br>
-                                                        Si prega di controllare e correggere il dato su Ekovision inserendo una causale corretta.
-                                                        '''.format(data[i]['codice_serv_pred'], 
-                                                                data[i]['data_esecuzione_prevista'],
-                                                                data[i]['id_scheda'])
-                                                        query_mail='''SELECT au.mail || ', '|| a.MAIL AS destinatari_mail 
-                                                            FROM ANAGR_UO au
-                                                            LEFT JOIN ANAGR_ZONE a ON a.ID_ZONATERRITORIALE = au.ID_ZONATERRITORIALE
-                                                            WHERE id_uo IN ( 
-                                                                SELECT id_uo FROM anagr_ser_per_uo 
-                                                                WHERE ID_PERCORSO = :m1
-                                                                AND to_date(:m2, 'YYYYMMDD') 
-                                                                BETWEEN DTA_ATTIVAZIONE AND DTA_DISATTIVAZIONE 
-                                                            )'''
-                                                        try:
-                                                            cur.execute(query_mail, (data[i]['codice_serv_pred'], 
-                                                                                    data[i]['data_esecuzione_prevista'],))
-                                                            check_mails=cur.fetchall()
-                                                        except Exception as e:
-                                                            logger.error(query_mail)
-                                                            logger.error(e)
-                                                            
-                                                        for cm in check_mails:
-                                                            destinatari=cm[0]
-                                                        
-                                                        
-                                                        warning_message_mail(messaggio, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
-                                                            
-                                                #else:
-                                                    # non faccio nulla 
-                                                    
-                                                        
-                                            # vedo se consuntivazione arriva da totem o meno 
-                                            if int(data[i]['cons_works'][t]['ts_exec']) == 0:
-                                                totem=0
-                                            else :
-                                                totem=1
-                                            
-                                            
-                                            # riprogrammato
-                                            try:
-                                                if int(data[i]['cons_works'][t]['flg_riprogrammato']) == 0:
-                                                    riprogrammato=0
-                                                elif int(data[i]['cons_works'][t]['flg_riprogrammato']) == 1 :
-                                                    riprogrammato=1
-                                            except Exception as e:
-                                                riprogrammato=None
-                                                    
-                                            
-                                            # note
-                                            if data[i]['cons_works'][t]['note'] =='':
-                                                note=None
-                                            else :
-                                                note=data[i]['cons_works'][t]['note']
-                                                    
-                                                    
-                                            if data[i]['cons_works'][t]['tipo_srv_comp']=='SPAZZ':
-                                                #logger.debug('Consuntivazione spazzamento')
-                                            
-                                                # gestione anomalie causali
-                                                if check_cons==1:
-                                                    insert_anom='''INSERT INTO UNIOPE.EKOVISION_ANOMALIE_CAUSALI 
-                                                    (ID_SCHEDA, COD_TRATTO, POS, FILENAME)
-                                                    VALUES
-                                                    (:a1, :a2, :a3, :a4)'''
-                                                    try:
-                                                        cur.execute(insert_anom, (
-                                                        data[i]['id_scheda'], 
-                                                        int(data[i]['cons_works'][t]['cod_tratto'].strip()),
-                                                        int(data[i]['cons_works'][t]['pos']), 
-                                                        filename
-                                                    ))
-                                                    except Exception as e:
-                                                        check=1
-                                                        logger.error('Problema inserimeno anomalie')
-                                                        
-                                                else: 
-                                                    delete_anom='''DELETE 
-                                                    FROM UNIOPE.EKOVISION_ANOMALIE_CAUSALI 
-                                                    WHERE ID_SCHEDA = :a1 AND
-                                                    COD_TRATTO=:a2 AND
-                                                    POS = :a3
-                                                    '''
-                                                    try:
-                                                        cur.execute(delete_anom, (
-                                                        data[i]['id_scheda'], 
-                                                        int(data[i]['cons_works'][t]['cod_tratto'].strip()),
-                                                        int(data[i]['cons_works'][t]['pos'])
-                                                    ))
-                                                    except Exception as e:
-                                                        check=1
-                                                        logger.error('Problema rimozione anomalie')
-                                                    
-                                                
-                                                insert_cons='''INSERT INTO UNIOPE.CONSUNT_EKOVISION_SPAZZAMENTO 
-                                                (ID_RECORD,
-                                                 ID_SCHEDA, DATA_ESECUZIONE_PREVISTA, CODICE_SERV_PRED,
-                                                COD_TRATTO, POSIZIONE, CAUSALE,
-                                                QUALITA, NOTE, TOTEM,
-                                                RIPROGRAMMATO) 
-                                                VALUES
-                                                (UNIOPE.CONSUNT_EKOVISION_SPAZZ_SEQ.NEXTVAL,
-                                                :c1, :c2, :c3,
-                                                :c4, :c5, :c6,  
-                                                :c7, :c8, :c9,
-                                                :c10
-                                                )'''
-                                                
-                                                try:
-                                                    cur.execute(insert_cons, (
-                                                        data[i]['id_scheda'], data[i]['data_esecuzione_prevista'], data[i]['codice_serv_pred'], 
-                                                        int(data[i]['cons_works'][t]['cod_tratto'].strip()), int(data[i]['cons_works'][t]['pos']), causale,
-                                                        qualita, note, totem,
-                                                        riprogrammato
-                                                    ))
-                                                except Exception as e:
-                                                    check=1
-                                                    logger.error(insert_cons)
-                                                    logger.error('1:{}, 2:{}, 3:{}, 4:{}, 5:{}, 6:{}, 7:{}, 8:{}, 9:{}, 10:{}'.format(
-                                                        data[i]['id_scheda'], data[i]['data_esecuzione_prevista'], data[i]['codice_serv_pred'], 
-                                                        int(data[i]['cons_works'][t]['cod_tratto'].strip()), int(data[i]['cons_works'][t]['pos']), causale,
-                                                        qualita, note, totem,
-                                                        riprogrammato
-                                                    ))
-                                                    logger.error(e) 
-                                                
-                                                
-                                                
-                                                
-                                            elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC' or data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
-                                                #logger.debug('Consuntivazione raccolta')
-                                                
-                                                
-                                                # gestione anomalie causali
-                                                if check_cons==1:
-                                                    insert_anom='''INSERT INTO UNIOPE.EKOVISION_ANOMALIE_CAUSALI 
-                                                    (ID_SCHEDA, COD_COMPONENTE, POS, FILENAME)
-                                                    VALUES
-                                                    (:a1, :a2, :a3, :a4)'''
-                                                    try:
-                                                        cur.execute(insert_anom, (
-                                                        data[i]['id_scheda'], 
-                                                        int(data[i]['cons_works'][t]['cod_componente'].strip()),
-                                                        int(data[i]['cons_works'][t]['pos']), 
-                                                        filename
-                                                    ))
-                                                    except Exception as e:
-                                                        check=1
-                                                        logger.error('Problema inserimeno anomalie')
-                                                        
-                                                else: 
-                                                    delete_anom='''DELETE 
-                                                    FROM UNIOPE.EKOVISION_ANOMALIE_CAUSALI 
-                                                    WHERE ID_SCHEDA = :a1 AND
-                                                    COD_COMPONENTE=:a2 AND
-                                                    POS = :a3
-                                                    '''
-                                                    try:
-                                                        cur.execute(delete_anom, (
-                                                        data[i]['id_scheda'], 
-                                                        int(data[i]['cons_works'][t]['cod_componente'].strip()),
-                                                        int(data[i]['cons_works'][t]['pos'])
-                                                    ))
-                                                    except Exception as e:
-                                                        check=1
-                                                        logger.error('Problema rimozione anomalie')
-                                                
-                                                insert_cons='''INSERT INTO UNIOPE.CONSUNT_EKOVISION_RACCOLTA 
-                                                (ID_SCHEDA, DATA_ESECUZIONE_PREVISTA, CODICE_SERV_PRED,
-                                                COD_COMPONENTE, POSIZIONE, CAUSALE,
-                                                NOTE, TOTEM, RIPROGRAMMATO) 
-                                                VALUES
-                                                (
-                                                :c1, :c2, :c3,
-                                                :c4, :c5, :c6,  
-                                                :c7, :c8, :c9
-                                                )'''
-                                                
-                                                try:
-                                                    cur.execute(insert_cons, (
-                                                        data[i]['id_scheda'], data[i]['data_esecuzione_prevista'], data[i]['codice_serv_pred'], 
-                                                        int(data[i]['cons_works'][t]['cod_componente'].strip()), int(data[i]['cons_works'][t]['pos']), causale,
-                                                        note, totem, riprogrammato
-                                                    ))
-                                                except Exception as e:
-                                                    check=1
-                                                    logger.error(insert_cons)
-                                                    logger.error('1:{}, 2:{}, 3:{}, 4:{}, 5:{}, 6:{}, 7:{}, 8:{}, 9:{}, 10:{}'.format(
-                                                        data[i]['id_scheda'], data[i]['data_esecuzione_prevista'], data[i]['codice_serv_pred'], 
-                                                        int(data[i]['cons_works'][t]['cod_componente'].strip()), int(data[i]['cons_works'][t]['pos']), causale,
-                                                        note, totem, riprogrammato
-                                                    ))
-                                                    logger.error(e)
-                                                                
-                        
-                                                            
-                                                            
-                                                            
-                                                
-                                            else:
-                                                check=1
-                                                logger.error('PROBLEMA CONSUNTIVAZIONE')
-                                                logger.error('File:{}'.format(filename))
-                                                logger.error('Mi sono fermato alla riga {}'.format(i))
-                                                error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
-                                                exit()
-                                        else:
-                                            logger.debug('Tappa non prevista e non effettuata')
-                                        t+=1
-                                        con.commit()
-                                    
-                                    
-                                    
-                                    
-                                else:
-                                    logger.info('Non processo la scheda perchè antecedente alla data di partenza di Ekovision {}'.format(data_start_ekovision))
-                            except Exception as e:
-                                check=1
-                                logger.error('File:{}'.format(filename))
-                                logger.error('Non processo la riga {}'.format(i))
-                            i+=1
-                        #con.commit()
-                        
-                        
-                        # Closing file
-                        f.close()
-                        logger.info('Chiudo il file {}'.format(filename))
-                        logger.info('-----------------------------------------------------------------------------------------------------------------------')
-                        #exit()
-                        #srv.rename("./"+ filename, "./archive/" + filename)
-                    except Exception as e:
-                        logger.error(e)
-                        logger.error('Problema processamemto file {}'.format(filename))
-                        #logger.error('File spostato nella cartella json_error')
-                        f.close()
-                        #srv.rename("./"+ filename, "./json_error/" + filename)
-                        #error_log_mail(errorfile, 'assterritorio@amiu.genova.it; andrea.volpi@ekovision.it; francesco.venturi@ekovision.it', os.path.basename(__file__), logger)
-                    
-                    # in modalità debug non scrivo nella tabella UNIOPE.EKOVISION_LETTURA_CONSUNT 
-                    # in modo da pote processare più volte lo stesso file fino a che non trovo errore
-                    if debug == 1:
-                        logger.warning('Sono in modalità DEBUG. Mi fermo qua senza scrivere in UNIOPE.EKOVISION_LETTURA_CONSUNT')
-                        exit()   
-                        
-                        
-                    insert_log='''INSERT INTO UNIOPE.EKOVISION_LETTURA_CONSUNT (FILENAME, ERROR) SELECT :c1, :c2
-                    FROM DUAL 
-                    WHERE NOT EXISTS (SELECT 1 FROM UNIOPE.EKOVISION_LETTURA_CONSUNT WHERE FILENAME = :c3)'''
-                    try:
-                        cur.execute(insert_log, (
-                            filename, check, filename
-                        ))
-                    except Exception as e:
-                        logger.error(insert_log)
-                        logger.error('1:{}, 2:{} 3:{}'.format(
-                            filename, check, filename
-                        ))
-                        logger.error(e)
-                    
-                    update_log = '''UPDATE UNIOPE.EKOVISION_LETTURA_CONSUNT 
-                    SET DA_RIPROCESSARE = NULL 
-                    WHERE FILENAME = :c1 '''
-                    try:
-                        cur.execute(update_log, (
-                            filename,
-                        ))
-                    except Exception as e:
-                        logger.error(update_log)
-                        logger.error('1:{}'.format(
-                            filename
-                        ))
-                        logger.error(e)
-                    con.commit()
-                    #exit()
-                    
-                    
-                    
-                    # riporto a 0 il semaforo 
-                    semaforo_0='''UPDATE CONSUNT_EKOVISION_SEMAFORO ces 
-                        SET semaforo = 0, LAST_UPDATE = SYSDATE'''
-                    try:
-                        cur.execute(semaforo_0)
-                    except Exception as e:
-                        logger.error(semaforo_0)
-                        logger.error(e)
-                    con.commit()   
-                    os.remove(path + "/eko_output2/" + filename)
-                    
-                    
-                    
-                    
-                    
-                #else: 
-                #    logger.info('Non scarico il file {} perchè già letto e processato'.format(filename))
+        srv = client.open_sftp()
         
         
+        select_file1 ='''SELECT * FROM UNIOPE.EKOVISION_LETTURA_CONSUNT 
+            WHERE da_riprocessare IS NOT NULL
+            ORDER BY FILENAME'''
         
+        try:
+            cur.execute(select_file1, )
+            elenco_file=cur.fetchall()
+        except Exception as e:
+            logger.error(select_file1)
+            logger.error(e)
         
-        
-        
-        
-        
+        for ff in elenco_file:
+            cerco_file=ff[0]
+            
+            logger.info('Cerco file {}'.format(cerco_file)) 
+            
+            
+            
+            try:    
+                srv.get(cartella_sftp_eko + '/' + cerco_file, path + "/eko_output/" + cerco_file)
+            except Exception as e:
+                logger.error('Errore nel download del file {}'.format(cerco_file))
+                logger.error(e)
+                exit()
+            logger.info('Scaricato file {}'.format(cerco_file))
+            #exit()
         # Closes the connection
         srv.close()
-        logger.info('Connessione chiusa')
+        logger.info('Connessione SFTP chiusa')
     except Exception as e:
         logger.error(e)
-        check_ekovision=103 # problema scarico SFTP  
+        check_ekovision=103 # problema scarico SFTP     
+        
+    exit()
+    
+        
+    for filename in os.listdir(path + "/eko_output2/"):
+        if filename.startswith("sch_lav_consuntivi"):               
+            logger.info ('Inizio processo file {}'.format(filename))   
+            #exit()
+            # imposto a 0 un controllo sulla lettura del file
+            check_lettura=0
+            
+            
+            # Opening JSON file
+            f = open(path + "/eko_output2/" + filename)
+            
+            
+            
+            # uso la tabella semaforo per bloccare altri processi che usino queste tabelle in modo da non generare errori
+            semaforo_1='''UPDATE CONSUNT_EKOVISION_SEMAFORO ces 
+                SET semaforo = 1, LAST_UPDATE = SYSDATE'''
+            try:
+                cur.execute(semaforo_1)
+            except Exception as e:
+                logger.error(semaforo_1)
+                logger.error(e)
+            con.commit()
+            cur.close()
+            cur = con.cursor()
+            
+            
+            # returns JSON object as 
+            # a dictionary
+            try:
+                data = json.load(f)
+                
+                
+                
+                i=0
+                while i<len(data):
+                    try:
+                        logger.info('{} - Leggo dati della scheda di lavoro {}'.format(i, data[i]['id_scheda']))
+                        check=0                    
+                        
+                        if data[i]['data_esecuzione_prevista']>=data_start_ekovision:
+                            ''' devo leggere quello che c'è in
+                            -   cons_conferimenti 
+                                    --> pesi percorsi
+                            -   cons_ris_tecniche
+                            -   cons_ris_umane
+                                    --> hist_servizi
+                            -   cons_works
+                                    tipo_rec - TRATTI STRADALI   
+                                    --> 
+                            '''
+                            
+                            # popolamento hist_servizi
+                            
+                            
+                            #interrogo il WS e ricavo la fascia turno
+                            
+                            # PARAMETRI GENERALI WS
+
+
+                            
+                                
+                            
+                            
+                        
+                                
+                            logger.info('Start WS per orario')
+                            params={'obj':'schede_lavoro',
+                                'act' : 'r',
+                                'sch_lav_data': data[i]['data_esecuzione_prevista'],
+                                'cod_modello_srv': data[i]['codice_serv_pred'], 
+                                'flg_includi_eseguite': 1,
+                                'flg_includi_chiuse': 1                                     
+                                }
+
+                            response = requests.post(eko_url, params=params, data=data_json, headers=headers)
+                            #response.json()
+                            #logger.debug(response.status_code)
+                            try:      
+                                response.raise_for_status()
+                                # access JSOn content
+                                #jsonResponse = response.json()
+                                #print("Entire JSON response")
+                                #print(jsonResponse)
+                            except HTTPError as http_err:
+                                logger.error(f'HTTP error occurred: {http_err}')
+                                check=1
+                            except Exception as err:
+                                logger.error(f'Other error occurred: {err}')
+                                logger.error(response.json())
+                                check=1
+                            if check<1:
+                                letture = response.json()
+                                logger.debug(letture)
+                                if len(letture['schede_lavoro']) > 0 : 
+                                    logger.debug('Schede trovate: {}'.format(len(letture['schede_lavoro'])))
+                                    # faccio ciclo 
+                                    # e controllo se la scheda è la stessa (escludo eventuali soccorsi o schede duplicate per sbaglio)
+                                    ss=0
+                                    while ss < len(letture['schede_lavoro']):
+                                    
+                                        if data[i]['id_scheda']==letture['schede_lavoro'][ss]['id_scheda_lav']:
+                                            ora_inizio_lav=letture['schede_lavoro'][ss]['ora_inizio_lav']
+                                            ora_inizio_lav_2=letture['schede_lavoro'][ss]['ora_inizio_lav_2']
+                                            ora_fine_lav=letture['schede_lavoro'][ss]['ora_fine_lav']
+                                            ora_fine_lav_2=letture['schede_lavoro'][ss]['ora_fine_lav_2']
+                                        ss+=1
+                                            
+                                    if ora_inizio_lav_2=='000000' and ora_fine_lav_2=='000000' :
+                                        orario_esecuzione='{} - {}'.format(ora_inizio_lav, ora_fine_lav)
+                                    else:
+                                        orario_esecuzione='{} - {} / {} - {}'.format(ora_inizio_lav, ora_fine_lav, ora_inizio_lav_2 ,ora_fine_lav_2)   
+                                    logger.debug('Orario esecuzione:{}'.format(orario_esecuzione))
+                                    fascia_t=fascia_turno(ora_inizio_lav, ora_fine_lav, ora_inizio_lav_2 ,ora_fine_lav_2)
+                                    logger.debug('Fascia turno :{}'.format(fascia_t))
+                                    # calcolo fascia turno
+                                    # caso semplice se c 
+                                    
+                            
+                            update_testata='''UPDATE UNIOPE.SCHEDE_ESEGUITE_EKOVISION 
+                                SET ORARIO_ESECUZIONE= :s1, FASCIA_TURNO = :s2
+                                WHERE ID_SCHEDA=:s3'''
+                            
+                            try:
+                                cur.execute(update_testata, (
+                                            orario_esecuzione, fascia_t, data[i]['id_scheda']
+                                        ))
+                            except Exception as e:
+                                check=1
+                                logger.error(update_testata)
+                                logger.error('1:{}, 2:{}, 3:{}'.format(
+                                    orario_esecuzione, fascia_t, data[i]['id_scheda']
+                                ))
+                                logger.error(e)
+
+                            con.commit()
+                            logger.info('End WS orario')                                
+                            
+                            
+                            
+                            
+                            # Prima di leggere qualsiasi cosa correggo eventuali inserimenti già fatti
+                    
+                            update_schede='''UPDATE UNIOPE.CONSUNT_EKOVISION_SPAZZAMENTO 
+                            SET RECORD_VALIDO = 'N' 
+                            WHERE ID_SCHEDA = :s1'''
+                            
+                            try:
+                                cur.execute(update_schede, (
+                                        data[i]['id_scheda'],
+                                    ))
+                            except Exception as e:
+                                check=1
+                                logger.error(update_schede)
+                                logger.error('1:{}'.format(
+                                data[i]['id_scheda']
+                                ))
+                                logger.error(e)
+                                check_lettura+=1
+                            con.commit()
+                            
+                        
+                            update_schede='''UPDATE UNIOPE.CONSUNT_EKOVISION_RACCOLTA 
+                            SET RECORD_VALIDO = 'N' 
+                            WHERE ID_SCHEDA = :s1'''
+                            
+                            try:
+                                cur.execute(update_schede, (
+                                        data[i]['id_scheda'],
+                                    ))
+                            except Exception as e:
+                                check=1
+                                logger.error(update_schede)
+                                logger.error('1:{}'.format(
+                                data[i]['id_scheda']
+                                ))
+                                logger.error(e)
+                                check_lettura+=1
+                            con.commit()
+                                
+                                
+                            # consuntivazione 
+                            t=0 # contatore tappe
+                            check_cons=0
+                            while t<len(data[i]['cons_works']):
+
+
+                                
+                                # escludo i NON previsti e NON eseguiti
+                                if int(data[i]['cons_works'][t]['flg_exec'].strip())==1 or  int(data[i]['cons_works'][t]['flg_non_previsto'].strip())==0 :
+                                    ################################################################
+                                    # Preparo i dati da inserire 
+                                    
+                                    # causale
+                                    # il primo if era dopo ma l'ho sposato sopra (28/11/2024 sarebbero da riprocessare un po di dati)
+                                    if int(data[i]['flg_segn_srv_non_effett'].strip())==1:
+                                        causale=int(data[i]['cod_caus_srv_non_eseg_ext'].strip())
+                                        qualita=0
+                                    elif int(data[i]['cons_works'][t]['flg_exec'].strip())==1:
+                                        if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC' or data[i]['cons_works'][t]['tipo_srv_comp']=='SPAZZ':
+                                            causale=100
+                                        elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
+                                            causale=110
+                                        if data[i]['cons_works'][t]['tipo_srv_comp']=='SPAZZ':
+                                            qualita=int(data[i]['cons_works'][t]['cod_std_qualita'].strip())
+                                    #lo sposto prima perchè ci sono alcuni casi in cui int(data[i]['cons_works'][t]['flg_exec'].strip())==1 
+                                    # anche se il servizio non è stato effettuato
+                                    # elif int(data[i]['flg_segn_srv_non_effett'].strip())==1:
+                                    #    causale=int(data[i]['cod_caus_srv_non_eseg_ext'].strip())
+                                    #    qualita=0
+                                    # se il servizio non fosse stato completato
+                                    else :
+                                        try:
+                                            causale=int(data[i]['cons_works'][t]['cod_giustificativo_ext'].strip())
+                                            qualita=0
+                                        except Exception as e:
+                                            check_cons=1
+                                            invio_eko=1 # invio l'errore anche a Ekovision
+                                            logger.warning('ID SCHEDA:{} - Componente:{}'.format(data[i]['id_scheda'], data[i]['cons_works'][t]['cod_componente']))
+                                            logger.warning('Causale servizio non effettuato:{}'.format(data[i]['cod_caus_srv_non_eseg_ext']))
+                                            logger.warning('FLG Eseguito:{}'.format(data[i]['cons_works'][t]['flg_exec']))
+                                            logger.warning('PROBLEMA CAUSALE')
+                                            logger.warning(e)
+                                            try:
+                                                cp_probemi = data[i]['codice_serv_pred']
+                                                data_problemi= data[i]['data_esecuzione_prevista']
+                                                try:
+                                                    if cp_probemi not in percorsi_tappe_non_fatte:
+                                                        percorsi_tappe_non_fatte.append(cp_probemi)
+                                                        conn=connessione_sit()
+                                                        curr2 = conn.cursor()
+                                                        curr2.execute(query_mail_anomalie_cons, (cp_probemi, data_problemi,))
+                                                        row_mail=curr2.fetchone()
+                                                        conn.commit()
+                                                        curr2.close()
+                                                        logger.info("chiudo la connessione al SIT")
+                                                        conn.close()
+                                                        indirizzi_mail_amiu = row_mail[2]
+                                                        descrizione_problemi = row_mail[1]
+                                                        messaggio_ut = f'''Il percorso {cp_probemi} {descrizione_problemi} del {data_problemi}  
+                                                        (id_scheda_ekovision = {data[i]['id_scheda']}) ha delle tappe erroneamente consuntivate come non fatte ma senza causale.
+                                                        <br>Probabilmente si tratta di una scheda in cui è stato flaggato e poi rimosso il flag 'Non effettuato' su ekovision. 
+                                                        <br>La casistica in questione è in corso di risoluzione da ekovision e non succederà più in futuro. 
+                                                        <br>In attesa della soluzione è necessario controllare la scheda e correggere manualmente le tappe indicandole come "fatte", oppure, nel caso in cui siano effettivamente non fatte, indicare la causale. 
+                                                        '''
+                                                        soggetto_mail = f'ATTENZIONE problema consuntivazione ARERA percorso percorso {cp_probemi} del {data_problemi}'
+                                                        warning_message_mail(messaggio_ut, f'{indirizzi_mail_amiu}, assterritorio@amiu.genova.it, andrea.volpi@ekovision.it, francesco.venturi@ekovision.it', os.path.basename(__file__), logger, soggetto_mail)
+                                                        #error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                                                except Exception as e2:
+                                                    logger.error(query_mail)
+                                                    logger.error(e2)
+                                                
+                                            except Exception as e1:
+                                                logger.error(e1)
+                                            causale=None
+                                    # la causale 999, creata per le preconsuntivazione, in realtà non dovrebbe essere usata.. 
+                                    # se fosse arrivato qualcosa lo assimilo alla 102 (percorso non previsto)
+                                    previsto = 0
+                                    if causale == 999:
+                                        
+                                        causale = 102
+                                        if '{}_{}'.format(data[i]['codice_serv_pred'],data[i]['data_esecuzione_prevista']) not in percorsi_tappe_anomale:
+                                            
+                                            logger.info('Verifico se componente {} del percorso {} è prevista il {}'
+                                                        .format(int(data[i]['cons_works'][t]['cod_componente'].strip()),
+                                                            data[i]['codice_serv_pred'], 
+                                                            data[i]['data_esecuzione_prevista'] 
+                                                            )
+                                            )
+                                            # qua dovrei verificare se la componente o il tratto stradale è previsto o meno in quel giorno 
+                                            
+                                            # per le componenti 
+                                            
+                                            if data[i]['cons_works'][t]['tipo_srv_comp']=='RACC' or data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
+                                                query_raccolta='''SELECT id_elemento, frequenza
+                                                FROM cons_micro_tappa c
+                                                WHERE c.ID_MACRO_TAPPA IN 
+                                                (
+                                                SELECT ID_TAPPA  FROM CONS_PERCORSI_VIE_TAPPE cpvt 
+                                                JOIN CONS_MACRO_TAPPA cmt ON cmt.ID_MACRO_TAPPA=cpvt.ID_TAPPA
+                                                WHERE ID_PERCORSO IN (
+                                                    :cod_percorso
+                                                ) AND DATA_PREVISTA = 
+                                                (SELECT max(DATA_PREVISTA) FROM CONS_PERCORSI_VIE_TAPPE cpvt1 WHERE  cpvt1.id_percorso =cpvt.ID_PERCORSO  
+                                                AND DATA_PREVISTA <= to_date(:dataperc, 'YYYYMMDD')
+                                                )
+                                                ) AND UNIOPE.ISDATEINFREQ(to_date(:dataperc, 'YYYYMMDD'), c.FREQUENZA)=1
+                                                AND id_elemento = :cod_componente'''
+                                                
+                                                
+                                                try:
+                                                    cur.execute(query_raccolta, (data[i]['codice_serv_pred'], 
+                                                                            data[i]['data_esecuzione_prevista'],
+                                                                            data[i]['data_esecuzione_prevista'], 
+                                                                            int(data[i]['cons_works'][t]['cod_componente'].strip())
+                                                                            )
+                                                                )
+                                                    check_componente_previsto=cur.fetchall()
+                                                    #logger.debug(query_raccolta)
+                                                    #logger.debug(check_componente_previsto)
+                                                    if len(check_componente_previsto)>0:
+                                                        previsto = 1
+                                                    logger.debug(previsto)
+                                                except Exception as e:
+                                                    logger.error(query_raccolta)
+                                                    logger.error(e)
+                                                    
+                                                    
+                                            elif data[i]['cons_works'][t]['tipo_srv_comp']=='SPAZZ':
+                                                query_spazzamento = '''SELECT id_asta, frequenza
+                                                FROM cons_macro_tappa c
+                                                WHERE c.ID_MACRO_TAPPA IN 
+                                                (
+                                                SELECT ID_TAPPA  FROM CONS_PERCORSI_VIE_TAPPE cpvt 
+                                                JOIN CONS_MACRO_TAPPA cmt ON cmt.ID_MACRO_TAPPA=cpvt.ID_TAPPA
+                                                WHERE ID_PERCORSO IN (
+                                                    :cod_percorso
+                                                ) AND DATA_PREVISTA = 
+                                                (SELECT max(DATA_PREVISTA) FROM CONS_PERCORSI_VIE_TAPPE cpvt1 WHERE  cpvt1.id_percorso =cpvt.ID_PERCORSO  
+                                                /*----------------------------------------------------------------
+                                                --data consuntivazione*/
+                                                AND DATA_PREVISTA <= to_date(:dataperc, 'YYYYMMDD')
+                                                /*AND (SELECT UNIOPE.ISDATEINFREQ(to_date(:dataperc, 'YYYYMMDD'), cmt.FREQUENZA) FROM dual)>0*/
+                                                )
+                                                ) AND UNIOPE.ISDATEINFREQ(to_date(:dataperc, 'YYYYMMDD'), c.FREQUENZA)=1
+                                                AND id_asta = :cod_tratto'''
+                                                
+                                                
+                                                try:
+                                                    cur.execute(query_spazzamento, (data[i]['codice_serv_pred'], 
+                                                                            data[i]['data_esecuzione_prevista'],
+                                                                            data[i]['data_esecuzione_prevista'], 
+                                                                            int(data[i]['cons_works'][t]['cod_tratto'].strip())
+                                                                            )
+                                                                )
+                                                    check_tratto_previsto=cur.fetchall()
+                                                    if len(check_tratto_previsto)>0:
+                                                        previsto = 1
+                                                except Exception as e:
+                                                    logger.error(query_spazzamento)
+                                                    logger.error(e)
+                                                    
+                                                
+                                            
+                                            if previsto > 0 :
+                                                # faccio append
+                                                percorsi_tappe_anomale.append('{}_{}'.format(data[i]['codice_serv_pred'],data[i]['data_esecuzione_prevista']))
+                                                # invio mail warning 
+                                                messaggio = '''Per il percorso {0} del {1} (id_scheda = {2})
+                                                sono state consuntivate alcune tappe previste 
+                                                con la causale "<i>Frequenza non prevista</i>" (999) 
+                                                che non andrebbe usata se non per le tappe effettivamente non previste da SIT.<br>
+                                                Si prega di controllare e correggere il dato su Ekovision inserendo una causale corretta.
+                                                '''.format(data[i]['codice_serv_pred'], 
+                                                        data[i]['data_esecuzione_prevista'],
+                                                        data[i]['id_scheda'])
+                                                query_mail='''SELECT au.mail || ', '|| a.MAIL AS destinatari_mail 
+                                                    FROM ANAGR_UO au
+                                                    LEFT JOIN ANAGR_ZONE a ON a.ID_ZONATERRITORIALE = au.ID_ZONATERRITORIALE
+                                                    WHERE id_uo IN ( 
+                                                        SELECT id_uo FROM anagr_ser_per_uo 
+                                                        WHERE ID_PERCORSO = :m1
+                                                        AND to_date(:m2, 'YYYYMMDD') 
+                                                        BETWEEN DTA_ATTIVAZIONE AND DTA_DISATTIVAZIONE 
+                                                    )'''
+                                                try:
+                                                    cur.execute(query_mail, (data[i]['codice_serv_pred'], 
+                                                                            data[i]['data_esecuzione_prevista'],))
+                                                    check_mails=cur.fetchall()
+                                                except Exception as e:
+                                                    logger.error(query_mail)
+                                                    logger.error(e)
+                                                    
+                                                for cm in check_mails:
+                                                    destinatari=cm[0]
+                                                
+                                                
+                                                warning_message_mail(messaggio, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                    
+                                        #else:
+                                            # non faccio nulla 
+                                            
+                                                
+                                    # vedo se consuntivazione arriva da totem o meno 
+                                    if int(data[i]['cons_works'][t]['ts_exec']) == 0:
+                                        totem=0
+                                    else :
+                                        totem=1
+                                    
+                                    
+                                    # riprogrammato
+                                    try:
+                                        if int(data[i]['cons_works'][t]['flg_riprogrammato']) == 0:
+                                            riprogrammato=0
+                                        elif int(data[i]['cons_works'][t]['flg_riprogrammato']) == 1 :
+                                            riprogrammato=1
+                                    except Exception as e:
+                                        riprogrammato=None
+                                            
+                                    
+                                    # note
+                                    if data[i]['cons_works'][t]['note'] =='':
+                                        note=None
+                                    else :
+                                        note=data[i]['cons_works'][t]['note']
+                                            
+                                            
+                                    if data[i]['cons_works'][t]['tipo_srv_comp']=='SPAZZ':
+                                        #logger.debug('Consuntivazione spazzamento')
+                                    
+                                        # gestione anomalie causali
+                                        if check_cons==1:
+                                            insert_anom='''INSERT INTO UNIOPE.EKOVISION_ANOMALIE_CAUSALI 
+                                            (ID_SCHEDA, COD_TRATTO, POS, FILENAME)
+                                            VALUES
+                                            (:a1, :a2, :a3, :a4)'''
+                                            try:
+                                                cur.execute(insert_anom, (
+                                                data[i]['id_scheda'], 
+                                                int(data[i]['cons_works'][t]['cod_tratto'].strip()),
+                                                int(data[i]['cons_works'][t]['pos']), 
+                                                filename
+                                            ))
+                                            except Exception as e:
+                                                check=1
+                                                logger.error('Problema inserimeno anomalie')
+                                                
+                                        else: 
+                                            delete_anom='''DELETE 
+                                            FROM UNIOPE.EKOVISION_ANOMALIE_CAUSALI 
+                                            WHERE ID_SCHEDA = :a1 AND
+                                            COD_TRATTO=:a2 AND
+                                            POS = :a3
+                                            '''
+                                            try:
+                                                cur.execute(delete_anom, (
+                                                data[i]['id_scheda'], 
+                                                int(data[i]['cons_works'][t]['cod_tratto'].strip()),
+                                                int(data[i]['cons_works'][t]['pos'])
+                                            ))
+                                            except Exception as e:
+                                                check=1
+                                                logger.error('Problema rimozione anomalie')
+                                            
+                                        
+                                        insert_cons='''INSERT INTO UNIOPE.CONSUNT_EKOVISION_SPAZZAMENTO 
+                                        (ID_RECORD,
+                                            ID_SCHEDA, DATA_ESECUZIONE_PREVISTA, CODICE_SERV_PRED,
+                                        COD_TRATTO, POSIZIONE, CAUSALE,
+                                        QUALITA, NOTE, TOTEM,
+                                        RIPROGRAMMATO) 
+                                        VALUES
+                                        (UNIOPE.CONSUNT_EKOVISION_SPAZZ_SEQ.NEXTVAL,
+                                        :c1, :c2, :c3,
+                                        :c4, :c5, :c6,  
+                                        :c7, :c8, :c9,
+                                        :c10
+                                        )'''
+                                        
+                                        try:
+                                            cur.execute(insert_cons, (
+                                                data[i]['id_scheda'], data[i]['data_esecuzione_prevista'], data[i]['codice_serv_pred'], 
+                                                int(data[i]['cons_works'][t]['cod_tratto'].strip()), int(data[i]['cons_works'][t]['pos']), causale,
+                                                qualita, note, totem,
+                                                riprogrammato
+                                            ))
+                                        except Exception as e:
+                                            check=1
+                                            logger.error(insert_cons)
+                                            logger.error('1:{}, 2:{}, 3:{}, 4:{}, 5:{}, 6:{}, 7:{}, 8:{}, 9:{}, 10:{}'.format(
+                                                data[i]['id_scheda'], data[i]['data_esecuzione_prevista'], data[i]['codice_serv_pred'], 
+                                                int(data[i]['cons_works'][t]['cod_tratto'].strip()), int(data[i]['cons_works'][t]['pos']), causale,
+                                                qualita, note, totem,
+                                                riprogrammato
+                                            ))
+                                            logger.error(e) 
+                                        
+                                        
+                                        
+                                        
+                                    elif data[i]['cons_works'][t]['tipo_srv_comp']=='RACC' or data[i]['cons_works'][t]['tipo_srv_comp']=='RACC-LAV':
+                                        #logger.debug('Consuntivazione raccolta')
+                                        
+                                        
+                                        # gestione anomalie causali
+                                        if check_cons==1:
+                                            insert_anom='''INSERT INTO UNIOPE.EKOVISION_ANOMALIE_CAUSALI 
+                                            (ID_SCHEDA, COD_COMPONENTE, POS, FILENAME)
+                                            VALUES
+                                            (:a1, :a2, :a3, :a4)'''
+                                            try:
+                                                cur.execute(insert_anom, (
+                                                data[i]['id_scheda'], 
+                                                int(data[i]['cons_works'][t]['cod_componente'].strip()),
+                                                int(data[i]['cons_works'][t]['pos']), 
+                                                filename
+                                            ))
+                                            except Exception as e:
+                                                check=1
+                                                logger.error('Problema inserimeno anomalie')
+                                                
+                                        else: 
+                                            delete_anom='''DELETE 
+                                            FROM UNIOPE.EKOVISION_ANOMALIE_CAUSALI 
+                                            WHERE ID_SCHEDA = :a1 AND
+                                            COD_COMPONENTE=:a2 AND
+                                            POS = :a3
+                                            '''
+                                            try:
+                                                cur.execute(delete_anom, (
+                                                data[i]['id_scheda'], 
+                                                int(data[i]['cons_works'][t]['cod_componente'].strip()),
+                                                int(data[i]['cons_works'][t]['pos'])
+                                            ))
+                                            except Exception as e:
+                                                check=1
+                                                logger.error('Problema rimozione anomalie')
+                                        
+                                        insert_cons='''INSERT INTO UNIOPE.CONSUNT_EKOVISION_RACCOLTA 
+                                        (ID_SCHEDA, DATA_ESECUZIONE_PREVISTA, CODICE_SERV_PRED,
+                                        COD_COMPONENTE, POSIZIONE, CAUSALE,
+                                        NOTE, TOTEM, RIPROGRAMMATO) 
+                                        VALUES
+                                        (
+                                        :c1, :c2, :c3,
+                                        :c4, :c5, :c6,  
+                                        :c7, :c8, :c9
+                                        )'''
+                                        
+                                        try:
+                                            cur.execute(insert_cons, (
+                                                data[i]['id_scheda'], data[i]['data_esecuzione_prevista'], data[i]['codice_serv_pred'], 
+                                                int(data[i]['cons_works'][t]['cod_componente'].strip()), int(data[i]['cons_works'][t]['pos']), causale,
+                                                note, totem, riprogrammato
+                                            ))
+                                        except Exception as e:
+                                            check=1
+                                            logger.error(insert_cons)
+                                            logger.error('1:{}, 2:{}, 3:{}, 4:{}, 5:{}, 6:{}, 7:{}, 8:{}, 9:{}, 10:{}'.format(
+                                                data[i]['id_scheda'], data[i]['data_esecuzione_prevista'], data[i]['codice_serv_pred'], 
+                                                int(data[i]['cons_works'][t]['cod_componente'].strip()), int(data[i]['cons_works'][t]['pos']), causale,
+                                                note, totem, riprogrammato
+                                            ))
+                                            logger.error(e)
+                                                        
+                
+                                                    
+                                                    
+                                                    
+                                        
+                                    else:
+                                        check=1
+                                        logger.error('PROBLEMA CONSUNTIVAZIONE')
+                                        logger.error('File:{}'.format(filename))
+                                        logger.error('Mi sono fermato alla riga {}'.format(i))
+                                        error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                        exit()
+                                else:
+                                    logger.debug('Tappa non prevista e non effettuata')
+                                t+=1
+                                con.commit()
+                            
+                            
+                            
+                            
+                        else:
+                            logger.info('Non processo la scheda perchè antecedente alla data di partenza di Ekovision {}'.format(data_start_ekovision))
+                    except Exception as e:
+                        check=1
+                        logger.error('File:{}'.format(filename))
+                        logger.error('Non processo la riga {}'.format(i))
+                    i+=1
+                    #exit()
+                #con.commit()
+                
+                
+                # Closing file
+                f.close()
+                logger.info('Chiudo il file {}'.format(filename))
+                logger.info('-----------------------------------------------------------------------------------------------------------------------')
+                #exit()
+                #srv.rename("./"+ filename, "./archive/" + filename)
+            except Exception as e:
+                logger.error(e)
+                logger.error('Problema processamemto file {}'.format(filename))
+                #logger.error('File spostato nella cartella json_error')
+                f.close()
+                #srv.rename("./"+ filename, "./json_error/" + filename)
+                #error_log_mail(errorfile, 'assterritorio@amiu.genova.it; andrea.volpi@ekovision.it; francesco.venturi@ekovision.it', os.path.basename(__file__), logger)
+            
+            # in modalità debug non scrivo nella tabella UNIOPE.EKOVISION_LETTURA_CONSUNT 
+            # in modo da pote processare più volte lo stesso file fino a che non trovo errore
+            if debug == 1:
+                logger.warning('Sono in modalità DEBUG. Mi fermo qua senza scrivere in UNIOPE.EKOVISION_LETTURA_CONSUNT')
+                exit()   
+                
+                
+            insert_log='''INSERT INTO UNIOPE.EKOVISION_LETTURA_CONSUNT (FILENAME, ERROR) SELECT :c1, :c2
+            FROM DUAL 
+            WHERE NOT EXISTS (SELECT 1 FROM UNIOPE.EKOVISION_LETTURA_CONSUNT WHERE FILENAME = :c3)'''
+            try:
+                cur.execute(insert_log, (
+                    filename, check, filename
+                ))
+            except Exception as e:
+                logger.error(insert_log)
+                logger.error('1:{}, 2:{} 3:{}'.format(
+                    filename, check, filename
+                ))
+                logger.error(e)
+            
+            update_log = '''UPDATE UNIOPE.EKOVISION_LETTURA_CONSUNT 
+            SET DA_RIPROCESSARE = NULL 
+            WHERE FILENAME = :c1 '''
+            try:
+                cur.execute(update_log, (
+                    filename,
+                ))
+            except Exception as e:
+                logger.error(update_log)
+                logger.error('1:{}'.format(
+                    filename
+                ))
+                logger.error(e)
+            con.commit()
+            #exit()
+            
+            
+            
+            # riporto a 0 il semaforo 
+            semaforo_0='''UPDATE CONSUNT_EKOVISION_SEMAFORO ces 
+                SET semaforo = 0, LAST_UPDATE = SYSDATE'''
+            try:
+                cur.execute(semaforo_0)
+            except Exception as e:
+                logger.error(semaforo_0)
+                logger.error(e)
+            con.commit()   
+            os.remove(path + "/eko_output2/" + filename)
+                
+                
+                
+                
+                
+            #else: 
+            #    logger.info('Non scarico il file {} perchè già letto e processato'.format(filename))
+        
+        
+        
+        
+        
+        
+        
+        
+         
     
     
     logger.debug('Fine ciclo')
