@@ -1580,6 +1580,7 @@ def main():
                                                     
                                                     
                                                     #logger.debug(tappe)
+                                                    nota_via = None # inizializzo nota_via, che poi sovrascrivo se trovo la tappa su SIT
                                                     ct=0
                                                     for tt in tappe:
                                                         ordine=tt[1]
