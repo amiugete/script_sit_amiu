@@ -119,12 +119,6 @@ def main():
     
 
     
-    test= {"name": "école '& c/o aaa", 
-        "location": "New York"}
-    
-    json_data = json.dumps(test , ensure_ascii=False).encode('utf-8')
-    
-    print(json_data)
     
     #exit()
     
