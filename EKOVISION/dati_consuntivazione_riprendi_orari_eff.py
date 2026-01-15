@@ -110,61 +110,7 @@ from invio_messaggio import *
 
 import fnmatch
 
-
-
-def fascia_turno(ora_inizio_lav, ora_fine_lav, ora_inizio_lav_2 ,ora_fine_lav_2):
-    '''
-    Calcolo della fascia turno sulla base degli orari della scheda di lavoro Ekovision
-    '''
-    fascia_turno=''
-    if ora_inizio_lav_2 == '000000' and ora_fine_lav_2 =='000000':
-    
-        if ora_inizio_lav== '000000' and ora_fine_lav =='000000':
-            fascia_turno='D'
-        else:
-            oi=int(ora_inizio_lav[:2])
-            mi=int(ora_inizio_lav[2:4])
-            of=int(ora_fine_lav[:2])
-            mf=int(ora_fine_lav[2:4])
-    else:
-        oi=int(ora_inizio_lav[:2])
-        mi=int(ora_inizio_lav[2:4])
-        of=int(ora_fine_lav_2[:2])
-        mf=int(ora_fine_lav_2[2:4])
-            
-            
-    if fascia_turno=='':        
-        # calcolo minuti del turno
-        if of < oi:
-            minuti= 60*(24 - oi) + 60 * of - mi + mf
-        else :
-            minuti = 60 * (of-oi) - mi + mf 
-
-        
-        hh_plus=int(minuti/2/60)
-        mm_plus=minuti/2-60*int(minuti/2/60)
-        
-        # ora media
-        if mi+mm_plus >= 60:
-            mm=mi+mm_plus-60
-            hh=oi+1+hh_plus
-        else:
-            mm=mi+mm_plus
-            hh=oi+hh_plus
-        
-        #print('{}:{}'.format(hh,mm))
-        
-        if hh > 5 and hh <= 12:
-            fascia_turno = 'M'
-        elif hh > 12 and hh <= 20:
-            fascia_turno = 'P'
-        elif hh > 20 or hh <= 5:
-            fascia_turno= 'N'
-        
-        return fascia_turno
-
-
-
+from generic_functions import get_fascia_turno
 
 def main():
     
@@ -202,9 +148,12 @@ def main():
     
     
     select_file='''SELECT DISTINCT CODICE_SERV_PRED, DATA_ESECUZIONE_PREVISTA, ID_SCHEDA
-FROM SCHEDE_ESEGUITE_EKOVISION see 
-WHERE see.RECORD_VALIDO = 'S' AND ORARIO_ESECUZIONE IS NULL 
-AND COD_CAUS_SRV_NON_ESEG_EXT IS null'''
+    FROM SCHEDE_ESEGUITE_EKOVISION see
+WHERE see.DATA_ESECUZIONE_PREVISTA > '2025' 
+AND see.COD_CAUS_SRV_NON_ESEG_EXT IS NULL 
+AND see.RECORD_VALIDO = 'S' 
+AND ORARIO_ESECUZIONE IS NULL 
+'''
 
     try:
         cur.execute(select_file)
@@ -223,10 +172,8 @@ AND COD_CAUS_SRV_NON_ESEG_EXT IS null'''
     for co in check_orari:
         params={'obj':'schede_lavoro',
             'act' : 'r',
-            'sch_lav_data': co[1],
-            'cod_modello_srv': co[0], 
-            'flg_includi_eseguite': 1,
-            'flg_includi_chiuse': 1
+            'id': co[2],
+            'flg_esponi_consunt': 1
             }
         check=0
         response = requests.post(eko_url, params=params, data=data_json, headers=headers)
@@ -248,7 +195,7 @@ AND COD_CAUS_SRV_NON_ESEG_EXT IS null'''
         if check<1:
             letture = response.json()
             logger.info('ID scheda da verificare = {}'.format(co[2]))
-            logger.info(letture)
+            logger.debug(letture)
             ora_inizio_lav_2=''
             ora_fine_lav_2 = ''
             orario_esecuzione=''
@@ -257,16 +204,16 @@ AND COD_CAUS_SRV_NON_ESEG_EXT IS null'''
             while k < len(letture['schede_lavoro']): 
                 #controllo se la scheda è la stessa (escludo eventuali soccorsi o schede duplicate per sbaglio)
                 if co[2]==letture['schede_lavoro'][k]['id_scheda_lav']:
-                    ora_inizio_lav=letture['schede_lavoro'][k]['ora_inizio_lav']
-                    ora_inizio_lav_2=letture['schede_lavoro'][k]['ora_inizio_lav_2']
-                    ora_fine_lav=letture['schede_lavoro'][k]['ora_fine_lav']
-                    ora_fine_lav_2=letture['schede_lavoro'][k]['ora_fine_lav_2']
+                    ora_inizio_lav=letture['schede_lavoro'][k]['servizi'][0]['ora_inizio']
+                    ora_inizio_lav_2=letture['schede_lavoro'][k]['servizi'][0]['ora_inizio_2']
+                    ora_fine_lav=letture['schede_lavoro'][k]['servizi'][0]['ora_fine']
+                    ora_fine_lav_2=letture['schede_lavoro'][k]['servizi'][0]['ora_fine_2']
                     if (ora_inizio_lav_2=='000000' or ora_inizio_lav_2=='') and (ora_fine_lav_2=='000000' or ora_fine_lav_2==''):
                         orario_esecuzione='{} - {}'.format(ora_inizio_lav, ora_fine_lav)
                     else:
                         orario_esecuzione='{} - {} / {} - {}'.format(ora_inizio_lav, ora_fine_lav, ora_inizio_lav_2 ,ora_fine_lav_2)   
                     logger.info('Orario esecuzione:{}'.format(orario_esecuzione))
-                    fascia_t=fascia_turno(ora_inizio_lav, ora_fine_lav, ora_inizio_lav_2 ,ora_fine_lav_2)
+                    fascia_t=get_fascia_turno(ora_inizio_lav, ora_fine_lav, ora_inizio_lav_2 ,ora_fine_lav_2)
                     logger.info('Fascia turno :{}'.format(fascia_t))
                 k+=1
                 # calcolo fascia turno
@@ -291,7 +238,9 @@ AND COD_CAUS_SRV_NON_ESEG_EXT IS null'''
 
             con.commit()
         else:
-            logger.error('''Per id_cheda {} non trovo l'orario di esecuzione'''.format(co[2]))                                                            
+            logger.error('''Per id_cheda {} non trovo l'orario di esecuzione'''.format(co[2])) 
+            logger.error(f'Dettagli risposta WS EKOVISION per cod_percorso = {co[0]} e data_percorso = {co[1]}')
+            logger.error(letture)                                                           
                                     
     
     
