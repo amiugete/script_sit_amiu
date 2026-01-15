@@ -329,10 +329,13 @@ def main():
     
     
     if file_presente==0:
-        messaggio = 'Su spazio SFTP di INAZ non è presente file personale per Ekovision con la data di oggi'
+        messaggio = f'''Su spazio SFTP di <b>INAZ</b> non è presente file personale per Ekovision con la data di oggi. 
+        <br> Il file {cartella_inaz_sftp}/ekovision1_{giorno_file}.csv che dovrebbe essere automaticamente creato alle 22 di oggi, alle {datetime.today()}
+        non è ancora presente.         
+        <br><b>Laura/Arianna</b> potete verificare e nel caso aprire Ticket?
+        <br> Grazie in anticipo'''
         logger.warning(messaggio)
-        warning_message_mail(messaggio, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
-    
+        warning_message_mail(messaggio, 'calvello@amiu.genova.it, Arianna.Cerboncini@amiu.genova.it', os.path.basename(__file__), logger)
     
     
     
