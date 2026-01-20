@@ -172,7 +172,7 @@ def main():
     curr_h = conn_h.cursor()
     curr_c = conn_c.cursor()
     
-    
+    logger.info("Update spazzamento")
     # SPAZZAMENTO
     # per prima cosa recupero il max(id) che ho su  nuovo db
     query_select = '''select coalesce(max(id),0) from spazzamento.effettuati'''
@@ -254,11 +254,12 @@ def main():
     curr_c.close()
     curr_h.close()
     # andrà fatta stessa cosa per la raccolta
+    logger.info("Passo alla raccolta")
     curr_h = conn_h.cursor()
     curr_c = conn_c.cursor()
     
     # per prima cosa recupero il max(id) che ho su  nuovo db
-    query_select = '''select coalesce(max(id),0) from raccolta.effettuati_amiu'''
+    query_select = '''select coalesce(max(id_hub),0) from raccolta.effettuati_amiu'''
     
     try:
         curr_c.execute(query_select)
@@ -299,7 +300,7 @@ def main():
     # riapro il cursore
     curr_c = conn_c.cursor()
     upsert=''' INSERT INTO raccolta.effettuati_amiu (
-        id, 
+        id_hub, 
         tappa, datainsert, 
         datalav, codice, 
         id_causale, fatto,
