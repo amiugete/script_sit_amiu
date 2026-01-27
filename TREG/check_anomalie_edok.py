@@ -92,6 +92,38 @@ from email.mime.text import MIMEText
 from invio_messaggio import *
 
 
+def invia_mail(subject, messaggio_html):
+    receiver_email = 'Vezzosi@amiu.genova.it, Matteo.Relli@amiu.genova.it, Manuela.Marchese@amiu.genova.it'
+    #debug_email = "roberta.fagandini@amiu.genova.it"
+    cc_email = "assterritorio@amiu.genova.it"
+
+    message = MIMEMultipart()
+    message["From"] = sender_email
+    message["To"] = receiver_email
+    message["CC"] = cc_email
+    message["Subject"] = subject
+    message.preamble = subject
+
+    body = f'''
+    {messaggio_html}
+    <br><br><hr>
+    <img src="cid:image1" alt="Logo" width="197">
+    <br>Questa mail è stata creata in automatico.
+    Per qualsiasi chiarimento contattare assterritorio@amiu.genova.it
+    '''
+
+    message.attach(MIMEText(body, "html"))
+
+    logoname = f'{path1}/img/logo_amiu.jpg'
+    immagine(message, logoname)
+
+    logger.info(f"Invio mail: {subject}")
+    invio=invio_messaggio(message)
+    logging.info(invio)
+    return invio
+
+
+
 def main():
     logger.info('Il PID corrente è {0}'.format(os.getpid()))
 
@@ -120,6 +152,7 @@ def main():
 
     curr = conn.cursor()
     #conn.autocommit = True
+  
 
     # verifico se ieri abbiamo inserito a DB pratiche con valori di Ufficio anomali
     query_ist = '''
@@ -153,76 +186,87 @@ order by date desc
         logger.error(lista_ist_old)
         logger.error(e)
 
-    messaggio = '''ALERT AUTOMATICO EDOK<br><br>'''
-    
-    invio_mail = 0
+    query_tipo_pratica ="""
+        select distinct it.cusmetadatitipopratica
+        from treg_edok.istanze_tari it
+        left join treg_edok.mapping_prestazione mp on it.cusmetadatitipopratica = mp.cod_edok
+        where mp.cod_edok is null and it.cusmetadatitipopratica is not null
+    """
+    try:
+        curr.execute(query_tipo_pratica)
+        lista_tipo_pratica=curr.fetchall()
+        logger.debug(lista_tipo_pratica)
+    except Exception as e:
+        logger.error(lista_tipo_pratica)
+        logger.error(e)
 
     # se ci sono pratiche con ufficio anomalo aggiunte ieri, compongo il testo della mail
     if len(lista_anomalie)>0:
-        invio_mail += 1        
-        messaggio = '''{0}Ieri {1} sono state inserite pratiche con valore di <b>Ufficio</b> anomalo. 
-        <br>Di seguito l'elenco: <ul>'''.format(messaggio, ieri.strftime("%d/%m/%Y"))
         
+        messaggio = f'''
+            <b>ALERT AUTOMATICO EDOK</b><br><br>
+            Ieri {ieri.strftime("%d/%m/%Y")} sono state inserite pratiche con valore di
+            <b>Ufficio</b> anomalo.<br>
+            Di seguito l'elenco:
+            <ul>
+        '''
+
         for a in lista_anomalie:
-            logger.debug(a)
-            messaggio='{0}<li>Protocollo: {1} - Ufficio: {2}</li>'.format(messaggio,a[0], a[2])
-        messaggio='{}</ul>'.format(messaggio)
+            messaggio += f'<li>Protocollo: {a[0]} - Ufficio: {a[2]}</li>'
+
+        messaggio += '</ul>'
+        
+        oggetto= "ANOMALIA EDOK Pratiche con Ufficio anomalo"
+
+        invia_mail(oggetto, messaggio)
 
     # se ci sono pratiche con stato acquisito più vecchie di 3 giorni, compongo il testo della mail 
     if len(lista_ist_old)>0:
-        invio_mail += 1      
-        messaggio='''
-        {}Ci sono pratiche ancora <b>non assegnate</b> da più di 3 giorni.
-        <br>Di seguito l'elenco: <ul>'''.format(messaggio)
-        
+        messaggio0 = '''
+        <b>ALERT AUTOMATICO EDOK</b><br><br>
+        Ci sono pratiche ancora <b>non assegnate</b> da più di 3 giorni.
+        <br>Di seguito l'elenco:
+        <ul>
+        '''
+
         for io in lista_ist_old:
-            logger.debug(io)
-            messaggio='{0}<li>Protocollo: {1} - Ufficio: {2} - Data: {3}</li>'.format(messaggio, io[0], io[2], io[3])
+            messaggio0 += f'<li>Protocollo: {io[0]} - Ufficio: {io[2]} - Data: {io[3].strftime("%d/%m/%Y")}</li>'
 
-        messaggio='{}</ul>'.format(messaggio)
+        messaggio0 += '</ul>'
 
-    #se si verifica una delle due anomalie verificate, invio la mail
-    if invio_mail > 0:
+        oggetto0= "ALLERT EDOK Pratiche non assegnate da oltre 3 giorni"
 
-        receiver_email='Vezzosi@amiu.genova.it, Matteo.Relli@amiu.genova.it, Manuela.Marchese@amiu.genova.it'
-        debug_email='roberta.fagandini@amiu.genova.it'
+        invia_mail(oggetto0, messaggio0)
 
+    if len(lista_tipo_pratica)>0:
+        messaggio1 = '''
+        <b>ALERT AUTOMATICO EDOK</b><br><br>
+        Sono state trovate pratiche con tipo pratica non mappato.
+        <br>Di seguito l'elenco dei tipi pratica:
+        <ul>
+        '''
 
-        # Create a multipart message and set headers
-        message = MIMEMultipart()
-        message["From"] = sender_email
-        message["To"] = receiver_email
-        message["CC"] = "assterritorio@amiu.genova.it"
-        message["Subject"] = "Anomalie pratiche EDOK"
-        #message["Bcc"] = debug_email  # Recommended for mass emails
-        message.preamble = "Pratiche con valore Ufficio anomalo"
+        for tp in lista_tipo_pratica:
+            messaggio1 += f'<li>{tp[0]}</li>'
 
-        body='''{0}
-        <br><br><hr>
-        <img src="cid:image1" alt="Logo" width=197>
-        <br>Questa mail è stata creata in automatico. 
-        Per qualsiasi chiarimento contattare assterritorio@amiu.genova.it'''.format(messaggio)
-                        
-        # Add body to email
-        message.attach(MIMEText(body, "html"))
+        messaggio1 += '</ul>'
 
+        messaggio1 += '''
+            Si prega di comunicare il prima possibile, inviando una mail ad assterritorio@amiu.genova.it, se si tratta di tipi pratica da inviare ad ARERA, 
+            in caso affermativo specificare la tipologia AREARA corrispondente tra quelle di seguito elencate:
+            <ul>
+                <li>Richiesta di attivazione servizio</li>
+                <li>Richiesta di variazione servizio</li>
+                <li>Richiesta di cessazione servizio</li>
+                <li>Richiesta di informazioni scritte</li>
+                <li>Richiesta di rettifica degli importi addebitati</li>
+            </ul>
+        '''
 
-        #aggiungo logo 
-        logoname='{}/img/logo_amiu.jpg'.format(path1)
-        immagine(message,logoname)
-        
-        
+        oggetto1= "ALLERT EDOK Pratiche con tipo pratica non mappato"
 
-            
-        #text = message.as_string()
-
-        logger.info("Richiamo la funzione per inviare mail")
-        invio=invio_messaggio(message)
-        logger.info(invio)
-
-
-    else:
-        logger.info("Non sono al momento presenti anomalie sui dati EDOK caricati su DB")
+        invia_mail(oggetto1, messaggio1)
+    
 
 if __name__ == "__main__":
     main()

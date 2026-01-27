@@ -440,6 +440,7 @@ from treg_edok.istanze_tari where id_archivio = %s'''
                                  i['cusAssegnanteUserName'], i['cusAssegnatarioUserFullName'],
                                  i['fromAddresses'])
                     logger.error(e)
+                    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                     exit()
             
                 
@@ -449,7 +450,7 @@ from treg_edok.istanze_tari where id_archivio = %s'''
         
         
         s+=1
-    exit()
+    #exit()
     
 
     

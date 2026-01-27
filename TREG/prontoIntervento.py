@@ -364,21 +364,23 @@ def SvuotaCartella(percorso):
 
 ####### INVIO A TREG #######
 
-def GetRichieste(cursor):
+def GetRichieste(cursor, inviato_treg):
     query = carica_query_da_file("queryProntoIntervento")
 
-    cursor.execute(query["get_richieste"], (date.today().year,))    
+    cursor.execute(query["get_richieste"], (inviato_treg,))  # Prendo solo quelle non inviate
     col_names = [desc[0] for desc in cursor.description]  
     result = [dict(zip(col_names, row)) for row in cursor.fetchall()]
 
     return result
 
 
-def CreaListaInterventi(lista):
+def CreaListaInterventi(lista, lista_sent):
     lista_interventi = []
 
+    anomalie = 0
     nomi_file = [] #file che hanno dei valori obbligatori mancanti
     richieste_anomale = {}
+    richieste_non_conf = {}
     
     for i in lista:
         #aggiungere un conytrollo sul sottoscopo = chiusura segnalazione con invio mail per ora a noi per richiedere verifica del dato
@@ -386,6 +388,7 @@ def CreaListaInterventi(lista):
             nomi_file.append(i["id_rich"])
             richieste_anomale[i["id_rich"]] = 'data apertura segnalazione {} - indirizzo {}'.format(i["data_apert_segn"], i["indirizzo"])
             logger.info("Richiesta con dati obbligatori mancanti, id richiesta: {}".format(i["id_rich"]))
+            anomalie += 1
         else:
             receptionDate = to_iso_z(i["data_telefonata"])
             arrivalDateTime = to_iso_z(i["data_arrivo_luogo"], i["ora_arrivo_luogo"]) if i["data_arrivo_luogo"] else None
@@ -409,30 +412,48 @@ def CreaListaInterventi(lista):
 
             lista_interventi.append(intervento)
 
-    if nomi_file:
+    for j in lista_sent:
+        if j["data_chius_segn"] is None:
+            richieste_non_conf[j["id_rich"]] = 'data apertura segnalazione {} - indirizzo {}'.format(j["data_apert_segn"], j["indirizzo"])
+            logger.info("Richiesta non confoeme ai fini ARERA, id richiesta: {}".format(j["id_rich"]))
+            anomalie += 1
+
+    if anomalie > 0:
         # Create a multipart message and set headers
         message = MIMEMultipart()
         message["From"] = sender_email
         message["To"] = 'roberto.longo@amiu.genova.it, Alessia.Magni@amiu.genova.it, Lupi@amiu.genova.it'
+        #message["To"] = 'roberta.fagandini@amiu.genova.it'
         message["CC"] = 'assterritorio@amiu.genova.it, Matteo.Relli@amiu.genova.it'
         message["Subject"] = "Richiesta PIN con dati obbligatori mancanti"
         #message["Bcc"] = debug_email  # Recommended for mass emails
         #message.preamble = f"Ispezione con id {id_ispezione} è stata eliminata"
         ids_list = "".join(f"<li>{key}: {value}</li>" for key, value in richieste_anomale.items())
+        idsA_list = "".join(f"<li>{key}: {value}</li>" for key, value in richieste_non_conf.items())
         body = f"""
-            <html>
-            <head></head>
-            <body>
-                <p>
-                    Nei file CSV, inviati settimanalmente da GAP, sono presenti richieste di Pronto Intervento con dati obbligatori mancanti.<br>
-                    Di seguito l'elenco degli ID delle richieste con i dati mancanti:<br>
-                    <ul>
-                        {ids_list}
-                    </ul>
-                    <p>Si prega di verificare i dati a <a href='https://amiugis.amiu.genova.it/sit_addons/report_pin_arera.php'>questo link</a> e segnalare l'anomalia al fornitore.</p>
-                </p>
-            </body>
-            </html>
+        <html>
+        <head></head>
+        <body>
+        <p>"""
+        if len(richieste_anomale) > 0:
+            body += f"""
+                Nei file CSV, inviati settimanalmente da GAP, sono presenti richieste di Pronto Intervento con dati obbligatori mancanti che quindi non sono state inviate a TREG.<br>
+                Di seguito l'elenco degli ID delle richieste con i dati mancanti:<br>
+                <ul>
+                    {ids_list}
+                </ul>"""
+        if len(richieste_non_conf) > 0:
+            body += f"""
+                Su TREG risultano alcune richieste di Pronto Intervento <b>NON conformi</b> ai fini ARERA.<br>
+                Di seguito l'elenco degli ID delle richieste non conformi:<br>
+                <ul>
+                    {idsA_list}
+                </ul>"""
+        body += f"""
+        <p>Si prega di verificare i dati a <a href='https://amiugis.amiu.genova.it/sit_addons/report_pin_arera.php'>questo link</a> e segnalare l'anomalia al fornitore.</p>
+        </p>
+        </body>
+        </html>
         """
                         
         # Add body to email
@@ -506,19 +527,7 @@ def main():
         ftp.connect(credenziali.servergGi, credenziali.portaGi, timeout=10)
         ftp.auth()  
         ftp.login(credenziali.userGi, credenziali.pwdGi)
-        ftp.prot_p() 
-
-        oggi = date.today()
-        logger.info("Oggi è: {}".format(oggi.weekday()))
-        if oggi.weekday() >= 3:
-            # il giovedì verifico che i file csv siano aggiornati alla settimana attuale
-            logger.info("Verifico se i file csv sono aggiornati alla settimana attuale")
-            checkFile = checkFileArchive(cursor, logger)
-            logger.info("Check file csv: {}".format(checkFile))
-            if checkFile[0] == False:
-                messaggio = "La settimana dell'ultimo file processato (anno {} settimana {}) non corrisponde con quella attuale. Verificare che su FTP sia stato caricato il file csv della settimana attuale.".format(checkFile[1], checkFile[2])
-                logger.warning(messaggio)
-                warning_message_mail(messaggio, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)   
+        ftp.prot_p()   
 
         #download dei file       
 
@@ -554,6 +563,20 @@ def main():
         else:  
             logger.info("Non ci sono file da caricare")
             ftp.quit()
+            #controllo se il file è già stato caricato
+            oggi = date.today()
+            logger.info("Oggi è: {}".format(oggi.weekday()))
+            if oggi.weekday() >= 2:
+                # il mercoledì verifico che i file csv siano aggiornati alla settimana attuale
+                logger.info("Verifico se i file csv sono aggiornati alla settimana attuale")
+                checkFile = checkFileArchive(cursor, logger)
+                logger.info("Check file csv: {}".format(checkFile))
+                if checkFile[0] == False:
+                    messaggio = "La settimana dell'ultimo file processato (anno {} settimana {}) non corrisponde con quella attuale. Verificare che su FTP sia stato caricato il file csv della settimana attuale.".format(checkFile[1], checkFile[2])
+                    logger.warning(messaggio)
+                    warning_message_mail(messaggio, 'assterritorio@amiu.genova.it, Supervisor@gapitalia.it, Matteo.Relli@amiu.genova.it', os.path.basename(__file__), logger)
+                else:
+                    logger.info("L'ultimo file processato corrisponde alla settimana attuale")
         
         
         #Prendo solo le chiamate con scopo Pronto intervento con stato 0 ovvero non inviate 
@@ -561,11 +584,12 @@ def main():
         logger.info("Recupero richieste pronto intervento...")
         cursor, conn = ConnettiDB()
 
-        richieste = GetRichieste(cursor)  
+        richieste = GetRichieste(cursor, 0)  # Prendo solo quelle non inviate 
+        richieste_sent = GetRichieste(cursor, 1)  # Prendo quelle già inviate per i controlli
 
         DisconttettiDB(cursor, conn)
 
-        interventi, errori = CreaListaInterventi(richieste)              
+        interventi, errori = CreaListaInterventi(richieste, richieste_sent)              
 
         if interventi:
             #Connessione con Token a TREG

@@ -119,7 +119,7 @@ f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.ERROR)
-f_handler.setLevel(logging.INFO)
+f_handler.setLevel(logging.DEBUG)
 
 
 # Add handlers to the logger
@@ -170,67 +170,41 @@ def convert_decimal(obj):
 #variabile che specifica se devo fare test ekovision oppure no
 test_ekovision=0
 
-def programming_start_ending_date(cursor, data, id_turno, gc):
-    
-    ''' 
-    La funzione in base a giorno, id_turno e giorno_competenza restituisce un array con la programmingStartDate e la programmingEndingDate 
-    nel formato voluto da TREG
-    '''
 
-    # inizializzo l'array di output
-    dates=[]
-    
-    #logger.debug(id_turno)
-    # query per tirare fuori l'intervallo con cui calcolare il giorno di fine
-    query='''select 
-            case
-                when fine_ora < inizio_ora then 
-                1
-                else 
-                0
-            end,
-            lpad(inizio_ora::text,2,'0')||':'||lpad(inizio_minuti::text,2,'0') as h_inizio, 
-            lpad(fine_ora::text,2,'0')||':'||lpad(fine_minuti::text,2,'0') as h_fine 
-            from elem.turni t 
-            where id_turno = %s'''
 
-    try:
-        cursor.execute(query, (id_turno,))
-        riga=cursor.fetchone()
-        #h_inizio=cursor.fetchone()[1]
-        #h_fine=cursor.fetchone()[2]
-    except Exception as e:
-        logger.error(query)
-        logger.error(e)
-    
-    interval = riga[0]
-    h_inizio = riga[1]
-    h_fine= riga[2]
+def bulk_update_consunt(cursor, updates):
+    cursor.execute("""
+        CREATE TEMP TABLE tmp_consunt_update_spazz (
+            codice int8,
+            data_ora_inizio TIMESTAMP,
+            resumption_date TIMESTAMP
+        ) ON COMMIT DROP
+    """)
 
-    hhi, mmi = map(int, h_inizio.split(':'))
-    hhf, mmf = map(int, h_fine.split(':'))
-    
-    #logger.debug(interval)
-    #exit()
-    #data = data.astimezone(timezone.utc)
-    data = datetime.combine(data, datetime.min.time())
-    if gc == 0:
-        dt_inizio = data.replace(hour=hhi, minute=mmi, second=0, microsecond=0).astimezone(timezone.utc)
-        dt_fine = data.replace(hour=hhf, minute=mmf, second=0, microsecond=0).astimezone(timezone.utc)
-    elif gc == -1: 
-        data_inizio= data-timedelta(days=1)
-        data_fine = data_inizio+timedelta(days=interval)
-        dt_inizio = data_inizio.replace(hour=hhi, minute=mmi, second=0, microsecond=0).astimezone(timezone.utc)
-        dt_fine = data_fine.replace(hour=hhi, minute=mmi, second=0, microsecond=0).astimezone(timezone.utc)
-    else: 
-        logger.error('Come mai gc vale {}'.format(gc))
-        
-    
-    dates.append(dt_inizio.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z')
-    dates.append(dt_fine.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z')
-    dates.append(dt_inizio.strftime('%Y'))
+    from psycopg2.extras import execute_values
 
-    return dates
+    execute_values(
+        cursor,
+        """
+        INSERT INTO tmp_consunt_update_spazz
+        (resumption_date, codice, data_ora_inizio)
+        VALUES %s
+        """,
+        updates
+    )
+
+    cursor.execute("""
+        UPDATE treg_eko.consunt_ekovision ce
+        SET resumption_date = t.resumption_date
+        FROM tmp_consunt_update_spazz t
+        WHERE ce.codice = t.codice
+          AND ce.data_ora_inizio = t.data_ora_inizio
+          AND ce.causale NOT IN ('100','110')
+          AND ce.resumption_date IS DISTINCT FROM t.resumption_date
+    """)
+
+
+
 
 def main():
       
@@ -263,7 +237,7 @@ def main():
         ) select cod_percorso, versione_testata, freq_binaria, freq_settimane, id_turno, gestione_arera, data_pianif_iniziale, max(data_last_update)
         from step0
         group by cod_percorso, versione_testata, freq_binaria, freq_settimane, id_turno, gestione_arera, data_pianif_iniziale
-        order by 8 asc limit 1600
+        order by 8 asc limit 1200
     '''
     
     # cerco quelle di SIT
@@ -291,7 +265,11 @@ def main():
                 else max(distinct ce.causale::int)
             end causale, 
             tab.frequenza,
-            ce.qualita
+           /*ce.qualita*/
+            case
+                when 100 = ANY (array_agg(distinct causale::int)::int[]) then max(ce.qualita)
+                else min(distinct ce.qualita)
+            end qualita
             from treg_eko.consunt_ekovision ce
             left join (
                 SELECT codice_modello_servizio, ordine, objecy_type, 
@@ -337,8 +315,8 @@ def main():
             data_ora_inizio, 
             data_ora_fine,
             ce.codice,
-            tab.frequenza,
-            ce.qualita
+            tab.frequenza/*,
+            ce.qualita*/
         ) 
         -- qua raggruppo per codice e data (dovrei escludere le schede doppie e prendere la causale migliore)
         select  
@@ -377,6 +355,22 @@ def main():
             codice, ep2.giorno_competenza
     '''
 
+    select_resumption_date = '''SELECT min(ce.data_ora_inizio)
+        FROM treg_eko.consunt_ekovision ce
+        WHERE codice = %s
+        AND causale  = '100'
+        AND data_ora_inizio > %s
+        /*ORDER BY ce.data_ora_inizio
+        LIMIT 1*/;
+    '''
+
+
+    update_resumption_date = '''UPDATE treg_eko.consunt_ekovision ce 
+    SET resumption_date= %s 
+    WHERE ce.codice = %s
+    AND ce.causale <> '100'
+    AND ce.data_ora_inizio = %s '''
+
     query_insert='''INSERT INTO treg_eko.last_import_treg_spazz_cons
         (data_last_update, last_update,
         request_id_amiu, importid_treg, 
@@ -412,7 +406,7 @@ def main():
                         host=host)
 
     curr = conn.cursor()
-      
+    conn.autocommit = False  
     
 
     try:
@@ -428,38 +422,16 @@ def main():
         data_last_update=gma[0]
 
     
+    logger.info('Devo trattare i percorsi a partire da data_last_update {}'.format(data_last_update))
 
-
-    # qua mi tiro fuori il token TREG 
     
-    token=token_treg(logger)
-    logger.debug(token)
-
     #while  data_start <= fine_ciclo:
 
-    ########################
-    #recupero import id TREG
-    ########################
-    guid = uuid.uuid4()
-    logger.debug(str(guid))
-    #logger.debug(guid.type)
-    #json_id={'id': '{}'.format(str(guid))}
-    json_id={'id': str(guid)}
-    api_url_begin_upload='{}atrif/api/v1/tobin/b2b/process/rifqt-sweepings/begin-upload/av1'.format(url_ws_treg)          
-    response = requests.post(api_url_begin_upload, json=json_id, headers={'accept':'*/*', 
-                                                                            'mde': 'PROD',
-                                                                            'Authorization': 'EIP {}'.format(token),
-                                                                            'Content-Type': 'application/json'})
-    importId=response.json()['importId']
-    #exit()
-    
-    logger.info('ImportId = {}'.format(importId))
-    
-    
+        
     # inizializzo un check 
     # dovrebbe rimanere 0 per garantirmi di fare il commit solo di roba pulita 
     check_error_upload=0
-    
+    lista_update_res_date=[]
     
     ##################################
     # procedo con il recupero dati
@@ -474,209 +446,275 @@ def main():
         logger.error(query_elenco_percorsi_spazz)
         logger.error(e)
 
-    # facciamo un dizionario con chiave cod_percorso e data, e valore una lista contenente turno e data_pianif_iniziale e data_last_update
-    dict_percorsi={}
+    logger.debug(f'Devo trattare {len(elenco_percorsi)} percorsi di igiene')
+
+    if len(elenco_percorsi)>0:
+
+        # qua mi tiro fuori il token TREG 
     
-    for ep in elenco_percorsi:
-        # cod percorso 0
-        # versione_testata 1
-        # freq_testata 2
-        # freq_settimane 3
-        # id_turno 4
-        # at2.gestione_arera 5
-        # ce.data_pianif_iniziale 6
-        
-        #logger.debug(ep[0])
-        # 1 se prevista # - 1 se non prevista
-        # check_s è la settimana del giorno (se P o D)
-        # freq_settimane può 
+        token=token_treg(logger)
+        logger.debug(token)
 
-        if datetime.strptime(ep[6], '%Y%m%d').date().isocalendar()[1]%2 == 1:
-            check_s='D'
-        else:
-            check_s='P'
-
-        
-        if tappa_prevista(datetime.strptime(ep[6], '%Y%m%d').date(),  ep[2])==1 and (ep[3].strip()=='T' or ep[3]==check_s):
-            # come chiave metto cod_percorso e data_pianif_iniziale
-            dict_percorsi[ep[0], ep[6]]=[ep[4], ep[6], ep[7]]
-            # verificato se era prevista verifico che ci sia una scheda chiusa
-
-        
-        
-    logger.info(f'Devo trattare {len(dict_percorsi)} percorsi di igiene')
-    #logger.debug(dict_percorsi)
-    
-    # estraiamo dal dizionario dei tratti per percorso la massima data_last_update
-    max_data = max((v[2] for v in dict_percorsi.values()), default=None)
-    
-       
-    # c è la chiave (codice turno)
-    # t è il turno    
-    
-    
-      
-    for c, t in dict_percorsi.items():
-        #logger.debug(c + ' : ' + str(t))
-
-        # ora devo verificare i tratti   
-        
-        try:
-            curr.execute(query_elementi_percorso, (c[0], t[1],))
-            elenco_elementi_percorso=curr.fetchall()
-        except Exception as e:
-            logger.error(query_elementi_percorso)
-            logger.error(e)
-        
-
-        list_sweeping=[]
-        list_trac_del=[]
-        # popolo tratti_sit
-        for eep in elenco_elementi_percorso:
-            # verifico se in frequenza con la solita funzione
-            #if tappa_prevista(data_start,  eep[1])==1:
-                # questa sarà da passare a TREG, le altre no
-            curr1 = conn.cursor()
-
-            if eep[5] is None:
-                interruptionType = None
-                interruptionCause = None
-                interruptionDate = None
-                resumptionDate = None
-            elif int(eep[5]) in (100,110,102,101,999): # 100 - compleatato 110 - completato con lavaggio
-                interruptionType = None
-                interruptionCause = None
-                interruptionDate = None
-                resumptionDate = None
-            else:
-                interruptionType = 'LIM'
-                interruptionCause = causale_arera(curr1, eep[5], logger, errorfile)
-                if interruptionCause is None:
-                    logger.error(f'Per il percorso {c[0]} del {datetime.strptime(c[1], "%Y%m%d").date()} trovo delle causali {eep[5]} non mappate in ARERA')
-                    #error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
-                interruptionDate = programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[7])[0]
-                resumptionDate= eep[2].astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
-            
-            ############# DA GESTIRE IL DELETE In caso di non previsto o festivo 
-            if int(eep[5]) in (102,101,999):
-                list_trac_del.append('{0}_{1}_{2}'.format(eep[4],t[1],t[0]))
-            else:
-                sweeping={
-                    'traceabilityCode': '{0}_{1}_{2}'.format(eep[4],t[1],t[0]),
-                    'kilometersTravelled': eep[6],
-                    'areaType':str(eep[8]),
-                    'areaCode': str(eep[4]),
-                    'streetCode': str(eep[9]),
-                    'streetDescription':str(eep[10]),
-                    'programmingStartDate':programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[7])[0],
-                    'programmingEndingDate':programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[7])[1],
-                    'executionStartDate': eep[2].astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z',
-                    'executionEndingDate':eep[3].astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z',
-                    'interruptionType': interruptionType,
-                    'interruptionCause':interruptionCause,
-                    'interruptionDate': interruptionDate,
-                    'resumptionDate': resumptionDate,
-                    'nonComplianceCauseInterruption': interruptionCause,
-                    'year':int(programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[7])[2]),
-                    'istatCode': str(eep[11]) 
-                }
-                list_sweeping.append(sweeping)
-            
-        
-        #logger.debug(f'list spazzamenti = {convert_decimal(list_sweeping)}')
-        #jsonfile='{0}/log/{1}_spazzamento.json'.format(path,c)
-        #with open(jsonfile, 'w', encoding='utf-8') as f:
-        #    json.dump(convert_decimal(list_sweeping), f, ensure_ascii=False, indent=4)
-        ########################################################
-        # upload di list_wasteCollection di un singolo percorso
-        ########################################################
-
+        ########################
+        #recupero import id TREG
+        ########################
+        guid = uuid.uuid4()
+        logger.debug(str(guid))
+        #logger.debug(guid.type)
+        #json_id={'id': '{}'.format(str(guid))}
+        json_id={'id': str(guid)}
+        api_url_begin_upload='{}atrif/api/v1/tobin/b2b/process/rifqt-sweepings/begin-upload/av1'.format(url_ws_treg)          
+        response = requests.post(api_url_begin_upload, json=json_id, headers={'accept':'*/*', 
+                                                                                'mde': 'PROD',
+                                                                                'Authorization': 'EIP {}'.format(token),
+                                                                                'Content-Type': 'application/json'})
+        importId=response.json()['importId']
         #exit()
-        logger.info('Inizio upload dati del percorso {} del {}'.format(c[0], datetime.strptime(t[1], '%Y%m%d').date()))
-        api_url_upload='{}atrif/api/v1/tobin/b2b/process/rifqt-sweepings/upload/av1'.format(url_ws_treg)
-        # questa sarà da passare a TREG, le altre no
         
-        body_upload={
-            'id': str(guid),
-            'importId': str(importId),
-            'entities': list_sweeping
-        }
-        
-        
-        check_error_upload = call_treg_api(token, api_url_upload, body_upload, list_sweeping, logger, errorfile, 'errorCount')
-        
-        
-        # controllo  se per quel percorso ci sono componenti da cancellare in quanto consuntivate con causale non previsto e/o festivo
-        
-        if len(list_trac_del) > 0:
+        logger.info('ImportId = {}'.format(importId))
 
-            logger.debug(list_trac_del)
-                        
-            logger.info('Inizio delete dati del percorso {} del {}'.format(c[0], datetime.strptime(t[1], '%Y%m%d').date()))
-            api_url_delete='{}atrif/api/v1/tobin/b2b/process/rifqt-sweepings/delete/av1'.format(url_ws_treg)
-            # questa sarà da passare a TREG, le altre no
+        # facciamo un dizionario con chiave cod_percorso e data, e valore una lista contenente turno e data_pianif_iniziale e data_last_update
+        dict_percorsi={}
+        
+        for ep in elenco_percorsi:
+            # cod percorso 0
+            # versione_testata 1
+            # freq_testata 2
+            # freq_settimane 3
+            # id_turno 4
+            # at2.gestione_arera 5
+            # ce.data_pianif_iniziale 6
             
-            guid_del = uuid.uuid4()
-            body_delete={
-                'id': str(guid_del),
-                'sweepingIds': list_trac_del
-            }         
-            check_error_delete = call_treg_api(token, api_url_delete, body_delete, list_trac_del, logger, errorfile, 'deletedCount')
-            if check_error_delete>0:
-                logger.error('Errore nel delete di TREG per il percorso di igiene {} del {}'.format(c[0], datetime.strptime(t[1], '%Y%m%d').date()))
-                error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
-                exit()
-        # chiudo ciclo sui percorsi
+            #logger.debug(ep[0])
+            # 1 se prevista # - 1 se non prevista
+            # check_s è la settimana del giorno (se P o D)
+            # freq_settimane può 
 
-    
-    if len(dict_percorsi)>0:
-        
-        ####################################
-        # commit upload
-        ####################################
-        logger.info('Inizio il commit degli upload su TREG')
+            if datetime.strptime(ep[6], '%Y%m%d').date().isocalendar()[1]%2 == 1:
+                check_s='D'
+            else:
+                check_s='P'
+
+            
+            if tappa_prevista(datetime.strptime(ep[6], '%Y%m%d').date(),  ep[2])==1 and (ep[3].strip()=='T' or ep[3]==check_s):
+                # come chiave metto cod_percorso e data_pianif_iniziale
+                dict_percorsi[ep[0], ep[6]]=[ep[4], ep[6], ep[7]]
+                # verificato se era prevista verifico che ci sia una scheda chiusa
+
+            
+        #logger.debug(dict_percorsi)
         
         # estraiamo dal dizionario dei tratti per percorso la massima data_last_update
         max_data = max((v[2] for v in dict_percorsi.values()), default=None)
-        logger.info(f'La massima data_last_update tra i percorsi da trattare è {max_data}')
-        #exit()
-        if check_error_upload==0:
-            api_url_commit_upload='{}atrif/api/v1/tobin/b2b/process/rifqt-sweepings/commit-upload/av1'.format(url_ws_treg)
+        
+        logger.info('Devo trattare {} percorsi di raccolta con scheda consuntivata prevista'.format(len(dict_percorsi)))
+        
+        # c è la chiave (codice turno)
+        # t è il turno    
+        
+        
+        
+        for c, t in dict_percorsi.items():
+            #logger.debug(c + ' : ' + str(t))
+
+            # ora devo verificare i tratti   
+            
+            try:
+                curr.execute(query_elementi_percorso, (c[0], t[1],))
+                elenco_elementi_percorso=curr.fetchall()
+            except Exception as e:
+                logger.error(query_elementi_percorso)
+                logger.error(e)
+            
+
+            list_sweeping=[]
+            list_trac_del=[]
+            # popolo tratti_sit
+            for eep in elenco_elementi_percorso:
+                # verifico se in frequenza con la solita funzione
+                #if tappa_prevista(data_start,  eep[1])==1:
+                    # questa sarà da passare a TREG, le altre no
+                curr1 = conn.cursor()
+                
+                if eep[5] is None:
+                    interruptionType = None
+                    interruptionCause = None
+                    interruptionDate = None
+                    resumptionDate = None
+                    executionStartDate = eep[2].astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+                    executionEndingDate = eep[3].astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+                elif int(eep[5]) in (100,110,102,101,999): # 100 - compleatato 110 - completato con lavaggio
+                    interruptionType = None
+                    interruptionCause = None
+                    interruptionDate = None
+                    resumptionDate = None
+                    executionStartDate = eep[2].astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+                    executionEndingDate = eep[3].astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+                else:
+                    interruptionType = 'LIM'
+                    interruptionCause = causale_arera(curr1, eep[5], logger, errorfile)
+                    if interruptionCause is None:
+                        logger.error(f'Per il percorso {c[0]} del {datetime.strptime(c[1], "%Y%m%d").date()} trovo delle causali {eep[5]} non mappate in ARERA')
+                        #error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                    interruptionDate = programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[7], logger)[0]
+                    executionStartDate = None
+                    executionEndingDate = None
+                    # calcolo il resumption date
+                    try:
+                        curr1.execute(select_resumption_date, (eep[4], eep[2],))
+                        resumptionDate = curr1.fetchone()[0]
+                        
+                        # salvo la resumption date in consunt_ekovision
+                        if resumptionDate is None:
+                            logger.info(f'''Per il percorso {c[0]} del {datetime.strptime(t[1], "%Y%m%d").date()}, codice {eep[4]} con causale {eep[5]}
+                                        non trovo resumption date, non faccio nulla''')
+                        else:
+                            # aggiorno la tabella consunt_ekovision
+                            lista_update_res_date.append( (resumptionDate, eep[4], eep[2],) )
+                            # non faccio direttamente l'update ma lo salvo in una lista per fare un unico commit alla fine
+                        
+                    except Exception as e:
+                        logger.error(select_resumption_date)
+                        logger.debug(f'''Per il percorso {c[0]} del {datetime.strptime(t[1], "%Y%m%d").date()} trovo il codice {eep[4]} con causale {eep[5]} 
+                                     e non c'è resumption date''')
+                        logger.error(f'codice: {eep[4]}')
+                        logger.error(f'data_ora_inizio: {eep[2]}')
+                        logger.error(e)
+
+             
+                ############# DA GESTIRE IL DELETE In caso di non previsto o festivo 
+                if int(eep[5]) in (102,101,999):
+                    list_trac_del.append('{0}_{1}_{2}'.format(eep[4],t[1],t[0]))
+                else:
+                    sweeping={
+                        'traceabilityCode': '{0}_{1}_{2}'.format(eep[4],t[1],t[0]),
+                        'kilometersTravelled': eep[6],
+                        'areaType':str(eep[8]),
+                        'areaCode': str(eep[4]),
+                        'streetCode': str(eep[9]),
+                        'streetDescription':str(eep[10]),
+                        'programmingStartDate':programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[7], logger)[0],
+                        'programmingEndingDate':programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[7], logger)[1],
+                        'executionStartDate': executionStartDate,
+                        'executionEndingDate': executionEndingDate,
+                        'interruptionType': interruptionType,
+                        'interruptionCause':interruptionCause,
+                        'interruptionDate': interruptionDate,
+                        'resumptionDate': resumptionDate.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z' if resumptionDate is not None else None,
+                        'nonComplianceCauseInterruption': interruptionCause,
+                        'year':int(programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[7], logger)[2]),
+                        'istatCode': str(eep[11]) 
+                    }
+                    list_sweeping.append(sweeping)
+                    
+                    curr1.close()
+                
+            #logger.debug(f'Per il percorso {c[0]} del {datetime.strptime(t[1], "%Y%m%d").date()} devo inviare {list_sweeping}')
+            #logger.debug(f'list spazzamenti = {convert_decimal(list_sweeping)}')
+            #jsonfile='{0}/log/{1}_spazzamento.json'.format(path,c)
+            #with open(jsonfile, 'w', encoding='utf-8') as f:
+            #    json.dump(convert_decimal(list_sweeping), f, ensure_ascii=False, indent=4)
+            ########################################################
+            # upload di list_wasteCollection di un singolo percorso
+            ########################################################
+
+            #exit()
+            logger.info('Inizio upload dati del percorso {} del {}'.format(c[0], datetime.strptime(t[1], '%Y%m%d').date()))
+            api_url_upload='{}atrif/api/v1/tobin/b2b/process/rifqt-sweepings/upload/av1'.format(url_ws_treg)
             # questa sarà da passare a TREG, le altre no
             
-            body_commit_upload={
+            body_upload={
                 'id': str(guid),
-                'importId': str(importId)
+                'importId': str(importId),
+                'entities': list_sweeping
             }
             
             
-            response_commit_upload = requests.post(api_url_commit_upload, json=body_commit_upload, headers={'accept':'*/*', 
-                                                                            'mde': 'PROD',
-                                                                            'Authorization': 'EIP {}'.format(token),
-                                                                            'Content-Type': 'application/json'})
-            logger.info('Fine commit - Risposta TREG: {}'.format(response_commit_upload.text))
-                
-            #facciamo insert su tre_eko.last_import_treg_spazz_cons
-            try:
-                curr.execute(query_insert, (max_data,
-                                            str(guid), str(importId),
-                                            response_commit_upload.status_code, response_commit_upload.text,))
-                conn.commit()
-            except Exception as e:
-                logger.error(query_insert)
-                logger.error(e)  
-    
-        else: 
-            logger.warning('Sono presenti errori, non faccio il commit')
+            check_error_upload = call_treg_api(token, api_url_upload, body_upload, list_sweeping, logger, errorfile, 'errorCount', importId)
+            
+            
+            # controllo  se per quel percorso ci sono componenti da cancellare in quanto consuntivate con causale non previsto e/o festivo
+            
+            if len(list_trac_del) > 0:
 
-            #non facciamo commit su TREG ma teniamo traccia con insert su tre_eko.last_import_treg_spazz_cons
-            try:
-                curr.execute(query_insert_error, (max_data,
-                                            str(guid), str(importId),))
-                conn.commit()
-            except Exception as e:
-                logger.error(query_insert_error)
-                logger.error(e)    
+                logger.debug(list_trac_del)
+                            
+                logger.info('Inizio delete dati del percorso {} del {}'.format(c[0], datetime.strptime(t[1], '%Y%m%d').date()))
+                api_url_delete='{}atrif/api/v1/tobin/b2b/process/rifqt-sweepings/delete/av1'.format(url_ws_treg)
+                # questa sarà da passare a TREG, le altre no
+                
+                guid_del = uuid.uuid4()
+                body_delete={
+                    'id': str(guid_del),
+                    'sweepingIds': list_trac_del
+                }         
+                check_error_delete = call_treg_api(token, api_url_delete, body_delete, list_trac_del, logger, errorfile, 'deletedCount', importId)
+                if check_error_delete>0:
+                    logger.error('Errore nel delete di TREG per il percorso di igiene {} del {}'.format(c[0], datetime.strptime(t[1], '%Y%m%d').date()))
+                    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                    api_url_rollback='{}atrif/api/v1/tobin/b2b/process/rifqt-sweepings/rollback-upload/av1'.format(url_ws_treg)
+                    guid_roll = uuid.uuid4()
+                    body_rollback={
+                        'id': str(guid_roll),
+                        'importId': str(importId),
+                    }
+                    response_roll = requests.post(api_url_rollback, json=body_rollback, headers={'accept':'*/*', 
+                        'mde': 'PROD',
+                        'Authorization': 'EIP {}'.format(token),
+                        'Content-Type': 'application/json'})
+                    logger.error('la chiamata di rollback ha dato questo esito: {}'.format(response_roll.text))
+                    exit()
+            # chiudo ciclo sui percorsi
+
+        
+        if len(dict_percorsi)>0:
+            
+            ####################################
+            # commit upload
+            ####################################
+            logger.info('Inizio il commit degli upload su TREG')
+            
+            # estraiamo dal dizionario dei tratti per percorso la massima data_last_update
+            max_data = max((v[2] for v in dict_percorsi.values()), default=None)
+            logger.info(f'La massima data_last_update tra i percorsi da trattare è {max_data}')
+            #exit()
+            if check_error_upload==0:
+                api_url_commit_upload='{}atrif/api/v1/tobin/b2b/process/rifqt-sweepings/commit-upload/av1'.format(url_ws_treg)
+                # questa sarà da passare a TREG, le altre no
+                
+                body_commit_upload={
+                    'id': str(guid),
+                    'importId': str(importId)
+                }
+                
+                
+                response_commit_upload = requests.post(api_url_commit_upload, json=body_commit_upload, headers={'accept':'*/*', 
+                                                                                'mde': 'PROD',
+                                                                                'Authorization': 'EIP {}'.format(token),
+                                                                                'Content-Type': 'application/json'})
+                logger.info('Fine commit - Risposta TREG: {}'.format(response_commit_upload.text))
+                    
+                #facciamo insert su tre_eko.last_import_treg_spazz_cons
+                try:
+                    curr.execute(query_insert, (max_data,
+                                                str(guid), str(importId),
+                                                response_commit_upload.status_code, response_commit_upload.text,))
+                    #conn.commit()
+                except Exception as e:
+                    logger.error(query_insert)
+                    logger.error(e)  
+        
+            else: 
+                logger.warning('Sono presenti errori, faccio il commit ridotto')
+
+                #non facciamo commit su TREG ma teniamo traccia con insert su tre_eko.last_import_treg_spazz_cons
+                try:
+                    curr.execute(query_insert_error, (max_data,
+                                                str(guid), str(importId),))
+                    #conn.commit()
+                except Exception as e:
+                    logger.error(query_insert_error)
+                    logger.error(e)    
     else:
         logger.info('Nessun percorso da trattare, non faccio upload né commit')
         
@@ -686,8 +724,19 @@ def main():
             
  
     
+    if len(lista_update_res_date)>0:
+        # inserisco le resumption date calcolate
+        logger.info('Inizio l\'inserimento delle resumption date calcolate')
+        
+        try:
+            bulk_update_consunt(curr, lista_update_res_date)
+        except Exception as e:
+            logger.error(e)
+            logger.error(lista_update_res_date) 
     
     
+    # faccio unico commit sul DB
+    conn.commit()
     
     
     

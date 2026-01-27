@@ -142,7 +142,7 @@ from invio_messaggio import *
 import csv
 
 
-
+from treg_env import *
 
 #variabile che specifica se devo fare test ekovision oppure no
 test_ekovision=0
@@ -150,92 +150,7 @@ test_ekovision=0
 
     
 
-def token_treg():
-    api_url='{}atrif/api/v1/tobin/auth/login'.format(url_ws_treg)
-    payload_treg = {"username": user_ws_treg, "password": pwd_ws_treg, }
-    logger.debug(payload_treg)
-    response = requests.post(api_url, json=payload_treg)
-    logger.debug(response)
-    #response.json()
-    logger.info("Status code: {0}".format(response.status_code))
-    try:      
-        response.raise_for_status()
-        # access JSOn content
-        #jsonResponse = response.json()
-        #print("Entire JSON response")
-        #print(jsonResponse)
-    except HTTPError as http_err:
-        logger.error(f'HTTP error occurred: {http_err}')
-        check=500
-    except Exception as err:
-        logger.error(f'Other error occurred: {err}')
-        logger.error(response.json())
-        check=500
-    token=response.text
-    return token
 
-
-def programming_start_ending_date(cursor, data, id_turno, gc):
-    
-    ''' 
-    La funzione in base a giorno, id_turno e giorno_competenza restituisce un array con la programmingStartDate e la programmingEndingDate 
-    nel formato voluto da TREG
-    '''
-
-    # inizializzo l'array di output
-    dates=[]
-    
-    #logger.debug(id_turno)
-    # query per tirare fuori l'intervallo con cui calcolare il giorno di fine
-    query='''select 
-            case
-                when fine_ora < inizio_ora then 
-                1
-                else 
-                0
-            end,
-            lpad(inizio_ora::text,2,'0')||':'||lpad(inizio_minuti::text,2,'0') as h_inizio, 
-            lpad(fine_ora::text,2,'0')||':'||lpad(fine_minuti::text,2,'0') as h_fine 
-            from elem.turni t 
-            where id_turno = %s'''
-
-    try:
-        cursor.execute(query, (id_turno,))
-        riga=cursor.fetchone()
-        #h_inizio=cursor.fetchone()[1]
-        #h_fine=cursor.fetchone()[2]
-    except Exception as e:
-        logger.error(query)
-        logger.error(e)
-    
-    interval = riga[0]
-    h_inizio = riga[1]
-    h_fine= riga[2]
-
-    hhi, mmi = map(int, h_inizio.split(':'))
-    hhf, mmf = map(int, h_fine.split(':'))
-    
-    #logger.debug(interval)
-    #exit()
-    #data = data.astimezone(timezone.utc)
-    data = datetime.combine(data, datetime.min.time())
-    if gc == 0:
-        dt_inizio = data.replace(hour=hhi, minute=mmi, second=0, microsecond=0).astimezone(timezone.utc)
-        dt_fine = data.replace(hour=hhf, minute=mmf, second=0, microsecond=0).astimezone(timezone.utc)
-    elif gc == -1: 
-        data_inizio= data-timedelta(days=1)
-        data_fine = data_inizio+timedelta(days=interval)
-        dt_inizio = data_inizio.replace(hour=hhi, minute=mmi, second=0, microsecond=0).astimezone(timezone.utc)
-        dt_fine = data_fine.replace(hour=hhi, minute=mmi, second=0, microsecond=0).astimezone(timezone.utc)
-    else: 
-        logger.error('Come mai gc vale {}'.format(gc))
-        
-    
-    dates.append(dt_inizio.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z')
-    dates.append(dt_fine.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z')
-    dates.append(dt_inizio.strftime('%Y'))
-
-    return dates
 
 def main():
       
@@ -310,7 +225,7 @@ FROM treg_eko.last_import_treg_racc where commit_code=200 and deleted = false'''
     #exit()
     # qua mi tiro fuori il token TREG 
     
-    token=token_treg()
+    token=token_treg(logger)
     logger.debug(token)
     
     
@@ -532,9 +447,9 @@ FROM treg_eko.last_import_treg_racc where commit_code=200 and deleted = false'''
                     'streetDescription':str(eep[6]),
                     'cerCode':str(eep[7]),
                     'wasteDescription':str(eep[8]),
-                    'programmingStartDate':programming_start_ending_date(curr1, data_start, t, eep[12])[0],
-                    'programmingEndingDate':programming_start_ending_date(curr1, data_start, t, eep[12])[1],
-                    'year':int(programming_start_ending_date(curr1, data_start, t, eep[12])[2]),
+                    'programmingStartDate':programming_start_ending_date(curr1, data_start, t, eep[12], logger)[0],
+                    'programmingEndingDate':programming_start_ending_date(curr1, data_start, t, eep[12], logger)[1],
+                    'year':int(programming_start_ending_date(curr1, data_start, t, eep[12], logger)[2]),
                     'istatCode': str(eep[9]) 
                 }
                 list_wasteCollection.append(wasteCollection)

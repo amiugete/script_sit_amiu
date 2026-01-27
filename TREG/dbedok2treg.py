@@ -123,6 +123,8 @@ import csv
 
 import time
 
+from treg_env import *
+
 #variabile che specifica se devo fare test ekovision oppure no
 test_ekovision=0
     
@@ -218,7 +220,7 @@ FROM treg_edok.last_import_treg where commit_code=200 and deleted = false; '''
     data_start = max_update_dt.replace(tzinfo=None)
     fine_ciclo=oggi
     #logger.debug(data_start)
-
+    
 
     logger.info('Carico i dati a partire dal {}'.format(data_start))
     
@@ -251,7 +253,6 @@ FROM treg_edok.last_import_treg where commit_code=200 and deleted = false; '''
     # procedo con il recupero dati
     ##################################
 
-
     query_pratiche="""select 
         concat('T-', it.cusprotocollo) as traceabilityCode,
         mp.cod_treg as  serviceCode,
@@ -265,7 +266,7 @@ FROM treg_edok.last_import_treg where commit_code=200 and deleted = false; '''
         end as contractType,
         it."date" as receptionDate,
         case
-            when it.cusmotivazionesosp is not null then cmr.causale_arera
+            when mp.causa_fm = true then 'FRM'
             else 'CSG'
         end as nonComplianceCause,
         it.cusdatacestino as nonFulfillDate,
@@ -298,9 +299,9 @@ FROM treg_edok.last_import_treg where commit_code=200 and deleted = false; '''
         where it.updatetime > %s and mp.arera = true and lower(it.statusdescription) not in ('scartato', 'acquisito')
         and extract(year from it."date") >=%s 
         order by it.updatetime
-"""
-    #curr.mogrify(query_pratiche, (data_start,))
+    """
 
+    #curr.mogrify(query_pratiche, (data_start,))
     try:
         curr.execute(query_pratiche, (data_start, start_year_treg,))
         pratiche=curr.fetchall()
@@ -317,7 +318,7 @@ FROM treg_edok.last_import_treg where commit_code=200 and deleted = false; '''
         pratica={
             'traceabilityCode': p[0],
             'serviceCode': p[1],
-            'userName': p[2],
+            'userName': p[2][:100] if p[2] is not None else None,
             'userLastName': p[3],
             'userCode': p[4],
             'contractCode':p[5],
@@ -334,6 +335,7 @@ FROM treg_edok.last_import_treg where commit_code=200 and deleted = false; '''
             'nonComplianceCauseCredit': p[16],
             'operationDate': convert_date_treg(p[17]),
             'inspectionDate': convert_date_treg(p[18]),
+            'flagReceiveCredit': False,
             'year':int(p[19]),
             'istatCode': p[20],
             'url': p[21] 
@@ -448,6 +450,19 @@ FROM treg_edok.last_import_treg where commit_code=200 and deleted = false; '''
             except Exception as e:
                 logger.error(query_insert)
                 logger.error(e)  
+
+            query_update_sent = """
+                update treg_edok.istanze_tari it 
+                set sent = true where it.cusmetadatitipopratica in (
+                select distinct cod_edok from treg_edok.mapping_prestazione 
+                where arera =  true);
+            """
+            try:
+                curr.execute(query_update_sent)
+                conn.commit()
+            except Exception as e:
+                logger.error(query_update_sent)
+                logger.error(e)
         
         else: 
             logger.warning('Sono presenti errori, non faccio il commit')                
@@ -463,19 +478,54 @@ FROM treg_edok.last_import_treg where commit_code=200 and deleted = false; '''
             except Exception as e:
                 logger.error(query_insert)
                 logger.error(e)    
-
-
-        
-        
-        # check se c_handller contiene almeno una riga 
-        error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
-        
-        
-        logger.info("chiudo le connessioni in maniera definitiva")
         curr.close()
-        conn.close()
     else:
         logger.info("Nessuna pratica da importare su TREG")
+
+    ######################################################################################################
+    # elimino pratiche importate in precedenza che hanno cambiato tipo pratica in un tipo con arera = false
+    ######################################################################################################
+    curr = conn.cursor()
+    query_del = """
+        select cusprotocollo from treg_edok.istanze_tari it where it.cusmetadatitipopratica not in (
+        select distinct cod_edok from treg_edok.mapping_prestazione 
+        where arera =  true) --and it.sent = true;
+    """
+    try:
+        curr.execute(query_del)
+        pratiche_del=curr.fetchall()
+    except Exception as e:
+        logger.error(query_del)
+        logger.error(e) 
+
+    list_trac_del=[]
+    for pd in pratiche_del:
+        list_trac_del.append('T-{}'.format(pd[0]))
+
+    if len(list_trac_del) > 0:
+        logger.debug(list_trac_del)
+                        
+        logger.info('Inizio delete delle pratiche')
+        api_url_delete='{}atrif/api/v1/tobin/b2b/process/rifqc-services/delete/av1'.format(url_ws_treg)
+        # questa sarà da passare a TREG, le altre no
+        
+        guid_del = uuid.uuid4()
+        body_delete={
+            'id': str(guid_del),
+            'traceabilityCodes': list_trac_del
+        }         
+        call_treg_api(token, api_url_delete, body_delete, list_trac_del, logger, errorfile, 'error', importId)
+
+    else:
+        logger.info("Nessuna pratica da cancellare da TREG")
+
+    # check se c_handller contiene almeno una riga 
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+
+
+    logger.info("chiudo le connessioni in maniera definitiva")
+    curr.close()
+    conn.close()
 
 if __name__ == "__main__":
     main()      
