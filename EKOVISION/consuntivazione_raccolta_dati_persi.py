@@ -6,6 +6,10 @@
 
 '''
 Lo script si occupa della consuntivazione raccolta di dati persi su EKOVISION
+bisogna passare come parametri:
+- id_scheda_input
+- codice_percorso_input
+- data_percorso_input (YYYYMMDD)
 
 
 
@@ -116,7 +120,7 @@ from tappa_prevista import tappa_prevista
 
      
 
-def main(id_scheda_input, codice_percorso_input, data_percorso_input):
+def main(id_scheda_input, codice_percorso_input, data_percorso_input, folder_output):
     
     logger.info('Il PID corrente è {0}'.format(os.getpid()))
   
@@ -150,7 +154,7 @@ def main(id_scheda_input, codice_percorso_input, data_percorso_input):
     qual=[]
     mail_arr=[]
     
-    
+    contatore_tappe_frequenza=0 # uso un contatore per verificare che il percorso abbia delle frequenze
     
     # prima faccio un giro di pre-consuntivazione per le giornate mancant
     query_racc_np='''select p.cod_percorso, 
@@ -187,13 +191,62 @@ where p.cod_percorso = %s
 and to_date(%s, 'YYYYMMDD') between dpsu.data_inizio_validita and dpsu.data_fine_validita 
 and ap.frequenza is not null 
 and eap.frequenza::int <> p.frequenza and s.riempimento > 0  '''
+
+
+
+    query_racc='''select p.cod_percorso, 
+    p.id_turno, 
+eap.id_elemento, 
+fo.freq_binaria as freq_elemento, 
+fo2.freq_binaria  as freq_percorso, 
+fo3.freq_binaria  as differenza,
+eap.ripasso, 
+dpsu.data_inizio_validita::date, 
+dpsu.data_fine_validita::date 
+--p.data_attivazione::date, 
+--p.data_dismissione::date 
+from (select id_asta_percorso, id_percorso,data_inserimento, frequenza from elem.aste_percorso ap 
+union 
+select id_asta_percorso, id_percorso,data_inserimento, frequenza  from history.aste_percorso ap)
+ap 
+join elem.percorsi p on p.id_percorso = ap.id_percorso 
+join anagrafe_percorsi.date_percorsi_sit_uo dpsu on p.id_percorso = dpsu.id_percorso_sit 
+join (select id_asta_percorso, 
+id_elemento, frequenza, ripasso, data_inserimento, 
+id_elemento_asta_percorso
+from elem.elementi_aste_percorso  
+union 
+select id_asta_percorso, 
+id_elemento, frequenza, ripasso, data_inserimento, 
+id_elemento_asta_percorso
+from history.elementi_aste_percorso ) eap on ap.id_asta_percorso = eap.id_asta_percorso 
+join etl.frequenze_ok fo on fo.cod_frequenza = eap.frequenza::int
+join etl.frequenze_ok fo2 on fo2.cod_frequenza = p.frequenza
+join elem.servizi s on s.id_servizio = p.id_servizio 
+left join etl.frequenze_ok fo3 on fo3.cod_frequenza = (p.frequenza-eap.frequenza::int)
+where p.cod_percorso = %s
+and to_date(%s, 'YYYYMMDD') between dpsu.data_inizio_validita and dpsu.data_fine_validita 
+and s.riempimento > 0  '''
+
+
     day=datetime.strptime(data_percorso_input, '%Y%m%d').date()            
     try:
         curr.execute(query_racc_np, (codice_percorso_input, data_percorso_input,))
-        lista_elementi=curr.fetchall()
+        lista_elementi=curr.fetchall() # questi sono solo elemeni non previsti
     except Exception as e:
         check_error=1
         logger.error(e)
+        
+        
+    # mi tiro fuori tutti gli elementi del percorso    
+    try:
+        curr.execute(query_racc, (codice_percorso_input, data_percorso_input,))
+        lista_elementi_tot=curr.fetchall() # questi sono solo elemeni non previsti
+    except Exception as e:
+        check_error=1
+        logger.error(e)
+        
+        
 
     for aa in lista_elementi:
         
@@ -215,14 +268,18 @@ and eap.frequenza::int <> p.frequenza and s.riempimento > 0  '''
             id_tratto.append(None)
             flag_esecuzione.append(2)
             causale.append(999)
-            nota_causale.append('Pre-consuntivazione tappe non previste in giornata')
-            sorgente_dati.append('SIT')
+            nota_causale.append('Come da progettazione su SIT')
+            sorgente_dati.append('Come da progettazione su SIT')
             data_ora.append(day.strftime("%Y%m%d%H%M"))
             lat.append(None)
             long.append(None)
             ripasso.append(aa[6]) 
             qual.append(None) 
-            mail_arr.append(None)     
+            mail_arr.append(None)  
+            
+            
+            # incremento il contatore delle tappe con frequenza non nulla
+            contatore_tappe_frequenza+=1   
 
     
     
@@ -337,7 +394,68 @@ and ve.id_causale::int <> %s'''
 
 
     logger.info('Trovo {} righe consuntivate'.format(len(lista_x_piazzola)))
+    
+   
+    
+    if len(lista_x_piazzola) == 0:
+        logger.info('Nessuna consuntivazione su totem, mando il programmato a ekovision')
+        for aa in lista_elementi_tot:
+        
+        #aa[3] frequenza asta 
+        #aa[4] frequenza percorso
+        #logger.debug(aa[3])
+        #logger.debug(tappa_prevista(day, aa[3]))
+        #logger.debug(aa[4])
+        #logger.debug(tappa_prevista(day, aa[4]))
+            if (tappa_prevista(day, aa[4])==1 
+                and tappa_prevista(day, aa[3])==1
+                and aa[7] <= day # data attivazione
+                and (aa[8] is None or aa[8] > day) # data dismissione
+                ):
+                cod_percorso.append(aa[0])
+                data_percorso.append(day.strftime("%Y%m%d"))
+                id_turno.append(aa[1])
+                id_componente.append(aa[2])
+                id_tratto.append(None)
+                flag_esecuzione.append(1)
+                causale.append(100)
+                nota_causale.append('SIT')
+                sorgente_dati.append('Non consuntivato su Totem, prendiamo per buona progettazione su SIT')
+                data_ora.append(day.strftime("%Y%m%d%H%M"))
+                lat.append(None)
+                long.append(None)
+                ripasso.append(aa[6]) 
+                qual.append(None) 
+                mail_arr.append(None)     
+                
+                # incremento il contatore delle tappe con frequenza non nulla
+                contatore_tappe_frequenza+=1   
+        
+        if contatore_tappe_frequenza == 0:
+            logger.warning('''Il percorso {} non ha tappe con frequenza prevista per la giornata {}, mando tutto'''.format(codice_percorso_input, data_percorso_input))
+            
+            for aa in lista_elementi_tot:
+                #logger.info(aa)
+                cod_percorso.append(aa[0])
+                data_percorso.append(day.strftime("%Y%m%d"))
+                id_turno.append(aa[1])
+                id_componente.append(aa[2])
+                id_tratto.append(None)
+                flag_esecuzione.append(1)
+                causale.append(100)
+                nota_causale.append('SIT')
+                sorgente_dati.append('Percorso senza tappe previste, ma generato')
+                data_ora.append(day.strftime("%Y%m%d%H%M"))
+                lat.append(None)
+                long.append(None)
+                ripasso.append(aa[6]) 
+                qual.append(None) 
+                mail_arr.append(None)   
+            
+
     #exit()
+         
+        
     for vv in lista_x_piazzola:
     
     
@@ -575,7 +693,7 @@ and ve.id_causale::int <> %s'''
         '''
         try:    
             nome_csv_ekovision="consuntivazioni_raccolta_scheda_{0}.csv".format(id_scheda_input)
-            file_preconsuntivazioni_ekovision="{0}/consuntivazioni/{1}".format(path,nome_csv_ekovision)
+            file_preconsuntivazioni_ekovision="{0}/consuntivazioni/{2}/{1}".format(path,nome_csv_ekovision, folder_output)
             fp = open(file_preconsuntivazioni_ekovision, 'w', encoding='utf-8')
                         
             fieldnames = ['cod_percorso', 'data', 'id_turno', 'id_componente','id_tratto',
@@ -613,28 +731,9 @@ and ve.id_causale::int <> %s'''
             check_ekovision=102 # problema file variazioni
 
         logger.info('File con la consuntivazione raccolta creato correttamente: {}'.format(file_preconsuntivazioni_ekovision))
-        exit()
-        logger.info('Invio file con la consuntivazione raccolta via SFTP')
-        try: 
-            cnopts = pysftp.CnOpts()
-            cnopts.hostkeys = None
-            srv = pysftp.Connection(host=url_ev_sftp, username=user_ev_sftp,
-        password=pwd_ev_sftp, port= port_ev_sftp,  cnopts=cnopts,
-        log="/tmp/pysftp.log")
-
-            with srv.cd('sch_lav_cons/in/'): #chdir to public
-                srv.put(file_preconsuntivazioni_ekovision) #upload file to nodejs/
-
-            # Closes the connection
-            srv.close()
-        except Exception as e:
-            logger.error('problema invio SFTP')
-            logger.error(e)
-            check_ekovision=103 # problema invio SFTP  
         
-        currc.close()
-        currc1.close()
-        connc.close()
+       
+    
         
         
             
@@ -657,4 +756,12 @@ and ve.id_causale::int <> %s'''
 
 if __name__ == "__main__":
     #main('481241', '0507130502', '20250102')      
-    main ('667780',	'0101363201',	'20250806')
+    #main ('536618',	'0103008304',	'20250227')
+    
+    
+    arg1 = sys.argv[1]
+    arg2 = sys.argv[2]
+    arg3 = sys.argv[3]
+    arg4 = sys.argv[4]
+    # Call main function
+    main(arg1, arg2, arg3, arg4)
