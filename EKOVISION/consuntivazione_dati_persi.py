@@ -122,7 +122,25 @@ def main():
     logger.info('Il PID corrente è {0}'.format(os.getpid()))
     
     # pulisco cartella dati persi
-    cartella_dati_persi = f'{path}/consuntivazioni/dati_persi/'
+    
+    subfolder_amiu='dati_persi'
+    
+    
+    # se non esiste la cartella la creo
+    if not os.path.exists(f'{path}/consuntivazioni/{subfolder_amiu}/'):
+        os.makedirs(f'{path}/consuntivazioni/{subfolder_amiu}/')
+        
+    #exit()
+    subfolder_ekovision='dati_persi'
+    cartella_dati_persi = f'{path}/consuntivazioni/{subfolder_amiu}/'
+    
+    if subfolder_ekovision=='':
+        cartella_eko='sch_lav_cons/in'
+    else:
+        cartella_eko=f'sch_lav_cons/in/{subfolder_ekovision}'    
+    
+    
+    
     for nome_file in os.listdir(cartella_dati_persi):
         if nome_file.lower().endswith(".csv"):
             path_completo = os.path.join(cartella_dati_persi, nome_file)
@@ -169,6 +187,12 @@ ce.tipo_servizio,
 za.cod_zona 
 order by 1 '''
 """
+
+
+
+    
+
+    # Usato per corregger baco del ticket #6465
     query_percorsi_correggere='''with cons_eko as (
 select id_scheda, 
 codice_servizio_pred,
@@ -208,6 +232,22 @@ to_date(data_esecuzione_prevista, 'YYYYMMDD'),
 ce.tipo_servizio, 
 za.cod_zona 
 order by 1'''
+
+
+
+
+    # usato per il percorso centro storico + rimessa volpara 
+    """query_percorsi_correggere='''select 
+    distinct id_scheda, 
+    see.codice_serv_pred, 
+    to_date(data_esecuzione_prevista, 'YYYYMMDD') data_effettiva,
+    'RACC' as tipo_servizio,
+    see.data_pianif_iniziale from consunt.schede_eseguite_ekovision see 
+where see.codice_serv_pred  = '0508040501'
+and see.data_pianif_iniziale  >= '20260113'
+    '''
+    """
+    
     #day=datetime.strptime(data_percorso_input, '%Y%m%d').date()            
     try:
         curr.execute(query_percorsi_correggere)
@@ -223,10 +263,12 @@ order by 1'''
         data=aa[2].strftime("%Y%m%d")
         tipo=aa[3]
         logger.info(f'La data testuale è {data}')
+        
+       
         if tipo=='SPAZZ':
-            consuntivazione_spazzamento_dati_persi.main(id_scheda, cod_percorso, data, 'dati_persi')
+            consuntivazione_spazzamento_dati_persi.main(id_scheda, cod_percorso, data, subfolder_amiu)
         else:
-            consuntivazione_raccolta_dati_persi.main(id_scheda, cod_percorso, data, 'dati_persi')    
+            consuntivazione_raccolta_dati_persi.main(id_scheda, cod_percorso, data, subfolder_amiu)    
         
     
     
@@ -246,7 +288,7 @@ order by 1'''
     password=pwd_ev_sftp, port= port_ev_sftp,  cnopts=cnopts,
     log="/tmp/pysftp.log")
 
-        with srv.cd('sch_lav_cons/in/dati_persi'): #chdir to public
+        with srv.cd(cartella_eko): #chdir to public
             for nome_file in os.listdir(cartella_dati_persi):
                 if nome_file.lower().endswith(".csv"):
                     path_completo = os.path.join(cartella_dati_persi, nome_file)
@@ -261,6 +303,10 @@ order by 1'''
         logger.error(e)
         check_ekovision=103 # problema invio SFTP 
         
+    
+    
+    #cancello la subfolder dati persi
+    #os.remove(cartella_dati_persi)    
         
     # check se c_handller contiene almeno una riga 
     error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)

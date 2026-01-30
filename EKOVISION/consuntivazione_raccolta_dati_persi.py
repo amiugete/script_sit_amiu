@@ -164,6 +164,8 @@ fo.freq_binaria as freq_elemento,
 fo2.freq_binaria  as freq_percorso, 
 fo3.freq_binaria  as differenza,
 eap.ripasso, 
+greatest(ap.data_inserimento, eap.data_inserimento)::date+1 as data_inserimento,
+coalesce(eap.data_eliminazione, dpsu.data_fine_validita)::date+1 as data_eliminazione,
 dpsu.data_inizio_validita::date, 
 dpsu.data_fine_validita::date 
 --p.data_attivazione::date, 
@@ -175,12 +177,12 @@ ap
 join elem.percorsi p on p.id_percorso = ap.id_percorso 
 join anagrafe_percorsi.date_percorsi_sit_uo dpsu on p.id_percorso = dpsu.id_percorso_sit 
 join (select id_asta_percorso, 
-id_elemento, frequenza, ripasso, data_inserimento, 
+id_elemento, frequenza, ripasso, data_inserimento, null as data_eliminazione,
 id_elemento_asta_percorso
 from elem.elementi_aste_percorso  
 union 
 select id_asta_percorso, 
-id_elemento, frequenza, ripasso, data_inserimento, 
+id_elemento, frequenza, ripasso, data_inserimento, data_eliminazione,
 id_elemento_asta_percorso
 from history.elementi_aste_percorso ) eap on ap.id_asta_percorso = eap.id_asta_percorso 
 join etl.frequenze_ok fo on fo.cod_frequenza = eap.frequenza::int
@@ -188,7 +190,9 @@ join etl.frequenze_ok fo2 on fo2.cod_frequenza = p.frequenza
 join elem.servizi s on s.id_servizio = p.id_servizio 
 left join etl.frequenze_ok fo3 on fo3.cod_frequenza = (p.frequenza-eap.frequenza::int)
 where p.cod_percorso = %s
-and to_date(%s, 'YYYYMMDD') between dpsu.data_inizio_validita and dpsu.data_fine_validita 
+and to_date(%s, 'YYYYMMDD') /*between dpsu.data_inizio_validita and dpsu.data_fine_validita*/
+between greatest(ap.data_inserimento, eap.data_inserimento)::date+1 
+and coalesce(eap.data_eliminazione, dpsu.data_fine_validita)::date+1
 and ap.frequenza is not null 
 and eap.frequenza::int <> p.frequenza and s.riempimento > 0  '''
 
@@ -201,6 +205,8 @@ fo.freq_binaria as freq_elemento,
 fo2.freq_binaria  as freq_percorso, 
 fo3.freq_binaria  as differenza,
 eap.ripasso, 
+greatest(ap.data_inserimento, eap.data_inserimento)::date+1 as data_inserimento,
+coalesce(eap.data_eliminazione, dpsu.data_fine_validita)::date+1 as data_eliminazione,
 dpsu.data_inizio_validita::date, 
 dpsu.data_fine_validita::date 
 --p.data_attivazione::date, 
@@ -212,12 +218,12 @@ ap
 join elem.percorsi p on p.id_percorso = ap.id_percorso 
 join anagrafe_percorsi.date_percorsi_sit_uo dpsu on p.id_percorso = dpsu.id_percorso_sit 
 join (select id_asta_percorso, 
-id_elemento, frequenza, ripasso, data_inserimento, 
+id_elemento, frequenza, ripasso, data_inserimento, null as data_eliminazione,
 id_elemento_asta_percorso
 from elem.elementi_aste_percorso  
 union 
 select id_asta_percorso, 
-id_elemento, frequenza, ripasso, data_inserimento, 
+id_elemento, frequenza, ripasso, data_inserimento, data_eliminazione,
 id_elemento_asta_percorso
 from history.elementi_aste_percorso ) eap on ap.id_asta_percorso = eap.id_asta_percorso 
 join etl.frequenze_ok fo on fo.cod_frequenza = eap.frequenza::int
@@ -225,7 +231,9 @@ join etl.frequenze_ok fo2 on fo2.cod_frequenza = p.frequenza
 join elem.servizi s on s.id_servizio = p.id_servizio 
 left join etl.frequenze_ok fo3 on fo3.cod_frequenza = (p.frequenza-eap.frequenza::int)
 where p.cod_percorso = %s
-and to_date(%s, 'YYYYMMDD') between dpsu.data_inizio_validita and dpsu.data_fine_validita 
+and to_date(%s, 'YYYYMMDD') /*between dpsu.data_inizio_validita and dpsu.data_fine_validita*/
+between greatest(ap.data_inserimento, eap.data_inserimento)::date+1 
+and coalesce(eap.data_eliminazione, dpsu.data_fine_validita)::date+1
 and s.riempimento > 0  '''
 
 
@@ -758,6 +766,8 @@ if __name__ == "__main__":
     #main('481241', '0507130502', '20250102')      
     #main ('536618',	'0103008304',	'20250227')
     
+    #main('498621',	'0508063902',	'20250120', 'dati_persi') # consuntivazione su totem assente
+    
     
     arg1 = sys.argv[1]
     arg2 = sys.argv[2]
@@ -765,3 +775,4 @@ if __name__ == "__main__":
     arg4 = sys.argv[4]
     # Call main function
     main(arg1, arg2, arg3, arg4)
+    

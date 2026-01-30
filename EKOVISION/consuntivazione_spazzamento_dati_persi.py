@@ -179,12 +179,16 @@ ap.id_asta,
 fo.freq_binaria as freq_asta, 
 fo2.freq_binaria  as freq_percorso, 
 fo3.freq_binaria  as differenza, 
-p.data_attivazione::date, 
-p.data_dismissione::date, 
+ap.data_inserimento::date+1,
+coalesce(ap.data_eliminazione, dpsu.data_fine_validita)::date+1,
+/*p.data_attivazione::date, 
+p.data_dismissione::date, */
 coalesce(ap.ripasso_fittizio,0) as ripasso_fittizio               
-from (select num_seq, id_asta_percorso, id_percorso, id_asta, data_inserimento, frequenza, ripasso_fittizio from elem.aste_percorso ap 
+from (select num_seq, id_asta_percorso, id_percorso, id_asta,
+data_inserimento, null as data_eliminazione, frequenza, ripasso_fittizio from elem.aste_percorso ap 
 union 
-select num_seq, id_asta_percorso, id_percorso, id_asta, data_inserimento, frequenza, 0 as ripasso_fittizio  from history.aste_percorso ap)
+select num_seq, id_asta_percorso, id_percorso, id_asta,
+data_inserimento, data_eliminazione, frequenza, 0 as ripasso_fittizio  from history.aste_percorso ap)
 ap  
 join elem.percorsi p on p.id_percorso = ap.id_percorso 
 join anagrafe_percorsi.date_percorsi_sit_uo dpsu on dpsu.id_percorso_sit = p.id_percorso 
@@ -193,7 +197,8 @@ join etl.frequenze_ok fo2 on fo2.cod_frequenza = p.frequenza
 left join etl.frequenze_ok fo3 on fo3.cod_frequenza = (p.frequenza-ap.frequenza)
 join elem.servizi s on s.id_servizio = p.id_servizio
 where p.cod_percorso = %s
-and to_date(%s, 'YYYYMMDD') between dpsu.data_inizio_validita and dpsu.data_fine_validita 
+and to_date(%s, 'YYYYMMDD') /*between dpsu.data_inizio_validita and dpsu.data_fine_validita */
+between ap.data_inserimento::date+1 and coalesce(ap.data_eliminazione, dpsu.data_fine_validita)::date+1
 and ap.frequenza is not null 
 and ap.frequenza <> p.frequenza
 and s.riempimento = 0
@@ -207,12 +212,16 @@ ap.id_asta,
 fo.freq_binaria as freq_asta, 
 fo2.freq_binaria  as freq_percorso, 
 fo3.freq_binaria  as differenza, 
-p.data_attivazione::date, 
-p.data_dismissione::date, 
+ap.data_inserimento::date+1,
+coalesce(ap.data_eliminazione, dpsu.data_fine_validita)::date+1,
+/*p.data_attivazione::date, 
+p.data_dismissione::date, */
 coalesce(ap.ripasso_fittizio,0) as ripasso_fittizio               
-from (select num_seq, id_asta_percorso, id_percorso, id_asta, data_inserimento, frequenza, ripasso_fittizio from elem.aste_percorso ap 
+from (select num_seq, id_asta_percorso, id_percorso, id_asta,
+data_inserimento, null as data_eliminazione, frequenza, ripasso_fittizio from elem.aste_percorso ap 
 union 
-select num_seq, id_asta_percorso, id_percorso, id_asta, data_inserimento, frequenza, 0 as ripasso_fittizio  from history.aste_percorso ap)
+select num_seq, id_asta_percorso, id_percorso, id_asta,
+data_inserimento, data_eliminazione, frequenza, 0 as ripasso_fittizio  from history.aste_percorso ap)
 ap  
 join elem.percorsi p on p.id_percorso = ap.id_percorso 
 join anagrafe_percorsi.date_percorsi_sit_uo dpsu on dpsu.id_percorso_sit = p.id_percorso 
@@ -221,7 +230,8 @@ join etl.frequenze_ok fo2 on fo2.cod_frequenza = p.frequenza
 left join etl.frequenze_ok fo3 on fo3.cod_frequenza = (p.frequenza-ap.frequenza)
 join elem.servizi s on s.id_servizio = p.id_servizio
 where p.cod_percorso = %s
-and to_date(%s, 'YYYYMMDD') between dpsu.data_inizio_validita and dpsu.data_fine_validita 
+and to_date(%s, 'YYYYMMDD') /*between dpsu.data_inizio_validita and dpsu.data_fine_validita */
+between ap.data_inserimento::date+1 and coalesce(ap.data_eliminazione, dpsu.data_fine_validita)::date+1 
 and s.riempimento = 0
 order by p.cod_percorso, ap.num_seq'''
     
@@ -653,9 +663,16 @@ if __name__ == "__main__":
     #main('544611',	'0201245001',	'20250314') # consuntivazione su totem presente
     #main('478967',	'0201011001',	'20250103') # consuntivazione su totem assente
     
+    
+    #0203005001-20250923-300
+    #main('711763',	'0203005001',	'20250923', 'dati_persi') # consuntivazione su totem assente
+    
+
+    
     arg1 = sys.argv[1]
     arg2 = sys.argv[2]
     arg3 = sys.argv[3]
     arg4 = sys.argv[4]
     # Call main function
     main(arg1, arg2, arg3, arg4)
+    
