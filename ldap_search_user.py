@@ -48,14 +48,17 @@ import ldap
 
 import logging
 
-filename = inspect.getframeinfo(inspect.currentframe()).filename
-path = os.path.dirname(os.path.abspath(filename))
 
+
+filename = inspect.getframeinfo(inspect.currentframe()).filename
+#path = os.path.dirname(os.path.abspath(filename))
+path1 = os.path.dirname(os.path.dirname(os.path.abspath(filename)))
+path=os.path.dirname(sys.argv[0]) 
+path1 = os.path.dirname(os.path.dirname(os.path.abspath(filename)))
+nome=os.path.basename(__file__).replace('.py','')
 #tmpfolder=tempfile.gettempdir() # get the current temporary directory
-logfile='{}/log/ldap.log'.format(path)
-errorfile='{}/log/ldap_error.log'.format(path)
-#if os.path.exists(logfile):
-#    os.remove(logfile)
+logfile='{0}/log/{1}.log'.format(path,nome)
+errorfile='{0}/log/error_{1}.log'.format(path,nome)
 
 '''logging.basicConfig(
     #handlers=[logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')],
@@ -102,9 +105,36 @@ f_handler.setFormatter(cc_format)
 # update con la mail
 query_update='UPDATE util.sys_users SET email= %s WHERE id_user=%s'
 
+query_update_ns='UPDATE util_ns.sys_users SET email= %s WHERE id_user=%s'
+
+
+query_upsert_ns="""INSERT INTO util_ns.sys_users (
+    domain_name, 
+    "name",
+    id_role,
+    last_access,
+    id_user,
+    email) 
+    VALUES 
+    (
+        %s,
+        %s,
+        %s,
+        %s,
+        %s,
+        %s
+    )
+    ON CONFLICT (id_user)
+    DO UPDATE  
+    SET domain_name=EXCLUDED.domain_name, 
+    "name"=EXCLUDED."name", 
+    id_role=EXCLUDED.id_role, 
+    last_access=EXCLUDED.last_access, 
+    email=EXCLUDED.email;"""
+
 
 # upsert della tabella sys_users_addons (poi sarà da spostare)
-query_upsert_addons="""INSERT INTO etl.sys_users_addons 
+query_upsert_addons="""INSERT INTO util_ns.sys_users_addons 
 (id_user, 
 esternalizzati, sovrariempimenti,
 sovrariempimenti_admin,
@@ -124,8 +154,17 @@ def main():
                         user=user,
                         password=pwd,
                         host=host)
+    
+    logger.info('Connessione al db SIT TEST')
+    conn_test = psycopg2.connect(dbname=db_test,
+                        port=port,
+                        user=user,
+                        password=pwd,
+                        host=host)
 
     curr = conn.cursor()
+    curr_ns = conn.cursor()
+    curr_test = conn_test.cursor()
     #conn.autocommit = True
     ###################################################################
 
@@ -161,6 +200,8 @@ def main():
             
             # update mail
             curr.execute(query_update,(mail, id1,))
+
+            curr_ns.execute(query_update_ns,(mail, id1,))
             
             
             conn.commit()
@@ -174,6 +215,7 @@ def main():
     
     
     # faccio secondo giro su tutti utenti 
+    logger.info('Faccio  giro su tutti utenti per aggiungerli la riga in sys_users_addons')
     query_select2="select * from util.sys_users su where domain_name = 'DSI' "
     try:
         curr.execute(query_select2)
@@ -185,10 +227,28 @@ def main():
         user1=uu[1]
         id1=uu[4]
         # upsert sys_users_addons
+        curr.execute(query_upsert_ns,(uu[0],uu[1],uu[2],uu[3],uu[4], uu[5],))
         curr.execute(query_upsert_addons,(id1,))
         
         conn.commit()
+    
+    # faccio secondo giro su tutti utenti in test
+    logger.info('Faccio  giro su tutti utenti di test per aggiungerli la riga in sys_users_addons')
+
+    try:
+        curr_test.execute(query_select2)
+        users_test=curr_test.fetchall()
+    except Exception as e:
+        logging.error(e)
+    
+    for uut in users_test:
+        user1_test=uut[1]
+        id1_test=uut[4]
+        # upsert sys_users_addons
+        curr_test.execute(query_upsert_ns,(uu[0],uu[1],uu[2],uu[3],uu[4], uu[5],))
+        curr_test.execute(query_upsert_addons,(id1_test,))
         
+        conn_test.commit()
         
     
     # check se c_handller contiene almeno una riga 
@@ -196,7 +256,10 @@ def main():
     logger.info("chiudo le connessioni in maniera definitiva")
 
     curr.close()
+    curr_ns.close()
+    curr_test.close()
     conn.close()
+    conn_test.close()
 
 
 
