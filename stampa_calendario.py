@@ -19,7 +19,7 @@ locale.setlocale(locale.LC_TIME, 'it_IT.UTF-8')  # su Windows potrebbe essere 'I
 
 
 def genera_calendario_annuale(anno):
-    file_pdf = f'calendario_{anno}.pdf'
+    file_pdf = f'Calendario_{anno}.pdf'
     c = canvas.Canvas(file_pdf, pagesize=A4)
     width, height = A4
 

@@ -7,6 +7,8 @@ variazioni/*.csv
 variazioni/*.xlsx
 
 
+Calendario_*.pdf
+
 TAG/log/*.log
 
 TREG/log/*.log
@@ -20,6 +22,7 @@ TREG/download/*.csv
 
 EKOVISION/preconsuntivazioni/*.csv
 EKOVISION/consuntivazioni/*.csv
+EKOVISION/consuntivazioni/dati_persi/*.csv
 EKOVISION/timbrature/*.csv
 EKOVISION/assenze/*.csv
 EKOVISION/pesi/*.csv
