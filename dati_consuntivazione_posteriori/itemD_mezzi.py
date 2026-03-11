@@ -162,14 +162,14 @@ def main():
     """
     
     
-    
-    select_messaggi='''select  targa, 
+    # !!! ATTENZIONE A TOGLIERE EVENTUALI SPAZI NELLA TARGA CHE POTREBBERO CREARE PROBLEMI IN SEGUITO
+    select_messaggi='''select replace(targa, ' ', '') as targa,
         min(data_ora) as primo_messaggio, 
         max(data_ora) as ultimo_messaggio, 
         count(data_ora) as numero_messaggi
         from tellus.dettaglio_eventi de
         where data_ora >= to_date('20240919', 'YYYYMMDD')
-        group by targa 
+        group by replace(targa, ' ', '') 
         order by 2'''
             
     
@@ -183,8 +183,8 @@ def main():
     
     for lm in lista_mezzi: 
         if len(lm[0].split("-"))==2:
-            sportello=lm[0].split("-")[0]
-            targa=lm[0].split("-")[1]
+            sportello=lm[0].split("-")[0].strip()
+            targa=lm[0].split("-")[1].strip( )
             logger.debug(sportello)
             upsert='''INSERT INTO tellus.mezzi_itemd (targa, sportello, data_primo_messaggio, data_ultimo_messaggio)
             VALUES (%s, %s, %s, %s) ON CONFLICT (targa) DO UPDATE
