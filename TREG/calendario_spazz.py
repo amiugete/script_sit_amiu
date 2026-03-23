@@ -6,7 +6,8 @@
 
 '''
 Scopo dello script è lavorare giorno per giorno e inviare i dati a TREG a partire da una data che legge dal DB
-
+Inoltre fa un insert su SIT nella tabella consunt.report_raccolta con i dati che invia a TREG da utilizzare per i report
+da inviare a CM tramite il Duale
 
 PUNTI DI PARTENZA: 
 
@@ -54,13 +55,11 @@ import json
 
 from datetime import date, datetime, timedelta, timezone, time
 
-import locale
 
-import xlsxwriter
 
 import psycopg2
+from psycopg2.extras import execute_values
 
-import cx_Oracle
 
 currentdir = os.path.dirname(os.path.realpath(__file__))
 parentdir = os.path.dirname(currentdir)
@@ -171,6 +170,27 @@ def convert_decimal(obj):
 #variabile che specifica se devo fare test ekovision oppure no
 test_ekovision=0
 
+insert_sql_sit= '''
+INSERT INTO consunt.report_spazz (
+    trac_code, cod_percorso, id_via,
+    id_asta, lung_km, nota_asta,
+    data_programmata, orario_progr,
+    tipo_spazz, id_asta_percorso) 
+    VALUES %s
+    ON CONFLICT (trac_code, cod_percorso, id_asta_percorso) 
+    /* or you may use [DO NOTHING;] */ DO UPDATE 
+    SET cod_percorso=EXCLUDED.cod_percorso,
+    id_via=EXCLUDED.id_via,
+    id_asta=EXCLUDED.id_asta,
+    lung_km=EXCLUDED.lung_km,
+    nota_asta=EXCLUDED.nota_asta,
+    data_programmata=EXCLUDED.data_programmata,
+    orario_progr=EXCLUDED.orario_progr, 
+    tipo_spazz=EXCLUDED.tipo_spazz,
+    id_asta_percorso = EXCLUDED.id_asta_percorso ;
+'''
+
+
 
 
 
@@ -180,6 +200,13 @@ def main():
 
     
     logger.info('Il PID corrente è {0}'.format(os.getpid()))
+
+
+    #definisco una variabile insert_treg 
+    # se 1 invia i dati anche a TREG
+    # se 0 non invia i dati a TREG
+    insert_treg = 1
+
 
     # abbiamo notato che ogni tanto si incarta nel fare l'upload delle liste di wastcollection quindi lo gestiamo con più tentativi
     MAX_RETRIES = 5  # Numero massimo di tentativi
@@ -231,7 +258,7 @@ FROM treg_eko.last_import_treg_spazz where commit_code=200 and deleted = false; 
         data_start=gma[0]
         logger.debug('{} era {}'.format(data_start, data_start.strftime('%A')))
 
-    #data_start = datetime.strptime('2025-02-01', "%Y-%m-%d").date()
+    #data_start = datetime.strptime('2026-03-20', "%Y-%m-%d").date() # da utilizzare per debug / lanciare manualmente
     fine_ciclo=oggi
     
     #fine_ciclo = datetime.strptime('20250131', '%Y%m%d').date()
@@ -245,28 +272,30 @@ FROM treg_eko.last_import_treg_spazz where commit_code=200 and deleted = false; 
     while  data_start <= fine_ciclo:
         logger.info('Processo il giorno {}'.format(data_start))
 
-        ########################
-        #recupero import id TREG
-        ########################
-        guid = uuid.uuid4()
-        logger.debug(str(guid))
-        #logger.debug(guid.type)
-        #json_id={'id': '{}'.format(str(guid))}
-        json_id={'id': str(guid)}
-        api_url_begin_upload='{}atrif/api/v1/tobin/b2b/process/rifqt-sweepings/begin-upload/av1'.format(url_ws_treg)          
-        response = requests.post(api_url_begin_upload, json=json_id, headers={'accept':'*/*', 
-                                                                                'mde': 'PROD',
-                                                                                'Authorization': 'EIP {}'.format(token),
-                                                                                'Content-Type': 'application/json'})
-        importId=response.json()['importId']
-        #exit()
-        
-        logger.info('ImportId = {}'.format(importId))
-        
-        
-        # inizializzo un check 
-        # dovrebbe rimanere 0 per garantirmi di fare il commit solo di roba pulita 
-        check_error_upload=0
+
+        if insert_treg == 1 :
+            ########################
+            #recupero import id TREG
+            ########################
+            guid = uuid.uuid4()
+            logger.debug(str(guid))
+            #logger.debug(guid.type)
+            #json_id={'id': '{}'.format(str(guid))}
+            json_id={'id': str(guid)}
+            api_url_begin_upload='{}atrif/api/v1/tobin/b2b/process/rifqt-sweepings/begin-upload/av1'.format(url_ws_treg)          
+            response = requests.post(api_url_begin_upload, json=json_id, headers={'accept':'*/*', 
+                                                                                    'mde': 'PROD',
+                                                                                    'Authorization': 'EIP {}'.format(token),
+                                                                                    'Content-Type': 'application/json'})
+            importId=response.json()['importId']
+            #exit()
+            
+            logger.info('ImportId = {}'.format(importId))
+            
+            
+            # inizializzo un check 
+            # dovrebbe rimanere 0 per garantirmi di fare il commit solo di roba pulita 
+            check_error_upload=0
         
         
         ##################################
@@ -281,12 +310,21 @@ FROM treg_eko.last_import_treg_spazz where commit_code=200 and deleted = false; 
         logger.info('La settimana è {}'.format(check_s))
         
         query_elenco_percorsi_spazz='''
-        select cod_percorso, versione_testata, fo.freq_binaria, freq_settimane, id_turno, at2.gestione_arera 
+        select ep.cod_percorso, ep.versione_testata, 
+        fo.freq_binaria, ep.freq_settimane,
+        ep.id_turno, at2.gestione_arera,
+        ep.descrizione,
+            concat(
+            lpad(t.inizio_ora::text,2,'0'), ':', lpad(t.inizio_minuti::text,2,'0'),
+            ' - ',
+            lpad(t.fine_ora::text,2,'0'), ':', lpad(t.fine_minuti::text,2,'0')) as orario, 
+            ep.id_tipo
             from anagrafe_percorsi.elenco_percorsi ep 
             join anagrafe_percorsi.anagrafe_tipo at2 on at2.id = ep.id_tipo
+            join elem.turni t on t.id_turno = ep.id_turno
             join etl.frequenze_ok fo on fo.cod_frequenza = ep.freq_testata 
             where %s between data_inizio_validita and (data_fine_validita - interval '1' day) 
-            and gestione_arera = 't'
+            /*and gestione_arera = 't'*/
             and at2.id_famiglia in (2,3) /* consideriamo i soli servizi igiene */ 
             '''
 
@@ -317,7 +355,11 @@ FROM treg_eko.last_import_treg_spazz where commit_code=200 and deleted = false; 
             
             # !!!!!!!!!!!!!!!!!!!!!!!! DA AGGIUNGERE  CONDIZIONE SUL SERVIZIO ARERA  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             if tappa_prevista(data_start,  ep[2])==1 and (ep[3]=='T' or ep[3]==check_s): 
-                dict_percorsi[ep[0]]=ep[4]
+                # turno ep[4]
+                # descr_percorso ep[6]
+                # gestione_arera ep[5]
+                # orario ep[7]
+                dict_percorsi[ep[0]]=[ep[4],ep[6], ep[5], ep[7]]
             
             '''
             i+=1
@@ -330,8 +372,8 @@ FROM treg_eko.last_import_treg_spazz where commit_code=200 and deleted = false; 
         
         #logger.debug(dict_percorsi)
         #exit()   
-        # c è la chiave (codice turno)
-        # t è il turno      
+        # c è la chiave (codice percorso)
+        # t è il valore che in questo caso è una lista con id_turno, desrizione, gestione_arera, orario       
         for c, t in dict_percorsi.items():
             #logger.debug(c + ' : ' + str(t))
 
@@ -351,7 +393,9 @@ FROM treg_eko.last_import_treg_spazz where commit_code=200 and deleted = false; 
             c.cod_istat as istatCode, 
             min(tab.data_inizio) as data_inizio,
             max(tab.data_fine) as data_fine,
-            ep2.giorno_competenza
+            ep2.giorno_competenza, 
+            tab.nota, 
+            tab.id_asta_percorso 
             from 
             (
                 SELECT codice_modello_servizio, ordine, objecy_type, 
@@ -397,7 +441,9 @@ FROM treg_eko.last_import_treg_spazz where commit_code=200 and deleted = false; 
             aa.id_via ,
             v.nome,
             ep2.giorno_competenza,
-            c.cod_istat
+            c.cod_istat, 
+            tab.nota, 
+            id_asta_percorso
             '''
             
             try:
@@ -407,8 +453,13 @@ FROM treg_eko.last_import_treg_spazz where commit_code=200 and deleted = false; 
                 logger.error(query_elementi_percorso)
                 logger.error(e)
             
-
+            # lista per TREG
             list_sweeping=[]
+            
+            
+            #lista per importzione su SIT nella tabella consunt.report_raccolta
+            list_report_spazz_sit=[]
+            
             # popolo tratti_sit
             for eep in elenco_elementi_percorso:
                 # verifico se in frequenza con la solita funzione
@@ -416,134 +467,175 @@ FROM treg_eko.last_import_treg_spazz where commit_code=200 and deleted = false; 
                     # questa sarà da passare a TREG, le altre no
                 curr1 = conn.cursor()
                 
-                sweeping={
-                    'traceabilityCode': '{0}_{1}_{2}'.format(eep[4],data_start.strftime('%Y%m%d'),t),
-                    'kilometersTravelled': eep[2],
-                    'areaType':str(eep[3]),
-                    'areaCode': str(eep[4]),
-                    'streetCode': str(eep[5]),
-                    'streetDescription':str(eep[6]),
-                    'programmingStartDate':programming_start_ending_date(curr1, data_start, t, eep[10], logger)[0],
-                    'programmingEndingDate':programming_start_ending_date(curr1, data_start, t, eep[10], logger)[1],
-                    'year':int(programming_start_ending_date(curr1, data_start, t, eep[10], logger)[2]),
-                    'istatCode': str(eep[7]) 
+                trac_code= '{0}_{1}_{2}'.format(eep[4],data_start.strftime('%Y%m%d'),t[0])
+                
+                
+                if insert_treg == 1 and t[2] == True:
+                    sweeping={
+                        'traceabilityCode': trac_code,
+                        'kilometersTravelled': eep[2],
+                        'areaType':str(eep[3]),
+                        'areaCode': str(eep[4]),
+                        'streetCode': str(eep[5]),
+                        'streetDescription':str(eep[6]),
+                        'programmingStartDate':programming_start_ending_date(curr1, data_start, t[0], eep[10], logger)[0],
+                        'programmingEndingDate':programming_start_ending_date(curr1, data_start, t[0], eep[10], logger)[1],
+                        'year':int(programming_start_ending_date(curr1, data_start, t[0], eep[10], logger)[2]),
+                        'istatCode': str(eep[7]) 
+                    }
+                    list_sweeping.append(sweeping)
+                
+            
+            
+                #c codice percorso (chiave dizionario)                             
+                # eep[5] id_via
+                
+                # eep[4] id_asta
+                # eep[2] lung_km
+                
+                # eep[11] nota_asta
+                # data_start data_programmata
+                # t[3] orario_programmato
+                
+                #  eep[3] tipo_spazz 
+                list_report_spazz_sit.append((trac_code, c, eep[5],
+                                             eep[4], eep[2], eep[11],
+                                             data_start, t[3], eep[3], 
+                                             eep[12]
+                                             ))
+            
+            
+            
+            
+            # faccio insert di tutto il percorso    
+            try:
+                execute_values(curr, insert_sql_sit, list_report_spazz_sit)
+            except Exception as e:
+                logger.error(insert_sql_sit)
+                logger.error(e)
+            
+            
+            
+            
+            if insert_treg == 1 and t[2] == True:
+                #logger.debug(f'list spazzamenti = {convert_decimal(list_sweeping)}')
+                #jsonfile='{0}/log/{1}_spazzamento.json'.format(path,c)
+                #with open(jsonfile, 'w', encoding='utf-8') as f:
+                #    json.dump(convert_decimal(list_sweeping), f, ensure_ascii=False, indent=4)
+                ########################################################
+                # upload di list_wasteCollection di un singolo percorso
+                ########################################################
+
+                #exit()
+                logger.info('Inizio upload dati del percorso {} del {}'.format(c, data_start))
+                api_url_upload='{}atrif/api/v1/tobin/b2b/process/rifqt-sweepings/upload/av1'.format(url_ws_treg)
+                # questa sarà da passare a TREG, le altre no
+                
+                body_upload={
+                    'id': str(guid),
+                    'importId': str(importId),
+                    'entities': list_sweeping
                 }
-                list_sweeping.append(sweeping)
                 
-            
-            #logger.debug(f'list spazzamenti = {convert_decimal(list_sweeping)}')
-            #jsonfile='{0}/log/{1}_spazzamento.json'.format(path,c)
-            #with open(jsonfile, 'w', encoding='utf-8') as f:
-            #    json.dump(convert_decimal(list_sweeping), f, ensure_ascii=False, indent=4)
-            ########################################################
-            # upload di list_wasteCollection di un singolo percorso
-            ########################################################
+                
+                
+                for attempt in range(1, MAX_RETRIES + 1):
+                    try:
+                        
+                        if attempt> 1:
+                            logger.warning(f"Tentativo {attempt}")
+                        
+                        # 🔁 CODICE CHE PUÒ FALLIRE
+                        response_upload = requests.post(api_url_upload, json=body_upload, headers={'accept':'*/*', 
+                                                                                'mde': 'PROD',
+                                                                                'Authorization': 'EIP {}'.format(token),
+                                                                                'Content-Type': 'application/json'})
+                        
+                        logger.debug(response_upload.text)
+                        #logger.debug(response_upload.json()['errorCount'])
+                        #exit()
+                        
+                        # controllo che non ci siano errori (nel caso mi stoppo)
+                    
+                        if response_upload.json()['errorCount']!=0:
+                            logger.error(list_sweeping)   
+                            logger.error(response_upload.text)
+                            
+                            
+                            # butto il dato su check_error_upload          
+                            check_error_upload+=response_upload.json()['errorCount']
+                        # ✅ Se funziona, esci dal ciclo
+                        break
 
-            #exit()
-            logger.info('Inizio upload dati del percorso {} del {}'.format(c, data_start))
-            api_url_upload='{}atrif/api/v1/tobin/b2b/process/rifqt-sweepings/upload/av1'.format(url_ws_treg)
-            # questa sarà da passare a TREG, le altre no
+                    except Exception as e:
+                        logger.warning(e)
+
+                        if attempt == MAX_RETRIES:
+                            logger.error("Tutti i tentativi sono falliti. Operazione interrotta.")
+                            raise ValueError(e)  # fermo l'esecuzione
+                        else:
+                            time.sleep(DELAY_SECONDS)  # Aspetta prima del prossimo tentativo 
+        
+        # commit giornata
+        conn.commit()
+        
+        
+        if insert_treg == 1:    
+            ####################################
+            # commit upload
+            ####################################
+            logger.info('Inizio il commit degli upload su TREG')
             
-            body_upload={
-                'id': str(guid),
-                'importId': str(importId),
-                'entities': list_sweeping
-            }
-            
-            
-            
-            for attempt in range(1, MAX_RETRIES + 1):
+            if check_error_upload==0:
+                api_url_commit_upload='{}atrif/api/v1/tobin/b2b/process/rifqt-sweepings/commit-upload/av1'.format(url_ws_treg)
+                # questa sarà da passare a TREG, le altre no
+                
+                body_commit_upload={
+                    'id': str(guid),
+                    'importId': str(importId)
+                }
+                
+                
+                response_commit_upload = requests.post(api_url_commit_upload, json=body_commit_upload, headers={'accept':'*/*', 
+                                                                                'mde': 'PROD',
+                                                                                'Authorization': 'EIP {}'.format(token),
+                                                                                'Content-Type': 'application/json'})
+                logger.info('Fine commit - Risposta TREG: {}'.format(response_commit_upload.text))
+                
+                
+                query_insert='''INSERT INTO treg_eko.last_import_treg_spazz 
+                    (data_last_calendar, last_update,
+                    request_id_amiu, importid_treg, 
+                    commit_code, commit_message) 
+                    VALUES(to_date(%s, 'YYYYMMDD'), now(), 
+                    %s, %s, 
+                    %s, %s);'''
                 try:
-                    
-                    if attempt> 1:
-                        logger.warning(f"Tentativo {attempt}")
-                    
-                    # 🔁 CODICE CHE PUÒ FALLIRE
-                    response_upload = requests.post(api_url_upload, json=body_upload, headers={'accept':'*/*', 
-                                                                            'mde': 'PROD',
-                                                                            'Authorization': 'EIP {}'.format(token),
-                                                                            'Content-Type': 'application/json'})
-                    
-                    logger.debug(response_upload.text)
-                    #logger.debug(response_upload.json()['errorCount'])
-                    #exit()
-                    
-                    # controllo che non ci siano errori (nel caso mi stoppo)
-                
-                    if response_upload.json()['errorCount']!=0:
-                        logger.error(list_sweeping)   
-                        logger.error(response_upload.text)
-                        
-                        
-                        # butto il dato su check_error_upload          
-                        check_error_upload+=response_upload.json()['errorCount']
-                    # ✅ Se funziona, esci dal ciclo
-                    break
-
+                    curr.execute(query_insert, (data_start.strftime('%Y%m%d'),
+                                                str(guid), str(importId),
+                                                response_commit_upload.status_code, response_commit_upload.text,))
+                    conn.commit()
                 except Exception as e:
-                    logger.warning(e)
-
-                    if attempt == MAX_RETRIES:
-                        logger.error("Tutti i tentativi sono falliti. Operazione interrotta.")
-                        raise ValueError(e)  # fermo l'esecuzione
-                    else:
-                        time.sleep(DELAY_SECONDS)  # Aspetta prima del prossimo tentativo 
-        
-        ####################################
-        # commit upload
-        ####################################
-        logger.info('Inizio il commit degli upload su TREG')
-        
-        if check_error_upload==0:
-            api_url_commit_upload='{}atrif/api/v1/tobin/b2b/process/rifqt-sweepings/commit-upload/av1'.format(url_ws_treg)
-            # questa sarà da passare a TREG, le altre no
-            
-            body_commit_upload={
-                'id': str(guid),
-                'importId': str(importId)
-            }
-            
-            
-            response_commit_upload = requests.post(api_url_commit_upload, json=body_commit_upload, headers={'accept':'*/*', 
-                                                                            'mde': 'PROD',
-                                                                            'Authorization': 'EIP {}'.format(token),
-                                                                            'Content-Type': 'application/json'})
-            logger.info('Fine commit - Risposta TREG: {}'.format(response_commit_upload.text))
-              
-            
-            query_insert='''INSERT INTO treg_eko.last_import_treg_spazz 
-                (data_last_calendar, last_update,
-                request_id_amiu, importid_treg, 
-                commit_code, commit_message) 
-                VALUES(to_date(%s, 'YYYYMMDD'), now(), 
-                %s, %s, 
-                %s, %s);'''
-            try:
-                curr.execute(query_insert, (data_start.strftime('%Y%m%d'),
-                                            str(guid), str(importId),
-                                            response_commit_upload.status_code, response_commit_upload.text,))
-                conn.commit()
-            except Exception as e:
-                logger.error(query_insert)
-                logger.error(e)  
-            
-            
-            
-                  
-        else: 
-            logger.warning('Sono presenti errori, non faccio il commit')                
-            query_insert='''INSERT INTO treg_eko.last_import_treg_spazz 
-                (data_last_calendar, last_update,
-                request_id_amiu, importid_treg) 
-                VALUES(to_date(%s, 'YYYYMMDD'), now(), 
-                %s, %s);'''
-            try:
-                curr.execute(query_insert, (data_start.strftime('%Y%m%d'),
-                                            str(guid), str(importId),))
-                conn.commit()
-            except Exception as e:
-                logger.error(query_insert)
-                logger.error(e)    
+                    logger.error(query_insert)
+                    logger.error(e)  
+                
+                
+                
+                    
+            else: 
+                logger.warning('Sono presenti errori, non faccio il commit')                
+                query_insert='''INSERT INTO treg_eko.last_import_treg_spazz 
+                    (data_last_calendar, last_update,
+                    request_id_amiu, importid_treg) 
+                    VALUES(to_date(%s, 'YYYYMMDD'), now(), 
+                    %s, %s);'''
+                try:
+                    curr.execute(query_insert, (data_start.strftime('%Y%m%d'),
+                                                str(guid), str(importId),))
+                    conn.commit()
+                except Exception as e:
+                    logger.error(query_insert)
+                    logger.error(e)    
 
             
             
