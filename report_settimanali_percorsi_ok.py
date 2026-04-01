@@ -42,64 +42,6 @@ from email.mime.text import MIMEText
 from invio_messaggio import *
 
 
-#cerco la directory corrente
-currentdir = os.path.dirname(os.path.realpath(__file__))
-parentdir = os.path.dirname(currentdir)
-sys.path.append(parentdir)
-
-filename = inspect.getframeinfo(inspect.currentframe()).filename
-
-#inizializzo la variabile path
-path=currentdir
-
-# nome dello script python
-nome=os.path.basename(__file__).replace('.py','')
-
-
-
-giorno_file=datetime.datetime.today().strftime('%Y%m%d_%H%M%S')
-
-# inizializzo i nomi dei file di log (per capire cosa stia succedendo)
-logfile='{0}/log/{2}_{1}.log'.format(path,nome, giorno_file)
-errorfile='{0}/log/{2}_error_{1}.log'.format(path,nome, giorno_file)
-
-
-
-
-
-
-
-# Create a custom logger
-logging.basicConfig(
-    level=logging.DEBUG,
-    handlers=[
-    ]
-)
-
-logger = logging.getLogger()
-
-# Create handlers
-c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-#f_handler = logging.StreamHandler()
-f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
-
-
-c_handler.setLevel(logging.ERROR)
-f_handler.setLevel(logging.DEBUG)
-
-
-# Add handlers to the logger
-logger.addHandler(c_handler)
-logger.addHandler(f_handler)
-
-
-cc_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
-
-c_handler.setFormatter(cc_format)
-f_handler.setFormatter(cc_format)
-
-
-
 def sett(giorno):
     if giorno%7==0:
         set=int(giorno/7)
@@ -165,7 +107,55 @@ def copy_format(book, fmt):
 
 
 
-def main(arg1, arg2, arg3, arg4): 
+def main(arg1, arg2, arg3, arg4):
+
+    #cerco la directory corrente
+    currentdir = os.path.dirname(os.path.realpath(__file__))
+    parentdir = os.path.dirname(currentdir)
+    sys.path.append(parentdir)
+
+    filename = inspect.getframeinfo(inspect.currentframe()).filename
+
+    #inizializzo la variabile path
+    path=currentdir
+
+    # nome dello script python
+    nome=os.path.basename(__file__).replace('.py','')
+
+    giorno_file=datetime.datetime.today().strftime('%Y%m%d_%H%M%S')
+
+    # inizializzo i nomi dei file di log (per capire cosa stia succedendo)
+    logfile='{0}/log/{2}_{1}.log'.format(path,nome, giorno_file)
+    errorfile='{0}/log/{2}_error_{1}.log'.format(path,nome, giorno_file)
+
+    # Create a custom logger
+    logging.basicConfig(
+        level=logging.DEBUG,
+        handlers=[
+        ]
+    )
+
+    logger = logging.getLogger()
+
+    # Create handlers
+    c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
+    #f_handler = logging.StreamHandler()
+    f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+
+
+    c_handler.setLevel(logging.ERROR)
+    f_handler.setLevel(logging.DEBUG)
+
+
+    # Add handlers to the logger
+    logger.addHandler(c_handler)
+    logger.addHandler(f_handler)
+
+
+    cc_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
+
+    c_handler.setFormatter(cc_format)
+    f_handler.setFormatter(cc_format)
     
     # leggo l'input
     try: 
