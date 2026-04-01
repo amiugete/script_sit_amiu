@@ -5,9 +5,9 @@
 # Roberto Marzocchi
 
 '''
-Lo script si occupa di scaricare elenco mezzi da EKOVISION e di scriverlo sul DB del totem
+Lo script si occupa di scaricare elenco persone da EKOVISION e di scriverlo sul DB del totem
 
-Ci serve per sapere ID ekovision e targa del mezzo associato
+Ci serve per sapere ID ekovision e matricola del mezzo associato
 
 '''
 
