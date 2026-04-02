@@ -109,6 +109,40 @@ from invio_messaggio import *
 import csv
 
 
+# query oracle
+select_personale= '''SELECT * FROM PERSONALE_EKOVISION pe WHERE pe.ID_EKOVISION = :id_ekovision'''
+
+insert_personale= '''
+INSERT INTO personale_ekovision (
+    id_ekovision, 
+    nome, 
+    cognome, 
+    cf, 
+    matricola, 
+    dt_nascita, 
+    id_categoria_lavoratore, 
+    id_sede_trasp, 
+    des_sede_trasp,
+    update_data
+    ) 
+VALUES (:id_ekovision, :nome, :cognome, :cf, :matricola, :dt_nascita, :id_categoria_lavoratore, :id_sede_trasp, :des_sede_trasp, sysdate)
+'''
+
+update_personale= '''
+UPDATE personale_ekovision SET
+    nome = :nome, 
+    cognome = :cognome,             
+    cf = :cf,
+    matricola = :matricola,
+    dt_nascita = :dt_nascita,
+    id_categoria_lavoratore = :id_categoria_lavoratore,
+    id_sede_trasp = :id_sede_trasp,
+    des_sede_trasp = :des_sede_trasp,
+    update_data = sysdate
+WHERE id_ekovision = :id_ekovision
+'''
+
+
 
 def empty_to_none(obj):
     '''
@@ -174,7 +208,22 @@ def main():
 
     curr_c = conn_c.cursor()
     
-    
+    if test ==1:
+        logger.info('Sono in test, faccio anche upsert della tabella PERSONALE_EKOVISION della UO')
+        
+        # Mi connetto al DB oracle UO
+        cx_Oracle.init_oracle_client(percorso_oracle) # necessario configurare il client oracle correttamente
+        #cx_Oracle.init_oracle_client() # necessario configurare il client oracle correttamente
+        parametri_con='{}/{}@//{}:{}/{}'.format(user_uo,pwd_uo, host_uo,port_uo,service_uo)
+        logger.debug(parametri_con)
+        con = cx_Oracle.connect(parametri_con)
+        logger.info("Versione ORACLE: {}".format(con.version))
+        
+        cur = con.cursor()
+        
+        cur.execute("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYYMMDD'")
+        cur.execute("ALTER SESSION SET NLS_LANGUAGE = 'ITALIAN'")
+        cur.execute("ALTER SESSION SET NLS_TERRITORY = 'ITALY'")
     
 
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
@@ -240,6 +289,52 @@ def main():
         except Exception as e:
             logger.error(query_upsert_personale)
             logger.error(e)
+        
+        
+        if test ==1:
+            
+
+            # cerco se esiste id
+            try:
+                cur.execute(select_personale, {'id_ekovision': letture2['data'][0]['personale'][k]['id']})
+                personale_oracle=cur.fetchone()
+            except Exception as e:
+                logger.error(select_personale)
+                logger.error(e)
+            
+            if personale_oracle is None:
+                logger.info('Il personale con id_ekovision {} non esiste, lo inserisco'.format(letture2['data'][0]['personale'][k]['id']))
+                try:
+                    cur.execute(insert_personale, {'id_ekovision': letture2['data'][0]['personale'][k]['id'],   
+                            'nome': letture2['data'][0]['personale'][k]['nome'],
+                            'cognome': letture2['data'][0]['personale'][k]['cognome'],
+                            'cf': letture2['data'][0]['personale'][k]['cf'],
+                            'matricola': letture2['data'][0]['personale'][k]['matricola'],
+                            'dt_nascita': letture2['data'][0]['personale'][k]['dt_nascita'],
+                            'id_categoria_lavoratore': letture2['data'][0]['personale'][k]['id_categ_lavoratore'],
+                            'id_sede_trasp': letture2['data'][0]['personale'][k]['id_sede_trasp'],
+                            'des_sede_trasp': letture2['data'][0]['personale'][k]['des_sede_trasp']
+                            })
+                except Exception as e:
+                    logger.error(insert_personale)
+                    logger.error(e)
+            else:
+                logger.info('Il personale con id_ekovision {} esiste già, lo aggiorno'.format(letture2['data'][0]['personale'][k]['id']))
+                try:
+                    cur.execute(update_personale, {'id_ekovision': letture2['data'][0]['personale'][k]['id'],   
+                            'nome': letture2['data'][0]['personale'][k]['nome'],
+                            'cognome': letture2['data'][0]['personale'][k]['cognome'],
+                            'cf': letture2['data'][0]['personale'][k]['cf'],
+                            'matricola': letture2['data'][0]['personale'][k]['matricola'],
+                            'dt_nascita': letture2['data'][0]['personale'][k]['dt_nascita'],
+                            'id_categoria_lavoratore': letture2['data'][0]['personale'][k]['id_categ_lavoratore'],
+                            'id_sede_trasp': letture2['data'][0]['personale'][k]['id_sede_trasp'],
+                            'des_sede_trasp': letture2['data'][0]['personale'][k]['des_sede_trasp']
+                            })
+                except Exception as e:
+                    logger.error(update_personale)
+                    logger.error(e)
+        
         k+=1     
     
     conn_c.commit()
@@ -249,7 +344,20 @@ def main():
     #exit()
     
     
-     # check se c_handller contiene almeno una riga 
+    
+    if test ==1:
+        logger.info('Commit UO')
+
+
+        
+        con.commit()
+        
+        
+        cur.close()
+        con.close()
+    
+    
+    # check se c_handller contiene almeno una riga 
     error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
     logger.info("chiudo le connessioni in maniera definitiva")
     
@@ -260,9 +368,7 @@ def main():
     #currc1.close()
     conn_c.close()
     
-
-
-
+    
 
 
 if __name__ == "__main__":
