@@ -1,5 +1,8 @@
 credenziali.py
 
+*.xlsx
+indicatori_ARERA.xlsx
+
 log/*.log
 log/*.txt
 
