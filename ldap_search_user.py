@@ -245,7 +245,7 @@ def main():
         user1_test=uut[1]
         id1_test=uut[4]
         # upsert sys_users_addons
-        curr_test.execute(query_upsert_ns,(uu[0],uu[1],uu[2],uu[3],uu[4], uu[5],))
+        curr_test.execute(query_upsert_ns,(uut[0],uut[1],uut[2],uut[3],uut[4], uut[5],))
         curr_test.execute(query_upsert_addons,(id1_test,))
         
         conn_test.commit()
