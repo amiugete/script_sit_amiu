@@ -178,6 +178,7 @@ http://amiuintranet.amiu.genova.it/content/accesso-server-amiugis'''.format(scri
         return 200
     else: 
         logger_name.info('Nessun errore, quindi nessun messaggio inviato')
+        os.remove(error_log_file)
         return 0
     
    
