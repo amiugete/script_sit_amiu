@@ -39,57 +39,10 @@ from recupera_token import *
 from footer_mail_idea import *
 
 #import requests
-import datetime
 
 import logging
 
-filename = inspect.getframeinfo(inspect.currentframe()).filename
-#path = os.path.dirname(os.path.abspath(filename))
 
-path=os.path.dirname(sys.argv[0]) 
-nome=os.path.basename(__file__).replace('.py','')
-#tmpfolder=tempfile.gettempdir() # get the current temporary directory
-logfile='{0}/log/{1}.log'.format(path,nome)
-errorfile='{0}/log/error_{1}.log'.format(path,nome)
-
-'''logging.basicConfig(
-    #handlers=[logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')],
-    format='%(asctime)s\t%(levelname)s\t%(message)s',
-    #filemode='w', # overwrite or append
-    #fileencoding='utf-8',
-    #filename=logfile,
-    level=logging.DEBUG)
-'''
-
-
-# Create a custom logger
-logging.basicConfig(
-    level=logging.DEBUG,
-    handlers=[
-    ]
-)
-
-logger = logging.getLogger()
-
-# Create handlers
-c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-#f_handler = logging.StreamHandler()
-f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
-
-
-c_handler.setLevel(logging.ERROR)
-f_handler.setLevel(logging.DEBUG)
-
-
-# Add handlers to the logger
-logger.addHandler(c_handler)
-logger.addHandler(f_handler)
-
-
-cc_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
-
-c_handler.setFormatter(cc_format)
-f_handler.setFormatter(cc_format)
 
 
 # MAIL - libreria per invio mail
@@ -107,6 +60,55 @@ from invio_messaggio import *
 
 
 def main():
+    
+    filename = inspect.getframeinfo(inspect.currentframe()).filename
+    #path = os.path.dirname(os.path.abspath(filename))
+
+    path=os.path.dirname(sys.argv[0]) 
+    nome=os.path.basename(__file__).replace('.py','')
+    #tmpfolder=tempfile.gettempdir() # get the current temporary directory
+    logfile='{0}/log/{1}.log'.format(path,nome)
+    errorfile='{0}/log/error_{1}.log'.format(path,nome)
+
+    '''logging.basicConfig(
+        #handlers=[logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')],
+        format='%(asctime)s\t%(levelname)s\t%(message)s',
+        #filemode='w', # overwrite or append
+        #fileencoding='utf-8',
+        #filename=logfile,
+        level=logging.DEBUG)
+    '''
+
+
+    # Create a custom logger
+    logging.basicConfig(
+        level=logging.DEBUG,
+        handlers=[
+        ]
+    )
+
+    logger = logging.getLogger()
+
+    # Create handlers
+    c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
+    #f_handler = logging.StreamHandler()
+    f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+
+
+    c_handler.setLevel(logging.ERROR)
+    f_handler.setLevel(logging.DEBUG)
+
+
+    # Add handlers to the logger
+    logger.addHandler(c_handler)
+    logger.addHandler(f_handler)
+
+
+    cc_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
+
+    c_handler.setFormatter(cc_format)
+    f_handler.setFormatter(cc_format)
+    
     logger.info('Il PID corrente è {0}'.format(os.getpid()))
     #################################################################
     logger.info("Recupero il token")
@@ -432,8 +434,10 @@ def main():
         # Create a multipart message and set headers
         message = MIMEMultipart()
         message["From"] = 'no_reply@amiu.genova.it'
-        message["To"] = receiver_email
-        message["To"] = mail_cc
+        #message["To"] = receiver_email
+        
+        message["To"] = indirizzo_mail_idea
+        message["Cc"] = mail_cc
         ####################################################
         message["Subject"] = 'WARNING - Ultimo svuotamento registrato > 24 ore'
         message["Bcc"] = mail_cc  # Recommended for mass emails
@@ -456,15 +460,17 @@ def main():
         immagine(message,logoname)
         
         #text = message.as_string()
-
+        # vorrei evitare che mi arrivino mail ogni mezz'ora sabato e domenica (inutile)
+        
         logger.info("Richiamo la funzione per inviare mail")
-        invio=invio_messaggio(message)
-        logger.info(invio)
-        if invio==200:
-            logger.info('Messaggio inviato')
+        if datetime.datetime.today().weekday()< 5:  # 0=lunedì, 6=domenica
+            invio=invio_messaggio(message)
+            logger.info(invio)
+            if invio==200:
+                logger.info('Messaggio inviato')
 
-        else:
-            logger.error('Problema invio mail. Error:{}'.format(invio))
+            else:
+                logger.error('Problema invio mail. Error:{}'.format(invio))
 
 
     logger.info("Chiudo definitivamente la connesione al DB")
