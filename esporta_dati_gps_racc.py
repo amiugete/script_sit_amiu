@@ -174,7 +174,7 @@ def main():
             logger.error(query_dblink)
             logger.error(e)
         
-        
+        logger.info('   1 - Cancello tabella {} su amiugis se esiste'.format(mv))
         query_dblink1='''drop table if exists gps.{0}'''.format(mv) 
 
         try:
@@ -190,6 +190,7 @@ def main():
         data_ora timestamp, tipo_evento varchar,
         svuotamento integer, "data" date, geom geometry(point,4326))'''.format(mv)
 
+        logger.info('   2 - Ri-creo la tabella {} su amiugis'.format(mv))
         try:
             curr_web.execute(query_dblink2)
         except Exception as e:
@@ -198,7 +199,10 @@ def main():
 
         # faccio commit
         conn_web.commit()
-            
+
+
+    
+        logger.info('   3 - Creo chiave primaria')    
         query_dblink3='''ALTER TABLE gps.{0} 
         ADD CONSTRAINT {0}_pk PRIMARY KEY ({1})'''.format(mv, 'id')
 
@@ -208,6 +212,9 @@ def main():
             logger.error(query_dblink3)
             logger.error(e)
 
+
+       
+        logger.info('   4 - Creo indice geometrico')
         query_dblink4='''CREATE INDEX {0}_geom_idx
         ON gps.{0}
         USING GIST ({1})'''.format(mv, 'geom')
@@ -219,8 +226,11 @@ def main():
             logger.error(e)
         
         
+        logger.info('   5 - Commit pk e indici')
         # faccio commit
         conn_web.commit()
+        
+        
             
         query_dblink5='''select dblink_disconnect('conn_dblink{0}')'''.format(mv)
         
@@ -233,7 +243,10 @@ def main():
 
         #exit()
 
-
+        logger.info('Creo tabella {}_pref su amiugis'.format(mv))
+        
+        
+        logger.info('   1 - Drop if exists')
         query_dblink8='''drop table if exists gps.{0}_pref'''.format(mv) 
 
         try:
@@ -245,6 +258,8 @@ def main():
         # faccio commit
         conn_web.commit()   
         
+        
+        logger.info('   2 - La ricreo')
         # nella query devo escudere eventuali punti a cavallo fra 2 comuni lo faccio con il group by e l'having
         query_dblink6='''create table gps.{0}_pref as 
         SELECT r.id, r.tipo_mezzo, r.sportello, r.data_ora, r.tipo_evento, r.svuotamento, r."data", r.geom, 
@@ -263,7 +278,7 @@ def main():
         # faccio commit
         conn_web.commit()    
         
-        
+        logger.info('   3 - pk')
         query_dblink7='''ALTER TABLE gps.{0}_pref 
         ADD CONSTRAINT {0}_pref_pk PRIMARY KEY (id)'''.format(mv)
 
@@ -274,7 +289,7 @@ def main():
             logger.error(e)
 
         
-        
+        logger.info('   4 - Indice geometrico')
         query_dblink7='''CREATE INDEX {0}_pref_geom_idx
         ON gps.{0}_pref
         USING GIST (geom)'''.format(mv)
@@ -285,8 +300,14 @@ def main():
             logger.error(query_dblink7)
             logger.error(e)
         
+        
+        logger.info('   5 - Commit pk e indice')
         # faccio commit
         conn_web.commit()
+        
+        
+        
+        logger.info('Per finire Droppo la tabella {}'.format(mv) )
         
         
         query_drop='''drop table if exists gps.{0}'''.format(mv) 
