@@ -115,7 +115,7 @@ def get_query_attive(HOST_SERVER):
                now() - query_start AS runtime,
                wait_event_type, query, application_name, client_addr
         FROM pg_stat_activity
-        WHERE state != 'idle'
+        WHERE state = 'active'
         ORDER BY runtime DESC;
     """)
     righe = cur.fetchall()
