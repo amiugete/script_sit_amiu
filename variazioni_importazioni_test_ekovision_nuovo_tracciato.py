@@ -462,60 +462,43 @@ def main():
     cod_percorso_ok=tuple(cod_percorso)
     logger.debug(cod_percorso_ok)
     curr = conn.cursor()  
-    query_variazioni_ekovision='''select 
-codice_modello_servizio,
-coalesce((select distinct ordine from anagrafe_percorsi.v_percorsi_elementi_tratti 
-where codice_modello_servizio = tab.codice_modello_servizio 
-and codice = tab.codice
-and ripasso = tab.ripasso and data_fine is null ),1)
-as ordine,
-objecy_type, 
-  codice, quantita, lato_servizio, percent_trattamento,
-coalesce((select distinct frequenza from anagrafe_percorsi.v_percorsi_elementi_tratti 
-where codice_modello_servizio = tab.codice_modello_servizio 
-and codice = tab.codice
-and ripasso = tab.ripasso and data_fine is null),0)
-as 
-  frequenza, 
-  numero_passaggi, nota,
-  codice_qualita, codice_tipo_servizio,
-/*min(data_inizio) as data_inizio, 
-case 
-	when max(data_fine) = '20991231' then null 
-	else max(data_fine)
-end data_fine, */
-data_inizio, 
-data_fine, 
-ripasso, 
-concat(id_asta_percorso, '_', ee.id_piazzola) as id_asta_percorso,
-id_elemento_asta_percorso
-/*ripasso*/
-/*case 
-	when max(data_fine) = '20991231' then ripasso 
-	else 0
-end ripasso*/
-from (
-	  SELECT codice_modello_servizio, ordine, objecy_type, 
+    query_variazioni_ekovision='''with tab as (
+SELECT codice_modello_servizio, ordine, objecy_type, 
   codice, quantita, lato_servizio, percent_trattamento,frequenza,
   ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
   codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine, 
   id_asta_percorso, id_elemento_asta_percorso
 	 FROM anagrafe_percorsi.v_percorsi_elementi_tratti where data_inizio < coalesce(data_fine, '20991231')
-	 union 
-	   SELECT codice_modello_servizio, ordine, objecy_type, 
+union 
+SELECT codice_modello_servizio, ordine, objecy_type, 
   codice, quantita, lato_servizio, percent_trattamento,frequenza,
   ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
   codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine,
   id_asta_percorso, id_elemento_asta_percorso
 	 FROM anagrafe_percorsi.v_percorsi_elementi_tratti_ovs where data_inizio < coalesce(data_fine, '20991231')
-	 union 
-	 SELECT codice_modello_servizio, ordine, objecy_type, 
+union 
+SELECT codice_modello_servizio, ordine, objecy_type, 
   codice, quantita, lato_servizio, percent_trattamento,frequenza,
   ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
   codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine, 
   id_asta_percorso, id_elemento_asta_percorso
 	 FROM anagrafe_percorsi.mv_percorsi_elementi_tratti_dismessi where data_inizio < coalesce(data_fine, '20991231')
- ) tab
+)  
+select distinct 
+codice_modello_servizio,
+ordine,
+objecy_type, 
+tab.codice, quantita, lato_servizio, percent_trattamento,
+frequenza , 
+numero_passaggi, 
+nota,
+codice_qualita, codice_tipo_servizio,
+tab.data_inizio, 
+tab.data_fine, 
+ripasso, 
+concat(id_asta_percorso, '_', ee.id_piazzola) as id_asta_percorso,
+id_elemento_asta_percorso
+from tab
  left join (select id_piazzola, id_elemento from elem.elementi
  union 
  select id_piazzola, id_elemento from history.elementi
