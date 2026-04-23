@@ -1451,6 +1451,14 @@ from (
             workbook = xlsxwriter.Workbook(file_variazioni)
             w = workbook.add_worksheet()
 
+
+            w.set_column(0, 0, 15)  # cod_percorso
+            w.set_column(1, 1, 35)  # descrizione
+            w.set_column(2, 2, 20)  # servizio
+            w.set_column(3, 3, 20)  # ut
+            w.set_column(4, 4, 30)  # esito importazione
+            w.set_column(5, 5, 30)  # mail
+
             w.write(0, 0, 'cod_percorso') 
             w.write(0, 1, 'descrizione') 
             w.write(0, 2, 'servizio') 
@@ -1488,6 +1496,13 @@ from (
                 
             i+=1
 
+        # Auto-larghezza colonne
+        #for col, titolo in enumerate(TITOLI):
+        #    w.set_column(col, col, max(len(titolo) + 2, 14))
+
+        w.autofilter(0, 0, len(cod_percorso) +1 , 5)
+        
+        
         if len(cod_percorso)>0:
             #f.close()
             workbook.close()
