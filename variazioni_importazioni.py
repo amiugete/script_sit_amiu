@@ -1500,7 +1500,7 @@ from (
         #for col, titolo in enumerate(TITOLI):
         #    w.set_column(col, col, max(len(titolo) + 2, 14))
 
-        w.autofilter(0, 0, len(cod_percorso) +1 , 5)
+        w.autofilter(0, 0, len(cod_percorso) , 5)
         
         
         if len(cod_percorso)>0:
