@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# AMIU copyleft 2023
-# Roberto Marzocchi
+# AMIU copyleft 2026
+# Roberto Marzocchi - Roberta Fagandini
 
 '''
 Scopo dello script è lavorare giorno per giorno e inviare i dati a TREG a partire da una data che legge dal DB
