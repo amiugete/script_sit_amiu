@@ -53,6 +53,11 @@ import json
 #import pymssql
 
 from datetime import date, datetime, timedelta, timezone, time
+# per la gestione della mia zona
+import pytz
+tz_roma = pytz.timezone('Europe/Rome')
+
+
 
 import locale
 
@@ -106,6 +111,10 @@ from decimal import Decimal
 
 from treg_env import *
 
+from consuntivazione_spazz import bulk_update_consunt
+
+
+
 def convert_decimal(obj):
     if isinstance(obj, list):
         return [convert_decimal(i) for i in obj]
@@ -126,80 +135,25 @@ test_ekovision=0
 
 from psycopg2.extras import execute_values
 
-def bulk_update_consunt(cursor, updates, logger):
-    cursor.execute("""
-        CREATE TEMP TABLE tmp_consunt_update_spazz (
-            codice int8,
-            data_ora_inizio TIMESTAMP,
-            resumption_date TIMESTAMP
-        ) ON COMMIT DROP
-    """)
-
-
-    execute_values(
-        cursor,
-        """
-        INSERT INTO tmp_consunt_update_spazz
-        (resumption_date, codice, data_ora_inizio)
-        VALUES %s
-        """,
-        updates
-    )
-
-    cursor.execute("""
-        UPDATE treg_eko.consunt_ekovision ce
-        SET resumption_date = t.resumption_date
-        FROM tmp_consunt_update_spazz t
-        WHERE ce.codice = t.codice
-          AND ce.data_ora_inizio = t.data_ora_inizio
-          AND ce.causale NOT IN ('100','110')
-          AND ce.resumption_date IS DISTINCT FROM t.resumption_date
-    """)
-
-
-
-def bulk_update_consunt_tc(cursor, updates, logger):
-
-    '''
-    Gestisce update trac_code senza rallentare troppo il processo con update uno a uno,
-      creando una tabella temporanea e facendo un unico update con join
-    '''
-
-
-    cursor.execute("""
-        CREATE TEMP TABLE tmp_consunt_update_spazz_tc (
-            codice int8,
-            data_pianif_iniziale varchar,
-            cod_percorso varchar,
-            trac_code varchar
-        ) /*ON COMMIT DROP*/
-    """)
-
-
-
-    execute_values(
-        cursor,
-        """
-        INSERT INTO tmp_consunt_update_spazz_tc
-        (codice, data_pianif_iniziale, cod_percorso, trac_code)
-        VALUES %s
-        """,
-        updates
-    )
-
-    cursor.execute("""
-        UPDATE treg_eko.consunt_ekovision ce
-        SET trac_code = t.trac_code
-        FROM tmp_consunt_update_spazz_tc t
-        WHERE ce.codice = t.codice
-          AND ce.data_pianif_iniziale = t.data_pianif_iniziale
-          AND ce.codice_servizio_pred = t.cod_percorso
-          AND ce.trac_code IS DISTINCT FROM t.trac_code
-    """)
 
 
 def main():
     
+    ##################################################
+    debug = 0
+    # se non specifico id_scheda_test lavora con una query specifica dove individuo un elenco di percorsi 
+    # da correggere in base a specifiche caratteristiche
+    # ATTENZIONE in entambi i casi non scrive null nella tabella di log dei processamenti quindi il rischio e che da crontab vada in loop!!
+    
+    # volendo si può definire se fare o meno il commit in fondo 
+    
+    id_scheda_test = None # 748395
+    ##################################################
+
+
+
+    ###################################################
+    # LOGGER
     
     giorno_file=datetime.today().strftime('%Y%m%d_%H%M%S')
 
@@ -253,8 +207,8 @@ def main():
     # 1 - cerco il giono da cui partire
     query_first_day='''select min(data_last_update) from treg_eko.consunt_ekovision ce
         where ce.tipo_servizio = 'SPAZZ' and ce.data_last_update >= (
-        select coalesce(max(data_last_update), to_date('20250101', 'YYYYMMDD')) from treg_eko.last_import_treg_spazz_cons
-        where commit_code=200 and deleted = false
+        select coalesce(max(data_last_update), to_date('20250101', 'YYYYMMDD')) 
+        from consunt.last_import_sit_spazz_cons
         );'''
 
     # 2 - estraggo i percorsi dello spazzamento
@@ -269,7 +223,7 @@ def main():
         join anagrafe_percorsi.anagrafe_tipo at2 on at2.id = ep.id_tipo
         join etl.frequenze_ok fo on fo.cod_frequenza = ep.freq_testata 
         where ce.data_last_update > %s
-        and gestione_arera = 't'
+        and at2.gestione_duale = 't'
         and at2.id_famiglia in (2,3)
         /*ATTENZIONE A QUEST'ORDINAMENTO CHE SERVE PER GESTIRE I GIRI SUCCESSIVI*/
         order by ce.data_last_update asc
@@ -277,8 +231,151 @@ def main():
         ) select cod_percorso, versione_testata, freq_binaria, freq_settimane, id_turno, gestione_arera, data_pianif_iniziale, max(data_last_update)
         from step0
         group by cod_percorso, versione_testata, freq_binaria, freq_settimane, id_turno, gestione_arera, data_pianif_iniziale
-        order by 8 asc limit 2500
+        order by 8 asc limit 1000
     '''
+    
+    
+    
+    if debug==1:
+        logger.debug('Sono in modalità debug, quindi prendo un singolo id_scheda per testare la query di estrazione dei percorsi di raccolta')
+    
+        
+        if id_scheda_test is None:
+            
+            # giorno competenza  -1
+            """
+            query_elenco_percorsi_spazz='''with step0 as (
+        select ep.cod_percorso, versione_testata, fo.freq_binaria, freq_settimane, 
+        id_turno, at2.gestione_arera, ce.data_pianif_iniziale, ce.data_last_update 
+        from  treg_eko.consunt_ekovision ce 
+        join anagrafe_percorsi.elenco_percorsi ep 
+            on ep.cod_percorso = ce.codice_servizio_pred 
+            and to_date(ce.data_pianif_iniziale, 'YYYYMMDD') between data_inizio_validita and (data_fine_validita - interval '1' day) 
+        join anagrafe_percorsi.anagrafe_tipo at2 on at2.id = ep.id_tipo
+        join etl.frequenze_ok fo on fo.cod_frequenza = ep.freq_testata 
+        where ep.giorno_competenza = -1
+        and at2.gestione_duale = 't'
+        and at2.id_famiglia  in (2,3)
+        /*ATTENZIONE A QUEST'ORDINAMENTO CHE SERVE PER GESTIRE I GIRI SUCCESSIVI*/
+        order by ce.data_last_update asc
+        /*limit 100000*/
+        ) select cod_percorso, versione_testata, freq_binaria, freq_settimane, id_turno, gestione_arera, data_pianif_iniziale, max(data_last_update)
+        from step0
+        group by cod_percorso, versione_testata, freq_binaria, freq_settimane, id_turno, gestione_arera, data_pianif_iniziale
+        order by 8'''
+            """
+            # riprocesso i dati dei percorsi previsti in giornata (c'era un errore nell'update delle tappe non_prev)
+            query_elenco_percorsi_spazz='''
+            with step0 as (
+            select ep.cod_percorso, versione_testata, fo.freq_binaria, freq_settimane, 
+            id_turno, at2.gestione_arera, ce.data_pianif_iniziale, ce.data_last_update 
+            from  treg_eko.consunt_ekovision ce 
+            join anagrafe_percorsi.elenco_percorsi ep 
+                on ep.cod_percorso = ce.codice_servizio_pred 
+                and to_date(ce.data_pianif_iniziale, 'YYYYMMDD') between data_inizio_validita and (data_fine_validita - interval '1' day) 
+            join anagrafe_percorsi.anagrafe_tipo at2 on at2.id = ep.id_tipo
+            join etl.frequenze_ok fo on fo.cod_frequenza = ep.freq_testata 
+            where 
+            treg_eko.verify_daily_frequency(
+                ep.freq_testata ,
+                to_date(ce.data_pianif_iniziale,'YYYYMMDD'),
+                ep.freq_settimane 
+            ) = 1
+            and at2.gestione_duale = 't'
+            and at2.id_famiglia  in (2,3)
+            /*ATTENZIONE A QUEST'ORDINAMENTO CHE SERVE PER GESTIRE I GIRI SUCCESSIVI*/
+            --order by ce.data_last_update asc
+            /*limit 100000*/
+            ) select cod_percorso, versione_testata, freq_binaria, freq_settimane, id_turno, gestione_arera, data_pianif_iniziale, max(data_last_update)
+            from step0
+            group by cod_percorso, versione_testata, freq_binaria, freq_settimane, id_turno, gestione_arera, data_pianif_iniziale
+            order by 8
+            '''
+            
+            
+            
+        else:
+            query_elenco_percorsi_spazz='''
+        with step0 as (
+        select ep.cod_percorso, versione_testata, fo.freq_binaria, freq_settimane, 
+        id_turno, at2.gestione_arera, ce.data_pianif_iniziale, ce.data_last_update 
+        from  treg_eko.consunt_ekovision ce 
+        join anagrafe_percorsi.elenco_percorsi ep 
+            on ep.cod_percorso = ce.codice_servizio_pred 
+            and to_date(ce.data_pianif_iniziale, 'YYYYMMDD') between data_inizio_validita and (data_fine_validita - interval '1' day) 
+        join anagrafe_percorsi.anagrafe_tipo at2 on at2.id = ep.id_tipo
+        join etl.frequenze_ok fo on fo.cod_frequenza = ep.freq_testata 
+        where ce.id_scheda = %s
+        and at2.gestione_duale = 't'
+        and at2.id_famiglia in (2,3)
+        /*ATTENZIONE A QUEST'ORDINAMENTO CHE SERVE PER GESTIRE I GIRI SUCCESSIVI*/
+        order by ce.data_last_update asc
+        /*limit 100000*/
+        ) select cod_percorso, versione_testata, freq_binaria, freq_settimane, id_turno, gestione_arera, data_pianif_iniziale, max(data_last_update)
+        from step0
+        group by cod_percorso, versione_testata, freq_binaria, freq_settimane, id_turno, gestione_arera, data_pianif_iniziale
+        order by 8 limit 1000
+        '''
+        
+        
+    
+    insert_sql_sit= '''
+INSERT INTO consunt.report_spazz (
+    trac_code, cod_percorso, id_via,
+    id_asta, lung_km, nota_asta,
+    data_programmata, orario_progr,
+    non_previsto, id_causale, 
+    id_causale_totem, qualita, 
+    data_ora_ini_esec,  data_ora_fine_esec, tempo_recupero,
+    tempo_ripresa, 
+    tipo_spazz, id_asta_percorso) 
+    VALUES %s
+    ON CONFLICT (trac_code, cod_percorso, id_asta_percorso) 
+    /* or you may use [DO NOTHING;] */ DO UPDATE 
+    SET id_via=EXCLUDED.id_via,
+    id_asta=EXCLUDED.id_asta,
+    lung_km=EXCLUDED.lung_km,
+    nota_asta=EXCLUDED.nota_asta,
+    data_programmata=EXCLUDED.data_programmata,
+    orario_progr=EXCLUDED.orario_progr,
+    non_previsto = EXCLUDED.non_previsto, 
+    id_causale= EXCLUDED.id_causale, 
+    id_causale_totem= EXCLUDED.id_causale_totem,
+    qualita = EXCLUDED.qualita,
+    data_ora_ini_esec= EXCLUDED.data_ora_ini_esec,
+    data_ora_fine_esec= EXCLUDED.data_ora_fine_esec,
+    tempo_recupero= EXCLUDED.tempo_recupero,
+    tempo_ripresa = EXCLUDED.tempo_ripresa,
+    tipo_spazz=EXCLUDED.tipo_spazz ;
+'''
+    
+    
+    update_sql_sit = '''
+    update consunt.report_spazz
+    set id_causale = %s, id_causale_totem = %s,
+    qualita = %s,
+    data_ora_ini_esec = %s,  data_ora_fine_esec = %s, 
+    tempo_recupero = %s, tempo_ripresa = %s, lung_km = %s
+    where trac_code = %s and cod_percorso = %s and id_asta_percorso = %s
+    '''
+    
+    
+    #########
+    # PROBLEMA CHE FACENDO JOIN SOLO CON ID_ASTA TROVA TROPPA ROBA 
+    # ma su consunt_ekovision non abbiamo altre informazioni per fare il join corretto
+    # ci sarebbe pos ma solo nei casi in cui il percorso non fosse mai stato cambiato
+    # 
+    
+        
+    # possibile idea non perfetta:
+    # se il percorso è in frequenza prendo solo le tappe in freq
+    # se il percorso non è in frequenza (casi piuttosto rari) prendo tutto
+    # per il futuro in seguito a evolutive occorre passare a ekovision
+    # id_asta_percorso 
+    # e id_elemento_asta_percorso 
+    # e che le 2 informazioni ci siano restituite nel json
+    
+    
     
     # cerco quelle di SIT
     query_elementi_percorso='''
@@ -304,12 +401,14 @@ def main():
                 when 100 = ANY (array_agg(distinct causale::int)::int[]) then 100
                 else max(distinct ce.causale::int)
             end causale, 
+            max(ce.causale_totem) as causale_totem,
             tab.frequenza,
-           /*ce.qualita*/
             case
                 when 100 = ANY (array_agg(distinct causale::int)::int[]) then max(ce.qualita)
                 else min(distinct ce.qualita)
-            end qualita
+            end qualita, 
+            tab.nota, 
+            tab.id_asta_percorso
             from treg_eko.consunt_ekovision ce
             join (
                 SELECT codice_modello_servizio, ordine, objecy_type, 
@@ -335,8 +434,11 @@ def main():
             ) tab 
             on tab.codice_modello_servizio = ce.codice_servizio_pred 
             and to_date(ce.data_pianif_iniziale, 'YYYYMMDD') 
-            between to_date(tab.data_inizio,'YYYYMMDD')  and to_date(tab.data_fine, 'YYYYMMDD')
+            between to_date(tab.data_inizio,'YYYYMMDD')  and to_date(tab.data_fine, 'YYYYMMDD') -1
             and tab.codice = ce.codice
+            /*and tab.ordine = ce.pos*/
+            /* codice e posizione dovrebbero essere chiave primaria.. un po' come id_asta_percorso... 
+            ma non funziona per casini di Ekovision dovuti alle variazioni dei percorsi */
             where ce.tipo_servizio = 'SPAZZ'
             and codice_servizio_pred = %s
             and data_pianif_iniziale = %s
@@ -355,16 +457,18 @@ def main():
             data_ora_inizio, 
             data_ora_fine,
             ce.codice,
-            tab.frequenza/*,
-            ce.qualita*/
-        ) 
+            tab.frequenza, 
+            tab.nota,
+            tab.id_asta_percorso,
+            ce.qualita
+            ) 
         -- qua raggruppo per codice e data (dovrei escludere le schede doppie e prendere la causale migliore)
         select  
         codice_servizio_pred,
         data_pianif_iniziale, 
         --data_esecuzione_prevista,
-        min(data_ora_inizio) + (ep2.giorno_competenza || ' day')::interval as data_ora_inizio_exec, 
-        max(data_ora_fine) + (ep2.giorno_competenza || ' day')::interval as data_ora_fine_exec,
+        min(data_ora_inizio) + (ep2.giorno_competenza || ' day')::interval  as data_ora_inizio_exec, 
+        max(data_ora_fine) + (ep2.giorno_competenza || ' day')::interval  as data_ora_fine_exec,
         codice,
         case
             when 100 = ANY (array_agg(distinct gs.causale::int)::int[]) then 100
@@ -383,7 +487,14 @@ def main():
     	    to_date(gs.data_pianif_iniziale, 'YYYYMMDD'),
     	    ep2.freq_settimane::text
     	)
-        ) as in_freq
+        ) as in_freq, 
+        case
+            when 100 = ANY (array_agg(distinct gs.causale::int)::int[]) then NULL
+            else min(gs.causale_totem)::int
+        end  as causale_totem,
+        max(gs.qualita) as qualita, 
+        gs.nota, 
+        gs.id_asta_percorso
         from group_scheda gs
         left join anagrafe_percorsi.elenco_percorsi ep2 
         on ep2.cod_percorso = gs.codice_servizio_pred 
@@ -400,7 +511,9 @@ def main():
         and data_pianif_iniziale = %s /* non prendo i soccorsi di giorni precedenti */
         group by codice_servizio_pred,
             data_pianif_iniziale, aa.lung_asta,
-            codice, ep2.giorno_competenza 
+            codice, ep2.giorno_competenza, 
+            gs.nota, 
+            gs.id_asta_percorso
             /*gs.frequenza*/
     '''
     # ATTENZIONE: 
@@ -415,66 +528,16 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
         	ep.cod_percorso = ce.codice_servizio_pred 
         	and to_date(ce.data_pianif_iniziale, 'YYYYMMDD') between ep.data_inizio_validita and ep.data_fine_validita -1
         WHERE codice = %s
-        AND causale = '100'
+        AND causale ='100'
         AND data_ora_inizio + (ep.giorno_competenza || ' day')::interval  >= %s
     group by ep.giorno_competenza ;
     '''
 
-    query_insert='''INSERT INTO treg_eko.last_import_treg_spazz_cons
-        (data_last_update, last_update,
-        request_id_amiu, importid_treg, 
-        commit_code, commit_message) 
-        VALUES(%s, now(), 
-        %s, %s, 
-        %s, %s);'''
-    
-    query_insert_error='''INSERT INTO treg_eko.last_import_treg_spazz_cons
-            (data_last_update, last_update,
-            request_id_amiu, importid_treg) 
-            VALUES(%s, now(), 
-            %s, %s);'''
+    query_insert='''INSERT INTO consunt.last_import_sit_spazz_cons
+        (data_last_update, last_update) VALUES
+        (%s, now());'''
     
     
-    # verifica se ci sono altri elementi con stesso trac code
-    check_del= '''select  
-            ce.id_scheda, ce.codice_servizio_pred, ce.codice, ce.causale  
-            from treg_eko.consunt_ekovision ce 
-            join anagrafe_percorsi.elenco_percorsi ep 
-            on ep.cod_percorso = ce.codice_servizio_pred 
-            and to_date(ce.data_pianif_iniziale, 'YYYYMMDD') 
-            between data_inizio_validita and (data_fine_validita - interval '1' day) 
-            where 
-            ce.codice = %s
-            and ce.data_pianif_iniziale = %s 
-            and ep.id_turno = %s
-            and ce.causale::int not in (101, 102, 999)  '''
-    
-    # verifica se ci sono altri elementi con stesso trac_code e causale con disservizio
-    query_check_diss= '''select  
-        ce.id_scheda, ce.codice_servizio_pred, ce.codice, ce.causale, cd.id_causale_arera
-        from treg_eko.consunt_ekovision ce 
-        join anagrafe_percorsi.elenco_percorsi ep 
-        on ep.cod_percorso = ce.codice_servizio_pred 
-        and to_date(ce.data_pianif_iniziale, 'YYYYMMDD') 
-        between data_inizio_validita and (data_fine_validita - interval '1' day) 
-        join etl.cause_disserv cd on cd.codice = ce.causale::int
-        where 
-        ce.codice = %s
-        and ce.data_pianif_iniziale = %s
-        and ep.id_turno = %s
-        and ce.causale::int not in (101, 102, 999, 100, 110)
-        order by id_causale_arera desc limit 1'''
-    
-    insert_importid = '''
-        INSERT INTO treg_eko.check_status_import
-        (pid, id_treg, import_id, tipo_qt, data_insert)
-        VALUES(%s, %s, %s, 'sweepings', now());
-    '''
-
-    delete_importid = '''
-        DELETE FROM treg_eko.check_status_import
-        WHERE import_id=%s;
-    '''
     
     
     # eliminazione geometria asta 
@@ -569,7 +632,13 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
    
     # eseguo query 2 per estrazione percorsi
     try:
-        curr.execute(query_elenco_percorsi_spazz, (data_last_update,))
+        if debug ==0:
+            curr.execute(query_elenco_percorsi_spazz, (data_last_update,))
+        else:
+            if id_scheda_test is None:  
+                curr.execute(query_elenco_percorsi_spazz)
+            else:
+                curr.execute(query_elenco_percorsi_spazz, (id_scheda_test,))
         elenco_percorsi=curr.fetchall()
     except Exception as e:
         check_error=1
@@ -580,39 +649,8 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
 
     if len(elenco_percorsi)>0:
 
-        # qua mi tiro fuori il token TREG 
-    
-        token=token_treg(logger)
-        logger.debug(token)
 
-        ########################
-        #recupero import id TREG
-        ########################
-        guid = uuid.uuid4()
-        logger.debug(str(guid))
-        #logger.debug(guid.type)
-        #json_id={'id': '{}'.format(str(guid))}
-        json_id={'id': str(guid)}
-        api_url_begin_upload='{}atrif/api/v1/tobin/b2b/process/rifqt-sweepings/begin-upload/av1'.format(url_ws_treg)          
-        response = requests.post(api_url_begin_upload, json=json_id, headers={'accept':'*/*', 
-                                                                                'mde': 'PROD',
-                                                                                'Authorization': 'EIP {}'.format(token),
-                                                                                'Content-Type': 'application/json'})
-        importId=response.json()['importId']
-        #exit()
-
-        #salvo info su tabella di controllo per successiva verifica dello stato dell'importazione con script check_status_import.py e per eventuale rollback in caso di errori nell'upload a TREG
-        try:
-            curr.execute(insert_importid, (os.getpid(), str(guid), str(importId),))
-        except Exception as e:
-            logger.error(insert_importid)
-            logger.error(e)
-            error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
-            exit()
-
-        conn.commit()
         
-        logger.info('ImportId = {}'.format(importId))
 
         # facciamo un dizionario con chiave cod_percorso e data, e valore una lista contenente turno e data_pianif_iniziale e data_last_update
         dict_percorsi={}
@@ -639,25 +677,34 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
             
             if tappa_prevista(datetime.strptime(ep[6], '%Y%m%d').date(),  ep[2])==1 and (ep[3].strip()=='T' or ep[3]==check_s):
                 # come chiave metto cod_percorso e data_pianif_iniziale
-                dict_percorsi[ep[0], ep[6]]=[ep[4], ep[6], ep[7], ep[3]]
-                # verificato se era prevista verifico che ci sia una scheda chiusa
+                non_prev = None
+            else:
+                non_prev = True
+            
+            
+            dict_percorsi[ep[0], ep[6]]=[ep[4], ep[6], ep[7], ep[3], non_prev]
+            # verificato se era prevista verifico che ci sia una scheda chiusa
 
             
         #logger.debug(dict_percorsi)
         
-        # estraiamo dal dizionario dei tratti per percorso la massima data_last_update
-        max_data = max((v[2] for v in dict_percorsi.values()), default=None)
+        
         
         # c è la chiave (codice turno)
         # t è il turno    
         
         
         if len(dict_percorsi)>0:
-            logger.info('Devo trattare {} percorsi di igiene con scheda consuntivata prevista'.format(len(dict_percorsi)))
+            logger.info('Devo trattare {} percorsi di igiene'.format(len(dict_percorsi)))
+            
+            # c è la chiave (codice percorso, data)
+            # t è il valore (una tupla di turno, data, etc..)
             for c, t in dict_percorsi.items():
                 #logger.debug(c + ' : ' + str(t))
 
                 # ora devo verificare i tratti   
+                logger.debug('Inizio estrazione elementi per il percorso {} con pianificazione iniziale {}'.format(c[0], t[1]))
+                
                 
                 try:
                     curr.execute(query_elementi_percorso, (c[0], c[0], c[0], c[0], t[1],t[1],))
@@ -667,8 +714,8 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
                     logger.error(e)
                 
 
-                list_sweeping=[]
-                list_trac_del=[]
+                lista_insert=[]
+                lista_update=[]
                 # popolo tratti_sit
                 for eep in elenco_elementi_percorso:
                     # verifico se in frequenza con la solita funzione
@@ -697,20 +744,6 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
                         if interruptionCause is None:
                             logger.error(f'Per il percorso {c[0]} del {datetime.strptime(c[1], "%Y%m%d").date()} trovo delle causali {eep[5]} non mappate in ARERA')
                             #error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
-                        # dobbiamo verificare che non ci sia un altro elemento con stesso trac_code e causale colpa del gestore
-                        try: 
-                            curr1.execute(query_check_diss, (eep[4], t[1], t[0],))
-                            check_diss=curr1.fetchone()
-                        except Exception as e:
-                            check_error=1
-                            logger.error(query_check_diss)
-                            logger.error(e)
-                        
-                        if check_diss is not None:  
-                            if check_diss[4] == 3:
-                                interruptionCause = causale_arera(curr1, check_diss[3], logger, errorfile) 
-                        # se non c'è disservizio per colpa del gestore non faccio niente
-                        
                         interruptionDate = programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[7], logger)[0]
                         #executionStartDate = None
                         #executionEndingDate = None
@@ -723,8 +756,7 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
                             # dalla query mi aspetto: 
                             # - se non c'è resumption date il fetchone restituisce  tmp_resumptionDate = None mentre fetchall restituirebbe []
                             # - se c'è resumption date: tmp_resumptionDate = (data_ora_inizio_resumption, data_ora_fine_resumption)
-                            
-                            if tmp_resumptionDate is None:  
+                            if tmp_resumptionDate is None : # tmp_resumptionDate[0] is None:
                                 logger.warning(f'''Per il percorso {c[0]} del {datetime.strptime(t[1], "%Y%m%d").date()}, codice {eep[4]} con causale {eep[5]}
                                             non trovo resumption date''')
                                 
@@ -812,227 +844,149 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
                             logger.error(e)
 
                 
-                    ############# DA GESTIRE IL DELETE In caso di non previsto o festivo 
-                    if int(eep[5]) in (102,101,999) or eep[12]==0:
-                        # prima bisogna verificare che non ci sia una componente consuntivata con causali != 101 / 102 / 999
-                        try:
-                            curr.execute(check_del, (eep[4], t[1], t[0],))
-                            check_del_res=curr.fetchall()
-                        except Exception as e:
-                            logger.error(check_del)
-                            logger.error(e)
-                        
-                        id_schede_doppie=''
-                        for r in check_del_res:
-                            id_schede_doppie=id_schede_doppie + ' ' + str(r[0])
-                            
-                        if len(check_del_res)>0: 
-                            logger.info(f'''Per il percorso {c[0]} del {datetime.strptime(t[1], "%Y%m%d").date()}
-                                        trovo il codice {eep[4]} con causale {eep[5]} 
-                                        ma anche altre schede ({id_schede_doppie}) con causale 100, non elimino da TREG. 
-                                        ''')
+                
+                    trac_code= '{0}_{1}_{2}'.format(eep[4],t[1],t[0])
+                    # cod_percorso = c[0]
+                    # id_via  eep[9]
+                    # id_asta eep[4]
+                    # lung_km eep[6]
+                    # nota_asta eep[15]
+                    # data_prpgrammata datetime.strptime(t[1], '%Y%m%d').date()
+                    # orario_programmato decode_turno(curr1, t[0], logger) 
+                    if t[4] == True:
+                        t_non_prev = True
+                    else :
+                        if eep[12]==0:
+                            t_non_prev = True
                         else:
-                            # in questo caso posso eliminare da TREG
-                            list_trac_del.append('{0}_{1}_{2}'.format(eep[4],t[1],t[0]))
+                            t_non_prev = None
+                    # id_causael eep[5]
+                    # id_causale_tote eep[13]
+                    #qualita  eep[14]
+                    
+                
+                     # calcolo tempo recupero
+                    if int(eep[5]) in (100,110,102,101,999):
+                        t_recupero = None 
+                        t_ripresa = None
+                        esec_inizio_tz = None 
+                        esec_fine_tz = None
                     else:
-                        sweeping={
-                            'traceabilityCode': '{0}_{1}_{2}'.format(eep[4],t[1],t[0]),
-                            'kilometersTravelled': eep[6],
-                            'areaType':str(eep[8]),
-                            'areaCode': str(eep[4]),
-                            'streetCode': str(eep[9]),
-                            'streetDescription':str(eep[10]),
-                            'programmingStartDate':programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[7], logger)[0],
-                            'programmingEndingDate':programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[7], logger)[1],
-                            'executionStartDate': executionStartDate,
-                            'executionEndingDate': executionEndingDate,
-                            'interruptionType': interruptionType,
-                            'interruptionCause':interruptionCause,
-                            'interruptionDate': interruptionDate,
-                            'resumptionDate': resumptionDate.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z' if resumptionDate is not None else None,
-                            #'nonComplianceCauseInterruption': interruptionCause,
-                            'nonComplianceCauseInterruption': None,
-                            'year':int(programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[7], logger)[2]),
-                            'istatCode': str(eep[11]) 
-                        }
-                        list_sweeping.append(sweeping)
-                        list_trac_code_update.append((eep[4], t[1], c[0], '{0}_{1}_{2}'.format(eep[4],t[1],t[0]),))
+                        # prendo la data inizio esecuzione UTC e la riconverto in datetime 
+                        esec_inizio = datetime.strptime(executionStartDate, 
+                                                '%Y-%m-%dT%H:%M:%S.%fZ')
+                        esec_fine = datetime.strptime(executionEndingDate, 
+                                                '%Y-%m-%dT%H:%M:%S.%fZ')
                         
-                        curr1.close()
-                        curr2.close()
+                        # prendo la data fine programmazione UTC e la riconverto in datetime
+                        progr_iniziale = datetime.strptime(programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[7], logger)[0], 
+                                                '%Y-%m-%dT%H:%M:%S.%fZ')
+                        progr_finale = datetime.strptime(programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[7], logger)[1], 
+                                                '%Y-%m-%dT%H:%M:%S.%fZ')
+                        
+                        # se la data di inizio esecuzione è > di quella di fine programmazione significa che il servizio è stato fatto in maniera non regolare, 
+                        # quindi devo calcolare un tempo recupero in h altrimenti no 
+                        
+                        t_ripresa = round((esec_inizio - progr_iniziale).total_seconds()/3600,1) if esec_inizio >  progr_iniziale else None
+                        t_recupero = round((esec_fine - progr_finale).total_seconds()/3600,1) if esec_fine > progr_finale else None
+                            
+                        
+                        # per scrivere su DB SIT 
+                        # 1) converto in datetime 
+                        # 2) ritorno alle ore non UTC che sono più leggibili
+                        esec_inizio_tz = esec_inizio.replace(tzinfo=timezone.utc).astimezone(tz_roma)
+                        
+                        esec_fine_tz = datetime.strptime(executionEndingDate, 
+                                                '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=timezone.utc).astimezone(tz_roma)
                     
                     
+                        # tipo_spazz eep[8]
+                        # id_asta_percorso eep[16]
+                    
+                    causale_totem = int(eep[13]) if eep[13] is not None else None
+                    #print(causale_totem)
+                    #exit()
+                    
+                    if t_non_prev == True: # percorso non previsto faccio insert di tutto
+                        lista_insert.append((trac_code, c[0], eep[9], eep[4], 
+                                             eep[6], eep[15], datetime.strptime(t[1], '%Y%m%d').date(), 
+                                             decode_turno(curr1, t[0], logger), t_non_prev, 
+                                             int(eep[5]), causale_totem, eep[14], esec_inizio_tz,  esec_fine_tz,
+                                             t_recupero, t_ripresa, eep[8], eep[16]
+                                             ))   
+                        
+                    else:  
+                        lista_update.append((int(eep[5]), causale_totem, eep[14], 
+                            esec_inizio_tz,  esec_fine_tz,
+                            t_recupero, t_ripresa, eep[6],
+                            trac_code, c[0], eep[16]))  
 
                     
                     
-                #logger.debug(f'Per il percorso {c[0]} del {datetime.strptime(t[1], "%Y%m%d").date()} devo inviare {list_sweeping}')
-                #logger.debug(f'list spazzamenti = {convert_decimal(list_sweeping)}')
-                #jsonfile='{0}/log/{1}_spazzamento.json'.format(path,c)
-                #with open(jsonfile, 'w', encoding='utf-8') as f:
-                #    json.dump(convert_decimal(list_sweeping), f, ensure_ascii=False, indent=4)
-                ########################################################
-                # upload di list_wasteCollection di un singolo percorso
-                ########################################################
-
-                #exit()
-                logger.info('Inizio upload dati del percorso {} del {}'.format(c[0], datetime.strptime(t[1], '%Y%m%d').date()))
-                api_url_upload='{}atrif/api/v1/tobin/b2b/process/rifqt-sweepings/upload/av1'.format(url_ws_treg)
-
-                # creo una nuova lista per rimuovere eventuali duplicati  list(set(list_wasteCollection)) ## ATTENZIONE CHE NON MANTIENE ORDINE
-                list_sweeping_unique = [
-                    dict(t) for t in {
-                        tuple(sorted(d.items())) for d in list_sweeping
-                    }
-                ]
-
-                # questa sarà da passare a TREG, le altre no
-                
-                body_upload={
-                    'id': str(guid),
-                    'importId': str(importId),
-                    'entities': list_sweeping_unique
-                }
+                    curr1.close()
+                    curr2.close()
                 
                 
-                check_error_upload = call_treg_api(token, api_url_upload, body_upload, list_sweeping_unique, logger, errorfile, 'errorCount', importId)
+                
+                # per l'insert non uso cur.execute ma questo metodo execute_values che è più performante
+                if len(lista_insert)> 0: 
+                    try:        
+                        execute_values(curr, insert_sql_sit, lista_insert)
+                        #.execute(insert_sql_sit, (lista_insert,))
+                    except Exception as e:
+                        logger.error(insert_sql_sit)
+                        logger.error(e)       
                 
                 
-                # controllo  se per quel percorso ci sono componenti da cancellare in quanto consuntivate con causale non previsto e/o festivo
+                # nel caso dell'update faccio un ciclo sulle singole tuple usando il classico curr.execute
+                #if len(lista_update)> 0: 
+                for tupla in lista_update:
+                    try:        
+                        curr.execute(update_sql_sit, tupla)
+                    except Exception as e:
+                        logger.error(tupla)
+                        logger.error(update_sql_sit)
+                        logger.error(e)      
                 
-                if len(list_trac_del) > 0:
-
-                    logger.debug(list_trac_del)
-                                
-                    logger.info('Inizio delete dati del percorso {} del {}'.format(c[0], datetime.strptime(t[1], '%Y%m%d').date()))
-                    api_url_delete='{}atrif/api/v1/tobin/b2b/process/rifqt-sweepings/delete/av1'.format(url_ws_treg)
-                    # questa sarà da passare a TREG, le altre no
-                    
-                    guid_del = uuid.uuid4()
-                    body_delete={
-                        'id': str(guid_del),
-                        'sweepingIds': list_trac_del
-                    }         
-                    check_error_delete = call_treg_api(token, api_url_delete, body_delete, list_trac_del, logger, errorfile, 'deletedCount', importId)
-                    if check_error_delete>0:
-                        logger.error('Errore nel delete di TREG per il percorso di igiene {} del {}'.format(c[0], datetime.strptime(t[1], '%Y%m%d').date()))
-                        error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
-                        api_url_rollback='{}atrif/api/v1/tobin/b2b/process/rifqt-sweepings/rollback-upload/av1'.format(url_ws_treg)
-                        guid_roll = uuid.uuid4()
-                        body_rollback={
-                            'id': str(guid_roll),
-                            'importId': str(importId),
-                        }
-                        response_roll = requests.post(api_url_rollback, json=body_rollback, headers={'accept':'*/*', 
-                            'mde': 'PROD',
-                            'Authorization': 'EIP {}'.format(token),
-                            'Content-Type': 'application/json'})
-                        logger.error('la chiamata di rollback ha dato questo esito: {}'.format(response_roll.text))
-                        exit()
-                # chiudo ciclo sui percorsi
-
-        
-            #if len(dict_percorsi)>0:
-            
-            ####################################
-            # commit upload
-            ####################################
-            logger.info('Inizio il commit degli upload su TREG')
-            
+                
+                
             # estraiamo dal dizionario dei tratti per percorso la massima data_last_update
-            max_data = max((v[2] for v in dict_percorsi.values()), default=None)
-            logger.info(f'La massima data_last_update tra i percorsi da trattare è {max_data}')
-            #exit()
-            if check_error_upload==0:
-                api_url_commit_upload='{}atrif/api/v1/tobin/b2b/process/rifqt-sweepings/commit-upload/av1'.format(url_ws_treg)
-                # questa sarà da passare a TREG, le altre no
-                
-                body_commit_upload={
-                    'id': str(guid),
-                    'importId': str(importId)
-                }
-                
-                
-                response_commit_upload = requests.post(api_url_commit_upload, json=body_commit_upload, headers={'accept':'*/*', 
-                                                                                'mde': 'PROD',
-                                                                                'Authorization': 'EIP {}'.format(token),
-                                                                                'Content-Type': 'application/json'})
-                logger.info('Fine commit - Risposta TREG: {}'.format(response_commit_upload.text))
+            max_data = max((v[2] for v in dict_percorsi.values()), default=None)    
+
                     
-                #facciamo insert su tre_eko.last_import_treg_spazz_cons
+            logger.info(f'La massima data_last_update tra i percorsi da trattare è {max_data}')        
+
+            if debug == 0:     
                 try:
-                    curr.execute(query_insert, (max_data,
-                                                str(guid), str(importId),
-                                                response_commit_upload.status_code, response_commit_upload.text,))
+                    curr.execute(query_insert, (max_data,))
                     conn.commit()
                 except Exception as e:
                     logger.error(query_insert)
-                    logger.error(e) 
-
-                # se import andatao a buon fine faccio delete su tabella di controllo importid per evitare che venga intercettato da script check_status_import.py
-                try:
-                    curr.execute(delete_importid, (str(importId),))
-                    conn.commit()
-                except Exception as e:
-                    logger.error(delete_importid)
-                    logger.error(e) 
-        
-            else: 
-                logger.warning('Sono presenti errori, faccio il commit ridotto')
-
-                #non facciamo commit su TREG ma teniamo traccia con insert su tre_eko.last_import_treg_spazz_cons
-                try:
-                    curr.execute(query_insert_error, (max_data,
-                                                str(guid), str(importId),))
-                    conn.commit()
-                except Exception as e:
-                    logger.error(query_insert_error)
                     logger.error(e)
-
-        else:
-            logger.info('Non ci sono percorsi di igiene con scheda consuntivata prevista da trattare, faccio rollback dell\'importId su TREG')
-            api_url_rollback='{}atrif/api/v1/tobin/b2b/process/rifqt-sweepings/rollback-upload/av1'.format(url_ws_treg)
-            guid_roll1 = uuid.uuid4()
-            body_rollback1={
-                'id': str(guid_roll1),
-                'importId': str(importId),
-            }
-            response_roll = requests.post(api_url_rollback, json=body_rollback1, headers={'accept':'*/*', 
-                'mde': 'PROD',
-                'Authorization': 'EIP {}'.format(token),
-                'Content-Type': 'application/json'})
-            logger.debug('la chiamata di rollback ha dato questo esito: {}'.format(response_roll.text))
-
-            try:
-                curr.execute(delete_importid, (str(importId),))
-                conn.commit()
-            except Exception as e:
-                logger.error(delete_importid)
-                logger.error(e) 
-
-        if len(list_trac_code_update)>0:
-            logger.info('Inizio l\'inserimento dei trac_code calcolati')
-            logger.debug(f'list_trac_code_update = {list_trac_code_update}')
-            try:
-                bulk_update_consunt_tc(curr, list_trac_code_update, logger)
-            except Exception as e:
-                logger.error(e)
-                logger.error(list_trac_code_update)
-
-
         
+        
+        else: 
+            logger.info('Non ci sono percorsi di spazzamento con scheda consuntivata da trattare ')        
+        
+       
+       
+       
         if len(lista_update_res_date)>0:
-            # inserisco le resumption date calcolate
             logger.info('Inizio l\'inserimento delle resumption date calcolate')
             
             try:
                 bulk_update_consunt(curr, lista_update_res_date, logger)
             except Exception as e:
                 logger.error(e)
-                logger.error(lista_update_res_date) 
+                logger.error(lista_update_res_date)
         
-        
-        # faccio unico commit sul DB
-        conn.commit()
+        # faccio unico commit sul DB solo se non sono in modalità (debug ==0)
+        if debug == 0:
+            conn.commit()
+        else:
+            logger.debug('Sono in modalità debug') 
+            conn.commit()
+            
     else:
         logger.info('Nessun percorso da trattare, non faccio upload né commit')
         
@@ -1048,17 +1002,19 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
     error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
     
     
+        
+    
     logger.info("chiudo le connessioni in maniera definitiva")
     curr.close()
     conn.close()
     
-
-
-
     if len(elenco_percorsi) == 0:
         # cancelllo anche il file di log
         #logfile.close()
         os.remove(logfile)
+
+
+
 
 
 
