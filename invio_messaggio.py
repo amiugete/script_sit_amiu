@@ -160,7 +160,10 @@ http://amiuintranet.amiu.genova.it/content/accesso-server-amiugis'''.format(scri
         message = MIMEMultipart()
         message["From"] = sender_email
         message["To"] = receiver_email
-        message["CC"] = 'roberto.marzocchi@amiu.genova.it'
+        # qualora non ci fosse già, aggiungo in CC assterritorio
+        if 'assterritorio' not in receiver_email:    
+            message["CC"] = 'assterritorio@amiu.genova.it'
+        #message["CC"] = 'roberto.marzocchi@amiu.genova.it'
         message["Subject"] = subject
         #message["Bcc"] = debug_email  # Recommended for mass emails
         message.preamble = subject

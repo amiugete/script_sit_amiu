@@ -64,34 +64,7 @@ errorfile='{0}/log/error_{1}.log'.format(path,nome)
 
 
 
-# Create a custom logger
-logging.basicConfig(
-    level=logging.DEBUG,
-    handlers=[
-    ]
-)
 
-logger = logging.getLogger()
-
-# Create handlers
-c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-#f_handler = logging.StreamHandler()
-f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
-
-
-c_handler.setLevel(logging.ERROR)
-f_handler.setLevel(logging.INFO)
-
-
-# Add handlers to the logger
-logger.addHandler(c_handler)
-logger.addHandler(f_handler)
-
-
-cc_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
-
-c_handler.setFormatter(cc_format)
-f_handler.setFormatter(cc_format)
 
 
 # libreria per invio mail
@@ -112,12 +85,59 @@ import csv
 
 from descrizione_percorso import *  
     
-     
+
+
+debug= 0
+    
+# se debug = 1 passo un singolo codice percorso e una data specifica, altrimenti prendo tutto quello che c'è da prendere
+cp_debug = '0207004401'
+data_debug = '20260420'
+ 
 
 def main():
+    
+    
+    # Create a custom logger
+    logging.basicConfig(
+        level=logging.DEBUG,
+        handlers=[
+        ]
+    )
+
+    logger = logging.getLogger()
+
+    # Create handlers
+    c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
+    #f_handler = logging.StreamHandler()
+    f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+
+
+    c_handler.setLevel(logging.ERROR)
+    if debug == 1:
+        f_handler.setLevel(logging.DEBUG)
+    else:   
+        f_handler.setLevel(logging.INFO)
+
+
+    # Add handlers to the logger
+    logger.addHandler(c_handler)
+    logger.addHandler(f_handler)
+
+
+    cc_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
+
+    c_handler.setFormatter(cc_format)
+    f_handler.setFormatter(cc_format)
+    
+    
       
     logger.info('Il PID corrente è {0}'.format(os.getpid()))
 
+
+    
+    
+    
+    
     # preparo gli array 
     
     cod_percorso=[]
@@ -300,6 +320,65 @@ and ve.id_causale <> %s'''
 	order by 1 limit 5000'''
     
     
+    if debug == 1:
+        query_effettuati_totem=f'''select 
+	distinct 
+	substr(e.id,3)::int as id,
+	e.idpercorso,
+	e.datalav::date ,
+	t.id_via,
+	trim(t.nota_via) as nota_via,
+	case 
+		when e.punteggio::int = 100 or ct.id = 100 then 1
+		when e.punteggio::int = 0 and ct.id <> 100 then 0 
+		when e.punteggio::int > 0 and e.punteggio::int < 100 then 1
+	end flag_esecuzione, 
+	e.causale as descr_causale,
+	ct.id as causale,
+	case 
+		when e.punteggio::int > 0 and e.punteggio::int < 100 then concat('Svolto al ', e.punteggio,'% CAUSALE: ', ct.id ,' - ',  e.causale)
+	end note_causale, 
+	concat('TOTEM Badge ', e.codice, ' - Matr. ', vpes.matricola::text, ' - ', vpes.cognome, ' ', vpes.nome) as sorgente_dati, 
+	e.datainsert, 
+    e.tappa, 
+    e.punteggio,
+    string_agg(distinct mu.mail, ',')
+	from spazzamento.cons_percorsi_spazz_x_app t
+	join spazzamento.v_effettuati e on e.tappa::int =  t.id_tappa_raggr::int
+ 	left join totem.v_personale_ekovision_step1 vpes on vpes.codice_badge::text = e.codice 
+	left join spazzamento.causali_testi ct on trim(e.causale) ilike trim(ct.descrizione)
+ 	left join servizi.mail_ut mu on mu.id_uo::int  =t.id_uo::int 
+	where
+	e.idpercorso = '{cp_debug}'
+	and datalav = to_date('{data_debug}', 'YYYYMMDD')
+    /*and
+	e.datalav <= (select max(datalav) + interval '3' day from  spazzamento.invio_consuntivazioni_ekovision ice)*/
+	group by 
+	substr(e.id,3),
+	e.idpercorso,
+	e.datalav::date ,
+	t.id_via,
+	trim(t.nota_via) ,
+	case 
+		when e.punteggio::int = 100 or ct.id = 100 then 1
+		when e.punteggio::int = 0 and ct.id <> 100 then 0 
+		when e.punteggio::int > 0 and e.punteggio::int < 100 then 1
+	end , 
+	e.causale ,
+	ct.id ,
+	case 
+		when e.punteggio::int > 0 and e.punteggio::int < 100 then concat('Svolto al ', e.punteggio,'% CAUSALE: ', ct.id ,' - ',  e.causale)
+	end , 
+	concat('TOTEM Badge ', e.codice, ' - Matr. ', vpes.matricola::text, ' - ', vpes.cognome, ' ', vpes.nome), 
+	e.datainsert, 
+    e.tappa, 
+    e.punteggio
+	order by 1 limit 5000'''
+        
+        
+        
+    
+    
     # prima di tutto faccio un controllo che non ci siano causali che non so gestire e nel caso fermo tutto il passaggio dati e lancio allarme
     query_check='''select distinct causale, descr_causale from (
         {}
@@ -317,7 +396,7 @@ and ve.id_causale <> %s'''
     for cc in lista_causali:
         if cc[0] == None:
             logger.error('''La causale {} non è riconosciuta. Andare sull'HUB aggiungere un id nella tabella spazzamento.causali_testo'''.format(cc[1])) 
-            error_log_mail(errorfile, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
+            error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
             exit()
     
     logger.info('CONTROLLO CAUSALI TERMINATO')
@@ -356,8 +435,9 @@ and ve.id_causale <> %s'''
         logger.error(query_effettuati_totem)
         logger.error(e)
 
+    logger.debug('Lunghezza lista_x_via {}'.format(len(lista_x_via)))
+   
     for vv in lista_x_via:
-        
         # temporanemente tolgo i percorsi non presenti su SIT
         
         if vv[1] not in (#'0209000401', '0209000301', #raccolte siringhe
@@ -381,7 +461,7 @@ and ve.id_causale <> %s'''
                 select id_percorso_sit  from anagrafe_percorsi.date_percorsi_sit_uo ep 
                 where id_percorso_sit is not null  
                 and cod_percorso = %s 
-                and data_inizio_validita < %s 
+                and data_inizio_validita <= %s 
                 and data_fine_validita >= %s
             ) and id_asta in (
                 select id_asta from elem.aste where id_via= %s
@@ -436,6 +516,8 @@ and ve.id_causale <> %s'''
                     logger.error(e)
                     error_log_mail(errorfile, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
                     exit()
+                logger.debug('Lunghezza lista_aste {}'.format(len(lista_aste)))
+                
                 for aa in lista_aste:
                     #logger.debug(aa[0])       
                     # controllo sulla consuntivazione pregressa
@@ -993,7 +1075,7 @@ and ve.id_causale <> %s'''
     currc = connc.cursor()
     
     
-    if check_ekovision==200 and len(lista_x_via)>0:
+    if check_ekovision==200 and len(cod_percorso)>0 and debug ==0:
         """insert_max_id='''INSERT INTO spazzamento.invio_consuntivazioni_ekovision
         (max_id, data_ora, datalav)
         VALUES
