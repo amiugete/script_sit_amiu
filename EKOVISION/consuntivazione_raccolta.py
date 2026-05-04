@@ -305,6 +305,9 @@ and ve.id_causale::int <> %s'''
     string_agg(mu.mail, ', ') as mail
 	from raccolta.cons_percorsi_raccolta_amiu t
 	join raccolta.effettuati_amiu e on e.tappa::bigint =  t.id_tappa::bigint
+    /* controllo la validità dei percorsi */
+	join servizi.servizi_per_ekovision spe 
+		on spe.id_percorso = t.id_percorso and e.datalav between spe.data_inizio_validita and spe.data_fine_validita
 	join totem.v_causali vc on vc.id = e.id_causale 
  	--left join raccolta.effettuati_correzione_date ecd on e.id_percorso=ecd.id_percorso and e.datalav= ecd.datalav_errata 
   	left join totem.v_personale_ekovision_step1 vpes on vpes.codice_badge::text = e.codice 
@@ -350,7 +353,7 @@ and ve.id_causale::int <> %s'''
     for cc in lista_causali:
         if cc[0] == None:
             logger.error('''La causale {} non è riconosciuta. Andare sull'HUB ggiungere un id nella tabella raccolta.causali_testo'''.format(cc[1])) 
-            error_log_mail(errorfile, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
+            error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
             exit()
     
     logger.info('CONTROLLO CAUSALI TERMINATO')
