@@ -216,7 +216,7 @@ diss_s1 as (
 	end id_causale_arera,
     lung_km as lung_km
 	from  diss_s0 
-	where anno = 2025 and mese = 12
+	/*where anno = 2025 and mese = 12*/
     group by comune, anno, mese, lung_km, trac_code
 )
 select comune, anno, mese,  ca.descrizione as causale_arera, interruzione,
