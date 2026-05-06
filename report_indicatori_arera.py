@@ -171,20 +171,23 @@ case
         when ep.giorno_competenza = -1 then extract(month from data_programmata-1)
     end mese, 
 case 
-	when min(rr.tempo_recupero) > 24
+	when coalesce(rr.tempo_recupero, 0) > 24
 	then 1
 	else 0
 end interruzione,
 case 
-	when min(tempo_ripresa) >= 24
+	when coalesce(tempo_ripresa,0) >= 24
 	then 1
 	else 0
 end disservizio,
 trac_code, 
-min(rr.lung_km) as lung_km, 
-min(cd.codice) as codice,
-min(cd.descrizione) as causale,
-max(cd.id_causale_arera) as id_causale_arera
+rr.lung_km as lung_km, 
+cd.codice, 
+cd.descrizione as causale,
+cd.id_causale_arera
+--min(cd.codice) as codice,
+--min(cd.descrizione) as causale,
+--max(cd.id_causale_arera) as id_causale_arera
 from consunt.report_spazz rr
 join topo.vie v on v.id_via = rr.id_via
 join topo.comuni c on c.id_comune= v.id_comune
@@ -198,31 +201,33 @@ and at2.gestione_arera = true
 and rr.id_causale not in (101,102,999)
 /*and data_programmata between to_date('20250101', 'YYYYMMDD') and to_date('20250131', 'YYYYMMDD')*/
 and c.id_comune = %s
-group by
+/*group by
 c.descr_comune, 
 data_programmata, 
 ep.giorno_competenza,
-trac_code
+trac_code, 
+rr.lung_km*/
 ), 
 diss_s1 as (
 	select trac_code, comune, anno, mese,  min(interruzione) as interruzione,
 	case 
-		when min(interruzione) = 0 then null
+		when min(interruzione) = 0 then 0
 		else max(id_causale_arera)
 	end id_causale_arera,
-    min(lung_km) as lung_km
+    lung_km as lung_km
 	from  diss_s0 
-    group by comune, anno, mese, trac_code
+	where anno = 2025 and mese = 12
+    group by comune, anno, mese, lung_km, trac_code
 )
 select comune, anno, mese,  ca.descrizione as causale_arera, interruzione,
-round(sum(round(lung_km,3)),3)
+round(sum(lung_km),3)
 from  diss_s1 d
 left join etl.causali_arera ca on d.id_causale_arera = ca.id
 where  interruzione = 1
 group by comune, anno, mese, causale_arera, interruzione 
 union 
 select comune, anno, mese,  'Effetuato' as causale_arera, 0 as interruzione,
-round(sum(round(lung_km,3)),3)
+round(sum(lung_km),3)
 from  diss_s1 
 where  interruzione = 0
 group by comune, anno, mese 
