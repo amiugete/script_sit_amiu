@@ -82,8 +82,8 @@ logger = logging.getLogger()
 
 # Create handlers
 c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-f_handler = logging.StreamHandler()
-#f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+#f_handler = logging.StreamHandler()
+f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.ERROR)
@@ -133,7 +133,7 @@ def main():
     api_url='{}atrif/api/v1/tobin/auth/login'.format(url_ws_treg)
     payload_treg = {"username": user_ws_treg, "password": pwd_ws_treg, }
     logger.debug(payload_treg)
-    response = requests.post(api_url, json=payload_treg)
+    response = requests.post(api_url, json=payload_treg, verify=False)
     logger.debug(response)
     #response.json()
     logger.info("Status code: {0}".format(response.status_code))
@@ -153,10 +153,19 @@ def main():
     token=response.text
     logger.debug(token)
 
-    # check_anno_comune = 0 cancello i dati di un anno dato
-    # check_anno_comune = 1 cancello i dati di un anno dato comune pe comune
-    check_anno_comune = 0
 
+
+    ##################################################################################################################################################################
+    # check_anno_comune = 0 cancello i dati dei sovrariempimenti di un anno dato
+     # check_anno_comune = 1 cancello i dati di un anno dato comune per comune (va fatto per raccolta e spazzamento)
+    
+    check_anno_comune = 1
+    tipo_dati =  'sweepings' #'wastecollections'  # 'overfilledbins'
+    anno_input=2026
+    ##################################################################################################################################################################
+
+    # costruisco l'url per la cancellazione dei dati con tipo_dati definito sopra
+    api_url_reset='{}atrif/api/v1/tobin/b2b/process/rifqt-{}/reset-data/av1'.format(url_ws_treg_interno, tipo_dati)
 
     ######################################################
     # Eliminazione dati caricati su TREG per anno e comune
@@ -179,7 +188,7 @@ def main():
 
         curr = conn.cursor()
 
-        query_code_istat='SELECT cod_istat from topo.comuni'
+        query_code_istat='SELECT cod_istat from topo.comuni where id_comune <> 3'
 
         try:
             curr.execute(query_code_istat)
@@ -196,11 +205,13 @@ def main():
 
             body_upload={
                 'id': str(guid),
-                'year': 2025,
+                'year': anno_input,
                 'istatCode': code_istat
             }
-            #api_url_reset='{}atrif/api/v1/tobin/b2b/process/rifqt-wastecollections/reset-data/av1'.format(url_ws_treg)          
-            response_reset = requests.post(api_url_reset, json=body_upload, headers={'accept':'*/*', 
+            
+                      
+            
+            response_reset = requests.post(api_url_reset, json=body_upload, verify=False, headers={'accept':'*/*', 
                                                                                     'mde': 'PROD',
                                                                                     'Authorization': 'EIP {}'.format(token),
                                                                                     'Content-Type': 'application/json'})
@@ -213,10 +224,9 @@ def main():
         
         body_upload={
             'id': str(guid),
-            'year': 2025
+            'year': anno_input
         }
-        api_url_reset='{}atrif/api/v1/tobin/b2b/process/rifqt-overfilledbins/reset-data/av1'.format(url_ws_treg)          
-        response_reset = requests.post(api_url_reset, json=body_upload, headers={'accept':'*/*', 
+        response_reset = requests.post(api_url_reset, json=body_upload, verify=False, headers={'accept':'*/*', 
                                                                                     'mde': 'PROD',
                                                                                     'Authorization': 'EIP {}'.format(token),
                                                                                     'Content-Type': 'application/json'})

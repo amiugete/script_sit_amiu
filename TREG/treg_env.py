@@ -2,7 +2,7 @@
 import requests
 from requests.exceptions import HTTPError
 
-import time 
+import time as tm 
 import os
 
 from invio_messaggio import *
@@ -52,6 +52,9 @@ def call_treg_api(tk, url, body, content_debug, logger, errorfile, error_param, 
         purtroppo ogni metodo restituisce roba diversa ed è difficile da generalizzare uso un if
     '''
     check_error_upload=0
+    split_url = url.split("/")
+    split_url[-2] = "rollback-upload"
+    api_url_rollback = "/".join(split_url)
     
     MAX_RETRIES = 5  # Numero massimo di tentativi
     DELAY_SECONDS = 10  # Tempo di attesa tra i tentativi
@@ -69,38 +72,70 @@ def call_treg_api(tk, url, body, content_debug, logger, errorfile, error_param, 
                                                                     'Authorization': 'EIP {}'.format(tk),
                                                                     'Content-Type': 'application/json'})
             
-            logger.debug(response_m.text)
+            #logger.debug(response_m.text)
             #logger.debug(response_m.json()['errorCount'])
             #exit()
             
             # controllo che non ci siano errori (nel caso mi stoppo)
             #logger.debug('Errore : {}'.format(response_m.json()[error_param]))
             if error_param == 'errorCount':
-                logger.debug("Sto facendo l'upload")
-                if response_m.json()[error_param]:
-                    logger.debug('Errore nella chiamata a TREG') 
-                    logger.error(response_m.text)
-                    logger.error(content_debug)  
-                    
-                    # butto il dato su check_error_upload
-                    check_error_upload+=1
-                # ✅ Se funziona, esci dal ciclo
-                break
+                logger.debug("Sto facendo l'upload") 
+                logger.info(f'Risposta WS :{response_m.text}')
+                try: 
+                    if response_m.json()[error_param]:
+                        logger.debug('Errore nella chiamata a TREG') 
+                        logger.error(response_m.text)
+                        logger.error(content_debug)  
+                        
+                        # butto il dato su check_error_upload
+                        check_error_upload+=1
+                    # ✅ Se funziona, esci dal ciclo
+                    break
+                except KeyError as e:
+                    logger.error('KeyError: {}'.format(e))
+                    logger.error('La chiamata di update è andata in errore per un problema di TREG: {}'.format(response_m.text))
+                    guid = uuid.uuid4()
+                    body_rollback={
+                        'id': str(guid),
+                        'importId': str(importid),
+                    }
+                    response_roll = requests.post(api_url_rollback, json=body_rollback, headers={'accept':'*/*', 
+                                                                        'mde': 'PROD',
+                                                                        'Authorization': 'EIP {}'.format(tk),
+                                                                        'Content-Type': 'application/json'})
+                    logger.error('la chiamata di rollback ha dato questo esito: {}'.format(response_roll.text))
+                    exit()
             # nel caso di delete l'error mi viene restituito in maniera diversa non con errorCount, 
             # ma in caso di errore non ho il deleteCount
             elif error_param == 'deletedCount':
                 logger.debug("Sto facendo il delete")
-                if response_m.json()[error_param] >=0 : # controllo se mi restituisce un numero. perchè comunque se non ho il trac_code da eliminare avrei 0
-                    # ✅ Se funziona, esci dal ciclo
-                    #logger.debug('Entro anche qua')
-                    break
-                else:
-                    logger.debug('Errore nella chiamata a TREG') 
-                    logger.error(response_m.text)
-                    logger.error(content_debug)  
-                    
-                    # butto il dato su check_error_upload
-                    check_error_upload+=1
+                logger.info(f'Risposta WS :{response_m.text}')
+                try:
+                    if response_m.json()[error_param] >=0 : # controllo se mi restituisce un numero. perchè comunque se non ho il trac_code da eliminare avrei 0
+                        # ✅ Se funziona, esci dal ciclo
+                        #logger.debug('Entro anche qua')
+                        break
+                    else:
+                        logger.debug('Errore nella chiamata a TREG') 
+                        logger.error(response_m.text)
+                        logger.error(content_debug)  
+                        
+                        # butto il dato su check_error_upload
+                        check_error_upload+=1
+                except KeyError as e:
+                    logger.error('KeyError: {}'.format(e))
+                    logger.error('La chiamata di delete è andata in errore per un problema di TREG: {}'.format(response_m.text))
+                    guid = uuid.uuid4()
+                    body_rollback={
+                        'id': str(guid),
+                        'importId': str(importid),
+                    }
+                    response_roll = requests.post(api_url_rollback, json=body_rollback, headers={'accept':'*/*', 
+                                                                        'mde': 'PROD',
+                                                                        'Authorization': 'EIP {}'.format(tk),
+                                                                        'Content-Type': 'application/json'})
+                    logger.error('la chiamata di rollback ha dato questo esito: {}'.format(response_roll.text))
+                    exit()
                 
 
         except Exception as e:
@@ -111,9 +146,7 @@ def call_treg_api(tk, url, body, content_debug, logger, errorfile, error_param, 
                 logger.error("dati passati a TREG: {}".format(body))
                 logger.error("i seguenti valori generano l'errore: {}".format(content_debug))
                 error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
-                split_url = url.split("/")
-                split_url[-2] = "rollback-upload"
-                api_url_rollback = "/".join(split_url)
+                
                 #api_url_rollback='{}atrif/api/v1/tobin/b2b/process/rifqt-wastecollections/rollback-upload/av1'.format(url_ws_treg)
                 # questa sarà da passare a TREG, le altre no
                 guid = uuid.uuid4()
@@ -128,7 +161,7 @@ def call_treg_api(tk, url, body, content_debug, logger, errorfile, error_param, 
                 logger.error('la chiamata di rollback ha dato questo esito: {}'.format(response_roll.text))
                 exit()  # fermo l'esecuzione
             else:
-                time.sleep(DELAY_SECONDS)  # Aspetta prima del prossimo tentativo
+                tm.sleep(DELAY_SECONDS)  # Aspetta prima del prossimo tentativo
         
     return check_error_upload
 
@@ -206,18 +239,29 @@ def programming_start_ending_date(cursor, data, id_turno, gc, logger):
     #data = data.astimezone(timezone.utc)
     data = datetime.combine(data, datetime.min.time())
     if gc == 0:
-        data_inizio= data
+        data_inizio = data
     elif gc == -1: 
-        data_inizio= data-timedelta(days=1)
+        data_inizio = data-timedelta(days=1)
     else: 
         logger.error('Come mai gc vale {}'.format(gc))
 
     data_fine = data_inizio+timedelta(days=interval)
     dt_inizio = data_inizio.replace(hour=hhi, minute=mmi, second=0, microsecond=0).astimezone(timezone.utc)
     dt_fine = data_fine.replace(hour=hhf, minute=mmf, second=0, microsecond=0).astimezone(timezone.utc)    
+    # resumption fittizio nel caso in cui manchi una resumption reale, 
+    # in questo modo evito di avere un campo vuoto che mi da errore in TREG, 
+    # tanto se non c'è la resumption è perchè non serve
+    dt_res_start = dt_fine + timedelta(hours=96)
+    dt_res_end = dt_fine + timedelta(hours=96, minutes=10)
+    
     
     dates.append(dt_inizio.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z')
     dates.append(dt_fine.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z')
     dates.append(dt_inizio.strftime('%Y'))
+    dates.append(dt_inizio)
+    # res fittizio
+    dates.append(dt_res_start.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z') # executionStartDate
+    dates.append(dt_res_end.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z')   #executionEndDate
+    dates.append(dt_res_start) # resumptionDate (che poi formatto dentro il collection)
 
     return dates

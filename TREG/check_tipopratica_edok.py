@@ -172,6 +172,16 @@ def main():
         and it.cusdatafine > now() - interval '30' day)
     '''
 
+    # query  di test per confrontare i protocolli su DB e quelli su edok per comune, anno e tipo pratica specifici
+    """    
+    query_ist = '''
+        select it.cusprotocollo, it.id_archivio, it.cusmetadatitipopratica, it.statusdescription from treg_edok.istanze_tari it
+        where it.cusmetadatitipopratica is not null 
+        and it.filtersd2 ilike '%cogoleto%'
+        and it.cusmetadatitipopratica in (select cod_edok from treg_edok.mapping_prestazione mp where cod_treg = 'INF')
+        and extract(year from it."date") = 2025
+        '''
+    """
     update_tipo_pratica ='''
         update treg_edok.istanze_tari
         set cusmetadatitipopratica = %s,

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# AMIU copyleft 2023
+# AMIU copyleft 2025
 # Matteo Scarfò, Roberta Fagandini, Roberto Marzocchi
 
 
@@ -39,7 +39,7 @@ from invio_messaggio import *
 
 import inspect 
 
-
+from treg_env import *
 
 
 
@@ -323,6 +323,20 @@ def SetInvatoTreg(richieste, errori):
     DisconttettiDB(cursor, conn)
 
 
+def SetRimossoTreg(richieste_del):
+    cursor, conn = ConnettiDB()
+
+    query = carica_query_da_file("queryProntoIntervento")
+    
+    #flaggo le richieste come rimosse
+    for r in richieste_del:       
+       cursor.execute(query["set_rimosso"], (r["cod_ident_segn"],))         
+    
+    conn.commit()
+
+    DisconttettiDB(cursor, conn)
+
+
 
 def carica_query_da_file(nome_file):
     percorso_base = os.path.dirname(__file__)  
@@ -373,79 +387,124 @@ def GetRichieste(cursor, inviato_treg):
 
     return result
 
+def GetRichiesteSent(cursor):
+    # per le richieste già inviate a TREG per ogni cod_ident_segn seleziono quelle con max(data_ins) 
+    # in modo da prendere l'ultima versione di ogni richiesta e fare i controlli sui dati più aggiornati
+    query = carica_query_da_file("queryProntoIntervento")
+
+    cursor.execute(query["get_richieste_sent"])
+    col_names = [desc[0] for desc in cursor.description]  
+    result = [dict(zip(col_names, row)) for row in cursor.fetchall()]
+
+    return result
+
 
 def CreaListaInterventi(lista, lista_sent):
     lista_interventi = []
 
     anomalie = 0
     nomi_file = [] #file che hanno dei valori obbligatori mancanti
+    richieste_ignorate = {}
     richieste_anomale = {}
     richieste_non_conf = {}
+    richieste_tobe_deleted = []
     
     for i in lista:
-        #aggiungere un conytrollo sul sottoscopo = chiusura segnalazione con invio mail per ora a noi per richiedere verifica del dato
-        if i["cod_ident_segn"] is None or i["data_telefonata"] is None or i["emerg_type"] is None or i["istat_code"] is None:
-            nomi_file.append(i["id_rich"])
-            richieste_anomale[i["id_rich"]] = 'data apertura segnalazione {} - indirizzo {}'.format(i["data_apert_segn"], i["indirizzo"])
-            logger.info("Richiesta con dati obbligatori mancanti, id richiesta: {}".format(i["id_rich"]))
+        if i["cod_ident_segn"] is None:
+            logger.error("Richiesta con id {} ha cod_ident_segn nullo, non può essere inviata a TREG".format(i["id_rich"]))
+            richieste_ignorate[i["id_rich"]] = 'Id GAP NULLO: data apertura segnalazione {} - indirizzo {}'.format(i["data_apert_segn"], i["indirizzo"])
             anomalie += 1
         else:
-            receptionDate = to_iso_z(i["data_telefonata"])
-            arrivalDateTime = to_iso_z(i["data_arrivo_luogo"], i["ora_arrivo_luogo"]) if i["data_arrivo_luogo"] else None
-            securingDateTime = to_iso_z(i["data_messa_sic"], i["ora_messa_sic"]) if i["data_messa_sic"] else None
-            cleanUpDateTime = to_iso_z(i["data_rim_rif"], i["ora_rim_rif"]) if i["data_rim_rif"] else None
+            #aggiungere un conytrollo sul sottoscopo = chiusura segnalazione con invio mail per ora a noi per richiedere verifica del dato
+            if i["data_telefonata"] is None or i["emerg_type"] is None or i["istat_code"] is None:
+                nomi_file.append(i["nome_file"])
+                richieste_anomale[i["cod_ident_segn"]] = 'Id GAP {}: data apertura segnalazione {} - indirizzo {}'.format(i["cod_ident_segn"], i["data_apert_segn"], i["indirizzo"])
+                logger.info("Richiesta con dati obbligatori mancanti, id richiesta GAP: {}".format(i["cod_ident_segn"]))
+                anomalie += 1
+            elif i["sottoscopo"].lower().strip() == 'segnalazione duplicata': 
+                richieste_tobe_deleted.append(str(i["cod_ident_segn"]))
+                logger.info("Richiesta con sottoscopo segnalazione duplicata, id richiesta GAP: {}".format(i["cod_ident_segn"]))
+                anomalie += 1
+            else:
+                receptionDate = to_iso_z(i["data_telefonata"])
+                arrivalDateTime = to_iso_z(i["data_arrivo_luogo"], i["ora_arrivo_luogo"]) if i["data_arrivo_luogo"] else None
 
-            intervento = {
-                'id': i["cod_ident_segn"],
-                'year': i["anno"],
-                'receptionDate': receptionDate,  
-                'emergencyType': i["emerg_type"],
-                'caller': i["nomin_segn"] if i["nomin_segn"] else None,
-                'phone': i["rec_tel"] if i["rec_tel"] else None,
-                'istatCode': i["istat_code"],
-                'address': i["indirizzo"] if i["indirizzo"] else None,
-                'nonComplianceCause': i["causale"] if i["causale"] else None,
-                'arrivalDateTime': arrivalDateTime,
-                'securingDateTime':  securingDateTime if securingDateTime is not None else arrivalDateTime,
-                'cleanUpDateTime': cleanUpDateTime,
-            }
+                if i["emerg_type"] != 'RIM':
+                    securingDateTime = None
+                elif i["data_messa_sic"] is not None:
+                    securingDateTime = to_iso_z(i["data_messa_sic"], i["ora_messa_sic"])
+                else:
+                    securingDateTime = arrivalDateTime
+                
+                if i["emerg_type"] != 'RIM':
+                    cleanUpDateTime = None
+                elif i["data_rim_rif"] is not None:
+                    cleanUpDateTime = to_iso_z(i["data_rim_rif"], i["ora_rim_rif"])
+                else:
+                    cleanUpDateTime = None
 
-            lista_interventi.append(intervento)
+                   
+                intervento = {
+                    'id': i["cod_ident_segn"],
+                    'year': i["anno"],
+                    'receptionDate': receptionDate,  
+                    'emergencyType': i["emerg_type"],
+                    'caller': i["nomin_segn"][:30] if i["nomin_segn"] else None,
+                    'phone': i["rec_tel"] if i["rec_tel"] else None,
+                    'istatCode': i["istat_code"],
+                    'address': i["indirizzo"] if i["indirizzo"] else None,
+                    'nonComplianceCause': i["causale"] if i["causale"] else None,
+                    'arrivalDateTime': arrivalDateTime,
+                    'securingDateTime':  securingDateTime,
+                    'cleanUpDateTime': cleanUpDateTime,
+                }
+
+                lista_interventi.append(intervento)
 
     for j in lista_sent:
         if j["data_chius_segn"] is None:
-            richieste_non_conf[j["id_rich"]] = 'data apertura segnalazione {} - indirizzo {}'.format(j["data_apert_segn"], j["indirizzo"])
-            logger.info("Richiesta non confoeme ai fini ARERA, id richiesta: {}".format(j["id_rich"]))
+            #richieste_non_conf[j["id_rich"]] = 'data apertura segnalazione {} - indirizzo {}'.format(j["data_apert_segn"], j["indirizzo"])
+            richieste_non_conf[j["cod_ident_segn"]] = 'Id GAP {}: data apertura segnalazione {} - indirizzo {}'.format(j["cod_ident_segn"], j["data_apert_segn"], j["indirizzo"])
+            logger.info("Richiesta non conforme ai fini ARERA, id GAP richiesta: {}".format(j["cod_ident_segn"]))
             anomalie += 1
-
+    #logger.debug("Richieste non conformi ai fini ARERA: {}".format(richieste_non_conf))
     if anomalie > 0:
         # Create a multipart message and set headers
         message = MIMEMultipart()
         message["From"] = sender_email
-        message["To"] = 'roberto.longo@amiu.genova.it, Alessia.Magni@amiu.genova.it, Lupi@amiu.genova.it'
+        message["To"] = 'roberto.longo@amiu.genova.it, Alessia.Magni@amiu.genova.it, alessandro.baldassari@amiu.genova.it'
         #message["To"] = 'roberta.fagandini@amiu.genova.it'
-        message["CC"] = 'assterritorio@amiu.genova.it, Matteo.Relli@amiu.genova.it'
+        message["CC"] = 'assterritorio@amiu.genova.it, Matteo.Relli@amiu.genova.it, Lupi@amiu.genova.it'
         message["Subject"] = "Richiesta PIN con dati obbligatori mancanti"
         #message["Bcc"] = debug_email  # Recommended for mass emails
         #message.preamble = f"Ispezione con id {id_ispezione} è stata eliminata"
-        ids_list = "".join(f"<li>{key}: {value}</li>" for key, value in richieste_anomale.items())
-        idsA_list = "".join(f"<li>{key}: {value}</li>" for key, value in richieste_non_conf.items())
+        ids_list = "".join(f"<li>{value}</li>" for key, value in richieste_anomale.items())
+        #idsA_list = "".join(f"<li>{key}: {value}</li>" for key, value in richieste_non_conf.items())
+        idsA_list = "".join(f"<li>{value}</li>" for key, value in richieste_non_conf.items())
+        idsI_list = "".join(f"<li>{key}: {value}</li>" for key, value in richieste_ignorate.items())
         body = f"""
         <html>
         <head></head>
         <body>
         <p>"""
+        if len(richieste_ignorate) > 0:
+            body += f"""
+                <b> ATTENZIONE! </b> Nei file csv ci sono richieste di Pronto intervento con codice identificativo NULLO che quindi verranno ignorate.<br>
+                Di seguito l'elenco degli ID delle richieste con i dati mancanti:<br>
+                <ul>
+                    {idsI_list}
+                </ul>"""
         if len(richieste_anomale) > 0:
             body += f"""
                 Nei file CSV, inviati settimanalmente da GAP, sono presenti richieste di Pronto Intervento con dati obbligatori mancanti che quindi non sono state inviate a TREG.<br>
-                Di seguito l'elenco degli ID delle richieste con i dati mancanti:<br>
+                Di seguito l'elenco degli ID GAP delle richieste con i dati mancanti:<br>
                 <ul>
                     {ids_list}
                 </ul>"""
         if len(richieste_non_conf) > 0:
             body += f"""
                 Su TREG risultano alcune richieste di Pronto Intervento <b>NON conformi</b> ai fini ARERA.<br>
-                Di seguito l'elenco degli ID delle richieste non conformi:<br>
+                Di seguito l'elenco degli ID GAP delle richieste non conformi:<br>
                 <ul>
                     {idsA_list}
                 </ul>"""
@@ -464,7 +523,7 @@ def CreaListaInterventi(lista, lista_sent):
         invio=invio_messaggio(message)
         logging.info(invio)
 
-    return lista_interventi, nomi_file
+    return lista_interventi, nomi_file, richieste_tobe_deleted
 
 def checkFileArchive(cursor, logger):
     query = carica_query_da_file("queryProntoIntervento")
@@ -585,11 +644,12 @@ def main():
         cursor, conn = ConnettiDB()
 
         richieste = GetRichieste(cursor, 0)  # Prendo solo quelle non inviate 
-        richieste_sent = GetRichieste(cursor, 1)  # Prendo quelle già inviate per i controlli
+        richieste_sent = GetRichiesteSent(cursor)  # Prendo quelle già inviate per i controlli
 
         DisconttettiDB(cursor, conn)
 
-        interventi, errori = CreaListaInterventi(richieste, richieste_sent)              
+        interventi, errori, richieste_tobe_deleted = CreaListaInterventi(richieste, richieste_sent)        
+        logger.debug("Lista interventi da inviare a TREG: {}".format(interventi))      
 
         if interventi:
             #Connessione con Token a TREG
@@ -672,6 +732,24 @@ def main():
                     logger.error(ex)                                
             else:
                 logger.error("Pronto intervento - La chiamata di upload a TREG ha restituito errori: " +  response_upload.text)
+            
+            if len(richieste_tobe_deleted) > 0:
+                logger.info("Elimino le richieste con sottoscopo segnalazione duplicata, id GAP: {}".format(richieste_tobe_deleted))
+                api_url_delete='{}atrif/api/v1/tobin/b2b/process/rifqt-emergencies/delete/av1'.format(credenziali.url_ws_treg)
+
+                guid_del = uuid.uuid4()
+                body_delete = {
+                    'id': str(guid_del),
+                    'emergencyIds': richieste_tobe_deleted
+                }
+                check_error_delete = call_treg_api(token, api_url_delete, body_delete, richieste_tobe_deleted, logger, errorfile, 'deletedCount', importId)
+                if check_error_delete>0:
+                    logger.error('Errore nel delete da TREG per la richieste con ID GAP {}'.format(richieste_tobe_deleted))
+                    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                else:
+                    logger.info('Richieste con sottoscopo segnalazione duplicata eliminate correttamente da TREG')
+                    SetRimossoTreg(richieste_tobe_deleted)  #segna le richieste come rimosse sul DB
+
         else:
             logger.info("Non sono state trovare richieste da inviare nel DB")
     except Exception as ex:

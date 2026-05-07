@@ -1,8 +1,28 @@
 -- name: inserisci_richiesta
-INSERT INTO treg_gap.richieste (scopo, sottoscopo, esito, data_telefonata, cod_ident_segn, tipo_apertura_guasto, data_apert_segn, ora_apert_segn, localita, nomin_segn, 
-                                rec_tel, tipo_richiesta, note_chiusura, data_chius_segn, ora_chius_segn, nomin_tecn_amiu, ident_interv_chius, data_ins, nome_file,
-                                indirizzo, data_arrivo_luogo, data_messa_sic, data_rim_rif, mot_rit, ora_arrivo_luogo, ora_messa_sic, ora_rim_rif, inviato_treg) 
-VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0);
+INSERT INTO treg_gap.richieste (scopo, sottoscopo, esito, data_telefonata, 
+cod_ident_segn, tipo_apertura_guasto, 
+data_apert_segn, ora_apert_segn, 
+localita, nomin_segn, 
+rec_tel, tipo_richiesta, note_chiusura, 
+data_chius_segn, ora_chius_segn,
+nomin_tecn_amiu, ident_interv_chius, 
+data_ins, nome_file, indirizzo, 
+data_arrivo_luogo, data_messa_sic, 
+data_rim_rif, mot_rit, 
+ora_arrivo_luogo, ora_messa_sic, 
+ora_rim_rif, inviato_treg) 
+VALUES(%s, %s, %s, to_timestamp(%s, 'YYYY-MM-DD HH24:MI:SS'), 
+%s, %s, 
+to_date(%s, 'YYYY-MM-DD'), %s,
+%s, %s, 
+%s, %s, %s, 
+to_date(%s, 'YYYY-MM-DD'), %s, 
+%s, %s, 
+%s, %s, %s, 
+to_date(%s, 'YYYY-MM-DD'), to_date(%s, 'YYYY-MM-DD'), 
+to_date(%s, 'YYYY-MM-DD'), %s, 
+%s, %s, 
+%s, 0);
 
 
 -- name: get_richieste
@@ -20,7 +40,7 @@ FROM treg_gap.richieste r
 left join topo.comuni c on upper(trim(c.descr_comune)) = upper(trim(r.localita))
 left join causale on causale.codice = r.mot_rit
 left join emergenza on trim(UPPER(emergenza.descrizione)) = TRIM(UPPER(r.tipo_apertura_guasto))
-where scopo = 'Pronto intervento' and sottoscopo not ilike 'chiusura segnalazione' and r.inviato_treg = %s;
+where scopo = 'Pronto intervento' and sottoscopo not ilike 'chiusura segnalazione' and r.inviato_treg = %s and r.rimosso_treg = 0;
 
 -- name: set_inviato
 update treg_gap.richieste r set inviato_treg = 1 where id = %s;
@@ -28,3 +48,14 @@ update treg_gap.richieste r set inviato_treg = 1 where id = %s;
 
 -- name: get_last_file
 select split_part(max(nome_file), '_', 1) as year, split_part(max(nome_file), '_', 3) as week from treg_gap.richieste r
+
+-- name: set_rimosso
+update treg_gap.richieste r set rimosso_treg = 1 where cod_ident_segn = %s;
+
+
+-- name: get_richieste_sent
+SELECT DISTINCT ON (cod_ident_segn) *
+FROM treg_gap.richieste
+where scopo = 'Pronto intervento' and sottoscopo not ilike 'chiusura segnalazione' 
+and inviato_treg = 1 and rimosso_treg = 0
+ORDER BY cod_ident_segn, data_ins DESC;

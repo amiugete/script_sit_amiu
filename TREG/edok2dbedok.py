@@ -361,9 +361,9 @@ from treg_edok.istanze_tari where id_archivio = %s'''
         
         
         num_mail=int(response2.json()['@odata.count'])
-        logger.info(f'Numero mail da leggere {num_mail}')
-        
-        logger.debug(response2.json()['value'][0]['date'])
+        logger.info(f'Numero pratiche ({ids[s]}) da leggere {num_mail}')
+        if num_mail > 0:
+            logger.debug(response2.json()['value'][0]['date'])
         step=1000
         count=0
         #exit()
