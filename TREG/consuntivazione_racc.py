@@ -469,6 +469,8 @@ group by codice_servizio_pred,
     query_update_check='''UPDATE marzocchir.check_upload_treg set upload = 1
     where codice_servizio_pred = %s and data_pianif_iniziale = %s'''
     """
+    
+    
     select_resumption_date = '''SELECT min(ce.data_ora_inizio) + (ep.giorno_competenza || ' day')::interval , 
 min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval 
         FROM treg_eko.consunt_ekovision ce
@@ -477,8 +479,12 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
         	and to_date(ce.data_pianif_iniziale, 'YYYYMMDD') between ep.data_inizio_validita and ep.data_fine_validita -1
         WHERE codice = %s
         AND causale IN ('100','110')
-        AND data_ora_inizio + (ep.giorno_competenza || ' day')::interval  >= %s
-    group by ep.giorno_competenza ;
+        AND 
+        (data_ora_inizio + (ep.giorno_competenza || ' day')::interval  >= %s
+        OR /* cerco anche il caso di anticipo*/
+        data_pianif_iniziale = %s  and id_turno = %s)
+    group by ep.giorno_competenza 
+    ORDER BY 2,1;
     '''
        
     query_insert='''INSERT INTO treg_eko.last_import_treg_racc_cons
@@ -735,10 +741,13 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
                     
                     #if tappa_prevista(datetime.strptime(c[1], '%Y%m%d').date(),  eep[13])==1 :
                         # PER ORA NON SERVE LA VERIFICA SULLA SETTIMANA CHE C'E solo a livello di percorso:
-                            
+                    
                             
                     curr1 = conn.cursor()
                     curr2 = conn.cursor()
+                    
+                    # lo calcolo una volta poi lo riuso
+                    prog_dates = programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[6], logger)
                     
                     if eep[5] is None:
                         interruptionType = None
@@ -774,13 +783,15 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
                         # se non c'è disservizio per colpa del gestore non faccio niente
                         
                         
-                        interruptionDate = programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[6], logger)[0]
+                        interruptionDate = prog_dates[0]
                         #executionStartDate = None
                         #executionEndingDate = None
                         # calcolo il resumption date
                         try:
                             #curr1.execute(select_resumption_date, (eep[4], eep[2],))
-                            curr1.execute(select_resumption_date, (eep[4], programming_start_ending_date(curr2, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[6], logger)[3],))
+                            curr1.execute(select_resumption_date, (eep[4], 
+                                            programming_start_ending_date(curr2, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[6], logger)[3],
+                                            t[1], t[0],))
                             #resumptionDate = curr1.fetchone()[0]
                             tmp_resumptionDate = curr1.fetchone()
                             
@@ -827,9 +838,9 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
                                         logger.info('''executionStartDate: {}, executionEndingDate: {}, resumptionDate: {}'''.format(executionStartDate, executionEndingDate, resumptionDate))
                                     else:
                                         logger.warning('Non trovo data di chiusura percorso, non posso calcolare resumption date e data di esecuzione per ora metto + 96 h')
-                                        executionStartDate = programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[6], logger)[4]
-                                        executionEndingDate = programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[6], logger)[5]
-                                        resumptionDate = programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[6], logger)[6]
+                                        executionStartDate = prog_dates[4]
+                                        executionEndingDate = prog_dates[5]
+                                        resumptionDate = prog_dates[6]
                             else:
                                 resumptionDate = tmp_resumptionDate[0]
                                 executionStartDate = resumptionDate.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
@@ -879,8 +890,8 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
                     else:                
                         wasteCollection={
                             'traceabilityCode': '{0}_{1}_{2}'.format(eep[4],t[1],t[0]),
-                            'programmingStartDate':programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[6], logger)[0],
-                            'programmingEndingDate':programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[6], logger)[1],
+                            'programmingStartDate':prog_dates[0],
+                            'programmingEndingDate':prog_dates[1],
                             'executionStartDate': executionStartDate,
                             'executionEndingDate': executionEndingDate,                   
                             'collectionType':str(eep[7]),
@@ -889,7 +900,7 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
                             'streetDescription':str(eep[9]),
                             'cerCode':str(eep[10]),
                             'wasteDescription':str(eep[11]),
-                            'year':int(programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[6], logger)[2]),
+                            'year':int(prog_dates[2]),
                             'istatCode': str(eep[12]),
                             'interruptionType': interruptionType,
                             'interruptionCause':interruptionCause,

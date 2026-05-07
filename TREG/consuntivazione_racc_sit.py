@@ -138,7 +138,10 @@ def main():
     
     # volendo si può definire se fare o meno il commit in fondo 
     
-    id_scheda_test = None #477822
+    id_scheda_test = 506943 #559502 # None #642890  #477822
+    #642890
+    #648932
+    #648933 # None #524264  #477822
     ##################################################
 
 
@@ -261,7 +264,7 @@ def main():
     set id_causale = %s, lavaggio = %s,
     data_ora_ini_esec = %s,  data_ora_fine_esec = %s, 
     tempo_recupero = %s, tempo_ripresa = %s, 
-    tipo_raccolta = %s
+    tipo_raccolta = %s, non_previsto = %s
     where trac_code = %s and cod_percorso = %s
     '''
     
@@ -482,6 +485,26 @@ group by codice_servizio_pred,
     """
     
     
+    
+    # verifica se ci sono altri elementi con stesso trac_code e causale con disservizio
+    query_check_diss= '''select  
+        ce.id_scheda, ce.codice_servizio_pred, ce.codice, ce.causale, cd.id_causale_arera
+        from treg_eko.consunt_ekovision ce 
+        join anagrafe_percorsi.elenco_percorsi ep 
+        on ep.cod_percorso = ce.codice_servizio_pred 
+        and to_date(ce.data_pianif_iniziale, 'YYYYMMDD') 
+        between data_inizio_validita and (data_fine_validita - interval '1' day) 
+        join etl.cause_disserv cd on cd.codice = ce.causale::int
+        where 
+        ce.codice = %s
+        and ce.data_pianif_iniziale = %s
+        and ep.id_turno = %s
+        and ce.causale::int not in (101, 102, 999, 100, 110)
+        order by id_causale_arera desc limit 1'''
+        
+        
+        
+    
     select_resumption_date = '''SELECT min(ce.data_ora_inizio) + (ep.giorno_competenza || ' day')::interval , 
 min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval 
         FROM treg_eko.consunt_ekovision ce
@@ -490,7 +513,9 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
         	and to_date(ce.data_pianif_iniziale, 'YYYYMMDD') between ep.data_inizio_validita and ep.data_fine_validita -1
         WHERE codice = %s
         AND causale IN ('100','110')
-        AND data_ora_inizio + (ep.giorno_competenza || ' day')::interval  >= %s
+        AND (data_ora_inizio + (ep.giorno_competenza || ' day')::interval  >= %s
+        OR /* cerco anche il caso di anticipo*/
+        data_pianif_iniziale = %s  and id_turno = %s)
     group by ep.giorno_competenza ;
     '''
        
@@ -668,16 +693,21 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
                     #logger.debug(eep[0])  
                     # verifico se in frequenza con la solita funzione
                     #if tappa_prevista(data_start,  eep[1])==1:
-                        
+                    
+                    
                         
                     curr1 = conn.cursor()
                     curr2 = conn.cursor()
+
+                    prog_dates = programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[6], logger)    
+
                     
                     if eep[5] is None:
                         interruptionType = None
                         interruptionCause = None
                         interruptionDate = None
                         resumptionDate = None
+                        causale_ok = None
                         executionStartDate = eep[2].astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
                         executionEndingDate = eep[3].astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
                     elif int(eep[5]) in (100,110,102,101,999): # 100 - compleatato 110 - completato con lavaggio
@@ -685,6 +715,7 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
                         interruptionCause = None
                         interruptionDate = None
                         resumptionDate = None
+                        causale_ok = eep[5]
                         executionStartDate = eep[2].astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
                         executionEndingDate = eep[3].astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
                     else:
@@ -692,7 +723,33 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
                         interruptionCause = causale_arera(curr1, eep[5], logger, errorfile)
                         if interruptionCause is None:
                             logger.error(f'Per il percorso {c[0]} del {datetime.strptime(c[1], "%Y%m%d").date()} trovo delle causali {eep[5]} non mappate in ARERA')
-                        interruptionDate = programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[6], logger)[0]
+                        
+                        
+                        # devo verificare che non ci sia la stessa componente con causale colpa del gestore
+                        
+                        try: 
+                            curr1.execute(query_check_diss, (eep[4], t[1], t[0],))
+                            check_diss=curr1.fetchone()
+                        except Exception as e:
+                            check_error=1
+                            logger.error(query_check_diss)
+                            logger.error(e)
+                        
+                        # se trova qualcosa già consuntivato con altra causale 
+                        if check_diss is not None:  
+                            # se colpa del gestore tengo quella
+                            if check_diss[4] == 3:
+                                #interruptionCause = causale_arera(curr1, check_diss[3], logger, errorfile) 
+                                causale_ok=check_diss[3]
+                            #altrimenti sovrascrivo
+                            else:
+                                causale_ok=eep[5]
+                        # se non trovo nulla prendo per buona la causale che ho sulla scheda
+                        else :
+                            causale_ok=eep[5]
+                            
+                            
+                        interruptionDate = prog_dates[0]
                         #executionStartDate = None
                         #executionEndingDate = None
                         # calcolo il resumption date
@@ -700,7 +757,9 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
                             #curr1.execute(select_resumption_date, (eep[4], eep[2],))
                             #logger.debug('t[1]:{}'.format(t[1]))
                             #logger.debug(programming_start_ending_date(curr2, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[6], logger)[3])
-                            curr1.execute(select_resumption_date, (eep[4], programming_start_ending_date(curr2, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[6], logger)[3],))
+                            curr1.execute(select_resumption_date, (eep[4],
+                                prog_dates[3],
+                                t[1], t[0],))
                             #resumptionDate = curr1.fetchone()[0]
                             
                             tmp_resumptionDate = curr1.fetchone()
@@ -747,9 +806,9 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
                                         logger.info('''executionStartDate: {}, executionEndingDate: {}, resumptionDate: {}'''.format(executionStartDate, executionEndingDate, resumptionDate))
                                     else:
                                         logger.warning('Non trovo data di chiusura percorso, non posso calcolare resumption date e data di esecuzione per ora metto + 96 h')
-                                        executionStartDate = programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[6], logger)[4]
-                                        executionEndingDate = programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[6], logger)[5]
-                                        resumptionDate = programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[6], logger)[6]
+                                        executionStartDate = prog_dates[4]
+                                        executionEndingDate = prog_dates[5]
+                                        resumptionDate = prog_dates[6]
                             else:
                                 resumptionDate = tmp_resumptionDate[0]
                                 executionStartDate = resumptionDate.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
@@ -774,6 +833,7 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
                     
                     
                     trac_code= '{0}_{1}_{2}'.format(eep[4],t[1],t[0])
+                    #logger.debug(f'Trac code: {trac_code}')
                     # cod_percorso = c[0]
                     # id_piazzola eep[14]
                     # id_elemento eep[4]
@@ -818,16 +878,12 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
                         esec_fine = datetime.strptime(executionEndingDate, 
                                                 '%Y-%m-%dT%H:%M:%S.%fZ')
                         # prendo la data fine programmazione UTC e la riconverto in datetime
-                        progr_iniziale = datetime.strptime(programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[6], logger)[0], 
+                        progr_iniziale = datetime.strptime(prog_dates[0], 
                                                 '%Y-%m-%dT%H:%M:%S.%fZ')
-                        progr_finale = datetime.strptime(programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[6], logger)[1], 
+                        progr_finale = datetime.strptime(prog_dates[1], 
                                                 '%Y-%m-%dT%H:%M:%S.%fZ')
                         
-                        # se la data di inizio esecuzione è > di quella di fine programmazione significa che il servizio è stato fatto in maniera non regolare, 
-                        # quindi devo calcolare un tempo recupero in h altrimenti no 
-                        t_ripresa = round((esec_inizio - progr_iniziale).total_seconds()/3600,1) if esec_inizio >  progr_iniziale else None
-                        t_recupero = round((esec_fine - progr_finale).total_seconds()/3600,1) if esec_fine > progr_finale else None
-                    
+                        
                         # per scrivere su DB SIT 
                         # 1) converto in datetime 
                         # 2) ritorno alle ore non UTC che sono più leggibili
@@ -835,8 +891,27 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
                         
                         esec_fine_tz = datetime.strptime(executionEndingDate, 
                                                 '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=timezone.utc).astimezone(tz_roma)
-                    
                         
+                        progr_iniziale_tz = progr_iniziale.replace(tzinfo=timezone.utc).astimezone(tz_roma)
+                        
+                        progr_finale_tz = progr_finale.replace(tzinfo=timezone.utc).astimezone(tz_roma)
+                        
+                        
+                        if eep[4]== 215798:
+                            logger.debug(f'''Per il percorso {c[0]} del {datetime.strptime(t[1], "%Y%m%d").date()}, (cod turno {t[0]}) codice {eep[4]} con causale {eep[5]}
+                                    prendo programmazione iniziale {progr_iniziale_tz} e finale {progr_finale_tz} 
+                                    e esecuzione inizio {esec_inizio_tz} e fine {esec_fine_tz} e programmazione ''')
+                        # se la data di inizio esecuzione è > di quella di fine programmazione significa che il servizio è stato fatto in maniera non regolare, 
+                        # quindi devo calcolare un tempo recupero in h altrimenti no 
+                        t_ripresa_utc = round((esec_inizio - progr_iniziale).total_seconds()/3600,3) if esec_inizio >  progr_iniziale else None
+                        t_recupero_utc = round((esec_fine - progr_finale).total_seconds()/3600,3) if esec_fine > progr_finale else None
+                    
+                        t_ripresa = round((esec_inizio_tz - progr_iniziale_tz).total_seconds()/3600,3) if esec_inizio_tz >  progr_iniziale_tz else None
+                        t_recupero = round((esec_fine_tz - progr_finale_tz).total_seconds()/3600,3) if esec_fine_tz > progr_finale_tz else None
+                    
+                        if eep[4]== 215798:
+                            logger.debug(f''' t_recupero_utc: {t_recupero_utc}, t_ripresa_utc: {t_ripresa_utc},
+                                         t_recupero: {t_recupero}, t_ripresa: {t_ripresa}''')
                         
                     # tipo_raccolta  eep[7] 
                     
@@ -848,17 +923,24 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
                                              eep[4], eep[8], get_asta_civ_rif(curr1, eep[4], logger)[0],
                                             get_asta_civ_rif(curr1, eep[4], logger)[1],get_asta_civ_rif(curr1, eep[4], logger)[2],eep[15],
                                             datetime.strptime(t[1], '%Y%m%d').date(), decode_turno(curr1, t[0], logger), t_non_prev,
-                                            int(eep[5]), lavaggio, esec_inizio_tz,  esec_fine_tz,
+                                            int(causale_ok), lavaggio, esec_inizio_tz,  esec_fine_tz,
                                             t_recupero, t_ripresa, eep[7]))
                     else: 
                         # update più semplice 
                         
-                        lista_update.append((int(eep[5]), lavaggio, 
+                        lista_update.append((int(causale_ok), lavaggio, 
                                     esec_inizio_tz,  esec_fine_tz,
-                                    t_recupero, t_ripresa, eep[7], trac_code, c[0]))
-                            
-
-                    
+                                    t_recupero, t_ripresa, eep[7], t_non_prev,
+                                    trac_code, c[0]))
+                    """ 
+                    in teoria dovrebbe bastare l'update perchè quanto a calendario dovrebbe già essere passato attraverso l'altro codice       
+                    lista_insert.append((trac_code, c[0], eep[14],
+                                             eep[4], eep[8], get_asta_civ_rif(curr1, eep[4], logger)[0],
+                                            get_asta_civ_rif(curr1, eep[4], logger)[1],get_asta_civ_rif(curr1, eep[4], logger)[2],eep[15],
+                                            datetime.strptime(t[1], '%Y%m%d').date(), decode_turno(curr1, t[0], logger), t_non_prev,
+                                            int(eep[5]), lavaggio, esec_inizio_tz,  esec_fine_tz,
+                                            t_recupero, t_ripresa, eep[7]))
+                    """
                     
                     ########## ripartire da qua
                          

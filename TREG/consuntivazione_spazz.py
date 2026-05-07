@@ -230,7 +230,7 @@ def main():
 
 
     c_handler.setLevel(logging.ERROR)
-    f_handler.setLevel(logging.DEBUG)
+    f_handler.setLevel(logging.INFO)
 
 
     # Add handlers to the logger
@@ -277,7 +277,7 @@ def main():
         ) select cod_percorso, versione_testata, freq_binaria, freq_settimane, id_turno, gestione_arera, data_pianif_iniziale, max(data_last_update)
         from step0
         group by cod_percorso, versione_testata, freq_binaria, freq_settimane, id_turno, gestione_arera, data_pianif_iniziale
-        order by 8 asc limit 2500
+        order by 8 asc limit 1350;
     '''
     
     # cerco quelle di SIT
@@ -416,8 +416,11 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
         	and to_date(ce.data_pianif_iniziale, 'YYYYMMDD') between ep.data_inizio_validita and ep.data_fine_validita -1
         WHERE codice = %s
         AND causale = '100'
-        AND data_ora_inizio + (ep.giorno_competenza || ' day')::interval  >= %s
-    group by ep.giorno_competenza ;
+        AND (data_ora_inizio + (ep.giorno_competenza || ' day')::interval  >= %s
+        OR /* cerco anche il caso di anticipo*/
+        data_pianif_iniziale = %s  and id_turno = %s)
+    group by ep.giorno_competenza
+    ORDER BY 2,1;
     '''
 
     query_insert='''INSERT INTO treg_eko.last_import_treg_spazz_cons
@@ -451,7 +454,7 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
     
     # verifica se ci sono altri elementi con stesso trac_code e causale con disservizio
     query_check_diss= '''select  
-        ce.id_scheda, ce.codice_servizio_pred, ce.codice, ce.causale, cd.id_causale_arera
+        ce.id_scheda, ce.codice_servizio_pred, ce.codice, ce.causale, cd.id_causale_arera, ep.freq_settimane
         from treg_eko.consunt_ekovision ce 
         join anagrafe_percorsi.elenco_percorsi ep 
         on ep.cod_percorso = ce.codice_servizio_pred 
@@ -462,8 +465,50 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
         ce.codice = %s
         and ce.data_pianif_iniziale = %s
         and ep.id_turno = %s
-        and ce.causale::int not in (101, 102, 999, 100, 110)
-        order by id_causale_arera desc limit 1'''
+        and ce.causale::int not in (101, 102, 999, 100)
+        and cd.id_causale_arera = 3
+        /*order by id_causale_arera desc */ 
+        limit 1'''
+        
+        
+    query_diss_in_freq='''
+    with tab as (
+SELECT codice_modello_servizio, ordine, objecy_type, 
+                    codice, quantita, lato_servizio, percent_trattamento,frequenza,
+                    ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
+                    codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine, 
+                    id_asta_percorso, id_elemento_asta_percorso
+    FROM anagrafe_percorsi.v_percorsi_elementi_tratti 
+    where codice_modello_servizio = %s 
+    and codice = %s and 
+    data_inizio < coalesce(data_fine, '20991231')
+    union 
+    SELECT codice_modello_servizio, ordine, objecy_type, 
+        codice, quantita, lato_servizio, percent_trattamento,frequenza,
+        ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
+        codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine,
+        id_asta_percorso, id_elemento_asta_percorso
+    FROM anagrafe_percorsi.v_percorsi_elementi_tratti_ovs 
+    where codice_modello_servizio = %s 
+    and codice = %s and data_inizio < coalesce(data_fine, '20991231')
+    union 
+    SELECT codice_modello_servizio, ordine, objecy_type, 
+        codice, quantita, lato_servizio, percent_trattamento,frequenza,
+        ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
+        codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine, 
+        id_asta_percorso, id_elemento_asta_percorso
+    FROM anagrafe_percorsi.mv_percorsi_elementi_tratti_dismessi 
+    where codice_modello_servizio = %s
+    and codice = %s and data_inizio < coalesce(data_fine, '20991231')
+) select treg_eko.verify_daily_frequency(
+    	    tab.frequenza,
+    	    to_date(%s, 'YYYYMMDD'),
+    	    %s
+    	) from tab
+    	where %s between tab.data_inizio and tab.data_fine 
+    '''
+    
+    
     
     insert_importid = '''
         INSERT INTO treg_eko.check_status_import
@@ -670,13 +715,17 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
                 list_sweeping=[]
                 list_trac_del=[]
                 # popolo tratti_sit
+                curr1 = conn.cursor()
+                curr2 = conn.cursor()
+                
+                
                 for eep in elenco_elementi_percorso:
                     # verifico se in frequenza con la solita funzione
                     #if tappa_prevista(datetime.strptime(c[1], '%Y%m%d').date(),  eep[12])==1:
                     # questa sarà da passare a TREG, le altre no
-                    curr1 = conn.cursor()
-                    curr2 = conn.cursor()
                     
+                    # lo calcolo una volta poi lo riuso 
+                    prog_dates = programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[7], logger)
                     if eep[5] is None:
                         interruptionType = None
                         interruptionCause = None
@@ -706,18 +755,42 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
                             logger.error(query_check_diss)
                             logger.error(e)
                         
-                        if check_diss is not None:  
+                        if check_diss is not None:
+                            #logger.debug('Verifico se in frequenza')
+                            #logger.debug(f''' check_diss[1] = {check_diss[1]} ,check_diss[2] ={check_diss[2]}, t[1] = {t[1]}''')
+                            
                             if check_diss[4] == 3:
-                                interruptionCause = causale_arera(curr1, check_diss[3], logger, errorfile) 
+                                try: 
+                                    curr1.execute(query_diss_in_freq, (check_diss[1], check_diss[2],
+                                                                    check_diss[1], check_diss[2],
+                                                                    check_diss[1], check_diss[2], 
+                                                                    t[1], check_diss[5], t[1],))
+                                    in_freq_diss=curr1.fetchone()[0]
+                                except Exception as e:
+                                    check_error=1
+                                    logger.error(query_diss_in_freq)
+                                    logger.error(e)
+                            else:
+                                in_freq_diss=-1 # se non è disservizio per colpa del gestore non mi interessa se è in frequenza o no, non devo fare escalation alla causale di disservizio più grave tra gli elementi con stesso trac code
+                              
+                            if check_diss[4] == 3 and in_freq_diss == 1:
+                                interruptionCause = causale_arera(curr1, check_diss[3], logger, errorfile)
+                            # se in_freq fosse 0 o causale non di disservizio per colpa del gestore, 
+                            # allora interruption cause rimarrebbe quella della scheda in questione,
+                            # senza escalation alla causale di disservizio più grave trovata tra gli elementi con stesso trac code.
+                            
+                             
                         # se non c'è disservizio per colpa del gestore non faccio niente
                         
-                        interruptionDate = programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[7], logger)[0]
+                        interruptionDate = prog_dates[0]
                         #executionStartDate = None
                         #executionEndingDate = None
                         # calcolo il resumption date
                         try:
                             #curr1.execute(select_resumption_date, (eep[4], eep[2],))
-                            curr1.execute(select_resumption_date, (eep[4], programming_start_ending_date(curr2, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[7], logger)[3],))
+                            curr1.execute(select_resumption_date, (eep[4],
+                                prog_dates[3],
+                                t[1], t[0],))
                             tmp_resumptionDate = curr1.fetchone()
                             
                             # dalla query mi aspetto: 
@@ -784,9 +857,9 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
                                             logger.warning('''Non trovo nemmeno la data di chiusura percorso, 
                                                         non posso calcolare resumption date e data di esecuzione 
                                                         per ora metto + 96 h rispetto alla data di fine programmazione, forse da rivedere per il 2026''')
-                                            executionStartDate = programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[7], logger)[4]
-                                            executionEndingDate = programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[7], logger)[5]
-                                            resumptionDate = programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[7], logger)[6]
+                                            executionStartDate = prog_dates[4]
+                                            executionEndingDate = prog_dates[5]
+                                            resumptionDate = prog_dates[6]
                                     
                             else:
                                 resumptionDate = tmp_resumptionDate[0]
@@ -826,14 +899,15 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
                         for r in check_del_res:
                             id_schede_doppie=id_schede_doppie + ' ' + str(r[0])
                             
-                        if len(check_del_res)>0: 
+                        if len(check_del_res)==0: 
+                            # in questo caso posso eliminare da TREG
+                            list_trac_del.append('{0}_{1}_{2}'.format(eep[4],t[1],t[0]))
+                        """else:
                             logger.info(f'''Per il percorso {c[0]} del {datetime.strptime(t[1], "%Y%m%d").date()}
                                         trovo il codice {eep[4]} con causale {eep[5]} 
                                         ma anche altre schede ({id_schede_doppie}) con causale 100, non elimino da TREG. 
                                         ''')
-                        else:
-                            # in questo caso posso eliminare da TREG
-                            list_trac_del.append('{0}_{1}_{2}'.format(eep[4],t[1],t[0]))
+                        """    
                     else:
                         sweeping={
                             'traceabilityCode': '{0}_{1}_{2}'.format(eep[4],t[1],t[0]),
@@ -842,8 +916,8 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
                             'areaCode': str(eep[4]),
                             'streetCode': str(eep[9]),
                             'streetDescription':str(eep[10]),
-                            'programmingStartDate':programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[7], logger)[0],
-                            'programmingEndingDate':programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[7], logger)[1],
+                            'programmingStartDate':prog_dates[0],
+                            'programmingEndingDate':prog_dates[1],
                             'executionStartDate': executionStartDate,
                             'executionEndingDate': executionEndingDate,
                             'interruptionType': interruptionType,
@@ -852,14 +926,16 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
                             'resumptionDate': resumptionDate.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z' if resumptionDate is not None else None,
                             #'nonComplianceCauseInterruption': interruptionCause,
                             'nonComplianceCauseInterruption': None,
-                            'year':int(programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[7], logger)[2]),
+                            'year':int(prog_dates[2]),
                             'istatCode': str(eep[11]) 
                         }
                         list_sweeping.append(sweeping)
                         list_trac_code_update.append((eep[4], t[1], c[0], '{0}_{1}_{2}'.format(eep[4],t[1],t[0]),))
-                        
-                        curr1.close()
-                        curr2.close()
+                
+                
+                # fine percorso         
+                curr1.close()
+                curr2.close()
                     
                     
 
