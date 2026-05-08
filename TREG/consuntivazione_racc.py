@@ -531,8 +531,49 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
         ce.codice = %s
         and ce.data_pianif_iniziale = %s
         and ep.id_turno = %s
-        and ce.causale::int not in (101, 102, 999, 100, 110)
-        order by id_causale_arera desc limit 1'''       
+        and ce.causale::int not in (101, 102, 999, 100, 110) 
+        and cd.id_causale_arera = 3
+        /*order by id_causale_arera desc limit 1*/'''       
+    
+    
+    query_diss_in_freq='''
+    with tab as (
+SELECT codice_modello_servizio, ordine, objecy_type, 
+                    codice, quantita, lato_servizio, percent_trattamento,frequenza,
+                    ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
+                    codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine, 
+                    id_asta_percorso, id_elemento_asta_percorso
+    FROM anagrafe_percorsi.v_percorsi_elementi_tratti 
+    where codice_modello_servizio = %s 
+    and codice = %s and 
+    data_inizio < coalesce(data_fine, '20991231')
+    union 
+    SELECT codice_modello_servizio, ordine, objecy_type, 
+        codice, quantita, lato_servizio, percent_trattamento,frequenza,
+        ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
+        codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine,
+        id_asta_percorso, id_elemento_asta_percorso
+    FROM anagrafe_percorsi.v_percorsi_elementi_tratti_ovs 
+    where codice_modello_servizio = %s 
+    and codice = %s and data_inizio < coalesce(data_fine, '20991231')
+    union 
+    SELECT codice_modello_servizio, ordine, objecy_type, 
+        codice, quantita, lato_servizio, percent_trattamento,frequenza,
+        ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
+        codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine, 
+        id_asta_percorso, id_elemento_asta_percorso
+    FROM anagrafe_percorsi.mv_percorsi_elementi_tratti_dismessi 
+    where codice_modello_servizio = %s
+    and codice = %s and data_inizio < coalesce(data_fine, '20991231')
+) select treg_eko.verify_daily_frequency(
+    	    tab.frequenza,
+    	    to_date(%s, 'YYYYMMDD'),
+    	    %s
+    	) from tab
+    	where %s between tab.data_inizio and tab.data_fine 
+    '''
+    
+    
     
     insert_importid = '''
         INSERT INTO treg_eko.check_status_import
@@ -767,21 +808,51 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
                         interruptionType = 'LIM'
                         interruptionCause = causale_arera(curr1, eep[5], logger, errorfile)
                         if interruptionCause is None:
-                            logger.error(f'Per il percorso {c[0]} del {datetime.strptime(c[1], "%Y%m%d").date()} trovo delle causali {eep[5]} non mappate in ARERA')
+                            messaggio_warning= f'''Per il percorso {c[0]} del {datetime.strptime(c[1], "%Y%m%d").date()} 
+                                        trovo delle causali {eep[5]} non mappate in ARERA. 
+                                        1) verificare la causale in SIT (etl.cause_disserv) e aggiungere mappatura ARERA
+                                        2) riprocessare manualmente la scheda TREG aggiornando la data di last update in treg_eko.consunt_ekovision per farla rientrare nel processo di upload automatico dopo la sistemazione della mappatura causali.'''
+                            logger.error(messaggio_warning)
+                            warning_message_mail(messaggio_warning,
+                                                 'assterritorio@amiu.genova.it', 
+                                                 os.path.basename(__file__), 
+                                                 logger,
+                                                 'PROBLEMA CAUSALE NON MAPPATA RACCOLTA')
                         # dobbiamo verificare che non ci sia un altro elemento con stesso trac_code e causale colpa del gestore
-                        try: 
-                            curr1.execute(query_check_diss, (eep[4], t[1], t[0],))
-                            check_diss=curr1.fetchone()
-                        except Exception as e:
-                            check_error=1
-                            logger.error(query_check_diss)
-                            logger.error(e)
                         
-                        if check_diss is not None:  
-                            if check_diss[4] == 3:
-                                interruptionCause = causale_arera(curr1, check_diss[3], logger, errorfile) 
-                        # se non c'è disservizio per colpa del gestore non faccio niente
+                        if interruptionCause != 'CSG': 
+                            try: 
+                                curr1.execute(query_check_diss, (eep[4], t[1], t[0],))
+                                check_diss=curr1.fetchall()
+                            except Exception as e:
+                                check_error=1
+                                logger.error(query_check_diss)
+                                logger.error(e)
                         
+                        
+                        
+                            if len(check_diss) > 0 : 
+                                in_freq_diss = 0
+                                for cd in check_diss:
+                                    try: 
+                                        curr1.execute(query_diss_in_freq, (cd[1], cd[2],
+                                                                        cd[1], cd[2],
+                                                                        cd[1], cd[2], 
+                                                                        t[1], cd[5], t[1],))
+                                        in_freq_diss+=curr1.fetchone()[0]
+                                    except Exception as e:
+                                        check_error=1
+                                        logger.error(query_diss_in_freq)
+                                        logger.error(e)
+                            else:
+                                in_freq_diss=-1 # se non è disservizio per colpa del gestore non mi interessa se è in frequenza o no, non devo fare escalation alla causale di disservizio più grave tra gli elementi con stesso trac code
+                                
+                            if in_freq_diss > 0:
+                                #interruptionCause = causale_arera(curr1, check_diss[3], logger, errorfile)
+                                # in questo caso sappiamo che la causale peggiore è quella colpa del gestore e la scriviamo a mano
+                                interruptionCause = 'CSG'
+                            
+                            
                         
                         interruptionDate = prog_dates[0]
                         #executionStartDate = None
