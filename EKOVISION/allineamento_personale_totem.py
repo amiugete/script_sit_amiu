@@ -49,49 +49,6 @@ import pysftp
 import logging
 
 
-path=os.path.dirname(sys.argv[0]) 
-nome=os.path.basename(__file__).replace('.py','')
-#tmpfolder=tempfile.gettempdir() # get the current temporary directory
-logfile='{0}/log/{1}.log'.format(path,nome)
-errorfile='{0}/log/error_{1}.log'.format(path,nome)
-#if os.path.exists(logfile):
-#    os.remove(logfile)
-
-
-
-
-
-
-
-# Create a custom logger
-logging.basicConfig(
-    level=logging.DEBUG,
-    handlers=[
-    ]
-)
-
-logger = logging.getLogger()
-
-# Create handlers
-c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-#f_handler = logging.StreamHandler()
-f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
-
-
-c_handler.setLevel(logging.ERROR)
-f_handler.setLevel(logging.DEBUG)
-
-
-# Add handlers to the logger
-logger.addHandler(c_handler)
-logger.addHandler(f_handler)
-
-
-cc_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
-
-c_handler.setFormatter(cc_format)
-f_handler.setFormatter(cc_format)
-
 
 # libreria per invio mail
 import email, smtplib, ssl
@@ -133,7 +90,7 @@ UPDATE personale_ekovision SET
     nome = :nome, 
     cognome = :cognome,             
     cf = :cf,
-    matricola = :matricola,
+    /*matricola = :matricola,*/
     dt_nascita = :dt_nascita,
     id_categoria_lavoratore = :id_categoria_lavoratore,
     id_sede_trasp = :id_sede_trasp,
@@ -164,21 +121,71 @@ def main():
       
 
 
-    logger.info('Il PID corrente è {0}'.format(os.getpid()))
     
     
     try:
-        logger.debug(len(sys.argv))
         if sys.argv[1]== 'prod':
             test=0
+        elif sys.argv[1]== 'test':
+            test=1
         else: 
-            logger.error('Il parametro {} passato non è riconosciuto'.format(sys.argv[1]))
+            print('Il parametro {} passato non è riconosciuto'.format(sys.argv[1]))
             exit()
     except Exception as e:
-        logger.info('Non ci sono parametri, sono in test')
         test=1
 
+
+    path=os.path.dirname(sys.argv[0]) 
+    nome=os.path.basename(__file__).replace('.py','')
+    #tmpfolder=tempfile.gettempdir() # get the current temporary directory
+    if test==0:
+        logfile='{0}/log/{1}.log'.format(path,nome)
+        errorfile='{0}/log/error_{1}.log'.format(path,nome)
+    else: 
+        logfile='{0}/log/{1}_test.log'.format(path,nome)
+        errorfile='{0}/log/error_{1}_test.log'.format(path,nome)
+    #if os.path.exists(logfile):
+    #    os.remove(logfile)
+
+
+
+
+
+
+
+    # Create a custom logger
+    logging.basicConfig(
+        level=logging.DEBUG,
+        handlers=[
+        ]
+    )
+
+    logger = logging.getLogger()
+
+    # Create handlers
+    c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
+    #f_handler = logging.StreamHandler()
+    f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+
+
+    c_handler.setLevel(logging.ERROR)
+    f_handler.setLevel(logging.INFO)
+
+
+    # Add handlers to the logger
+    logger.addHandler(c_handler)
+    logger.addHandler(f_handler)
+
+
+    cc_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
+
+    c_handler.setFormatter(cc_format)
+    f_handler.setFormatter(cc_format)
     
+    if test==1:
+        logger.info('Ambiente di TEST')
+      
+    logger.info('Il PID corrente è {0}'.format(os.getpid()))
     
     # Get today's date
     #presentday = datetime.now() # or presentday = datetime.today()
@@ -208,7 +215,7 @@ def main():
 
     curr_c = conn_c.cursor()
     
-    if test ==1:
+    if test == 1:
         logger.info('Sono in test, faccio anche upsert della tabella PERSONALE_EKOVISION della UO')
         
         # Mi connetto al DB oracle UO
@@ -234,11 +241,17 @@ def main():
     
     logger.info('Provo a leggere i dati del personale')
     
-    
+    '''
     params2={'obj':'personale',
             'act' : 'r',
             'data': '{}'.format(oggi.strftime('%Y%m%d')),
             }
+    '''
+    params2={'obj':'personale',
+            'act' : 'r',
+            'data': '20260105',
+    }
+    
     
     response2 = requests.post(eko_url, params=params2, data=auth_data_eko, headers=headers)
     letture2 = response2.json()
@@ -321,7 +334,7 @@ def main():
             else:
                 logger.info('Il personale con id_ekovision {} esiste già, lo aggiorno'.format(letture2['data'][0]['personale'][k]['id']))
                 try:
-                    cur.execute(update_personale, {'id_ekovision': letture2['data'][0]['personale'][k]['id'],   
+                    '''cur.execute(update_personale, {'id_ekovision': letture2['data'][0]['personale'][k]['id'],   
                             'nome': letture2['data'][0]['personale'][k]['nome'],
                             'cognome': letture2['data'][0]['personale'][k]['cognome'],
                             'cf': letture2['data'][0]['personale'][k]['cf'],
@@ -331,6 +344,16 @@ def main():
                             'id_sede_trasp': letture2['data'][0]['personale'][k]['id_sede_trasp'],
                             'des_sede_trasp': letture2['data'][0]['personale'][k]['des_sede_trasp']
                             })
+                            '''
+                    cur.execute(update_personale, {'id_ekovision': letture2['data'][0]['personale'][k]['id'],   
+                            'nome': letture2['data'][0]['personale'][k]['nome'],
+                            'cognome': letture2['data'][0]['personale'][k]['cognome'],
+                            'cf': letture2['data'][0]['personale'][k]['cf'],
+                            'dt_nascita': letture2['data'][0]['personale'][k]['dt_nascita'],
+                            'id_categoria_lavoratore': letture2['data'][0]['personale'][k]['id_categ_lavoratore'],
+                            'id_sede_trasp': letture2['data'][0]['personale'][k]['id_sede_trasp'],
+                            'des_sede_trasp': letture2['data'][0]['personale'][k]['des_sede_trasp']
+                            })        
                 except Exception as e:
                     logger.error(update_personale)
                     logger.error(e)
