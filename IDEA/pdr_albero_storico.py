@@ -625,7 +625,7 @@ def main():
         #sender_email = user_mail
         receiver_email='assterritorio@amiu.genova.it'
         debug_email='roberto.marzocchi@amiu.genova.it'
-        cc_mail='marco.zamboni@ideabs.com; valentina.anamiti@amiu.genova.it'
+        cc_mail='marco.zamboni@ideabs.com, valentina.anamiti@amiu.genova.it'
 
         # Create a multipart message and set headers
         message = MIMEMultipart()
