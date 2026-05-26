@@ -109,6 +109,9 @@ def main():
     c_handler.setFormatter(cc_format)
     f_handler.setFormatter(cc_format)
     
+    # variabile per memorizzare eventuali messaggi di svuotamenti senza codice contenitore, da inserire in mail finale se ci sono
+    messaggio_sscc = ''
+    
     logger.info('Il PID corrente è {0}'.format(os.getpid()))
     #################################################################
     logger.info("Recupero il token")
@@ -291,12 +294,12 @@ def main():
                         logger.info(messaggio)
                     if tipo_record in [0,1]:
                         if tipo_record==0 and cod_cont is None:
-                            messaggio = f'''ATTENZIONE - svuotamento senza targa contenitore. 
+                            messaggio_sscc += f'''<br>ATTENZIONE - svuotamento senza targa contenitore. 
                             tipo_record={tipo_record}, 
                             id_idea = {id_idea}, 
                             id_pdr = {id_pdr}, 
                             dettaglio_record = {dettaglio_record}'''
-                            warning_message_mail(messaggio, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger, '''API SVUOTAMENTI ID&A: manca targa contenitore in svuotamento''')
+                            #warning_message_mail(messaggio, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger, '''API SVUOTAMENTI ID&A: manca targa contenitore in svuotamento''')
                         # faccio inserimento
                         query_upsert='''INSERT INTO idea.svuotamenti 
                         (id_idea, id_piazzola, targa_contenitore, 
@@ -472,7 +475,9 @@ def main():
             else:
                 logger.error('Problema invio mail. Error:{}'.format(invio))
 
-
+    if messaggio_sscc != '':
+        logger.warning(messaggio_sscc)
+        warning_message_mail(messaggio_sscc, 'assterritorio@amiu.genova.it, marco.zamboni@ideabs.com', os.path.basename(__file__), logger, '''API SVUOTAMENTI ID&A: manca targa contenitore in svuotamento''')
     logger.info("Chiudo definitivamente la connesione al DB")
     curr.close()
     conn.close()
