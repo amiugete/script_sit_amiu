@@ -371,10 +371,13 @@ def main():
                         warning_message_mail(messaggio_warning, mail_sit_result, os.path.basename(__file__), logger, 'ATTENZIONE: scheda già eseguita su Ekovision')
                         #exit()
                     except Exception as e:
-                        logger.error(mail_sit)
-                        logger.error(e)
-                        mail_sit_result=None
-                
+                        #logger.error(mail_sit)
+                        #logger.error(e)
+                        mail_sit_result='assterritorio@amiu.genova.it'
+                        messaggio_warning= f'''<font color="red">ATTENZIONE non ho salvato l'utente che ha da totem ha tentato di eseguire la scheda come non effettuata.
+                        <br>Probabilmente si tratta di un problema di sessione da verificare con calma.</font>
+                        <br>{messaggio_warning}'''
+                        warning_message_mail(messaggio_warning, mail_sit_result, os.path.basename(__file__), logger, 'ATTENZIONE: scheda già eseguita su Ekovision')
                 
                 
                     try:
