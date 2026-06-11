@@ -393,7 +393,7 @@ def main():
                 """
                 
                 warning_message_mail(messaggio_warning, 
-                                'assterritorio@amiu.genova.it', os.path.basename(__file__), logger, 'Attenzione: aggiornamento segnalazioni')
+                                'assterritorio@amiu.genova.it, pianar@amiu.genova.it, davide.berninzone@amiu.genova.it', os.path.basename(__file__), logger, 'Attenzione: aggiornamento segnalazioni')
         else:
             logger.info("L'ultimo aggiornamento delle segnalazioni è recente.")
     except Exception as e:
