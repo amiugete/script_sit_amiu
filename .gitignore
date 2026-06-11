@@ -106,6 +106,8 @@ IDEA/output_file/*.xlsx
 IDEA/*.log
 
 
+TREG/segnalazioni_nuovo_sito/*
+TREG/*.xls
 
 
 
