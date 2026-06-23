@@ -84,7 +84,7 @@ f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.ERROR)
-f_handler.setLevel(logging.INFO)
+f_handler.setLevel(logging.DEBUG)
 
 
 # Add handlers to the logger
@@ -171,7 +171,7 @@ def main(id_scheda_input, codice_percorso_input, data_percorso_input, folder_out
     curr = conn.cursor()
     
     
-    # prima faccio un giro di pre-consuntivazione per le giornate mancant
+    # prima faccio un giro di pre-consuntivazione per le giornate mancanti
     query_spazz_np= '''
     select p.cod_percorso, 
 p.id_turno, 
@@ -253,11 +253,16 @@ order by p.cod_percorso, ap.num_seq'''
         logger.error(e)
     
     for aa in lista_aste:
+        logger.debug(f'day={day}')
+        logger.debug(f'freq_percorso={aa[4]}')
+        logger.debug(f'freq_asta={aa[3]}')
+        logger.debug(f'tappa_prevista={tappa_prevista(day, aa[3])}')
         if (tappa_prevista(day, aa[4])==1 # frequenza percorso
                 and tappa_prevista(day, aa[3])==-1 # frequenza asta
                 and aa[6] <= day # data attivazione
                 and (aa[7] is None or aa[7] > day) # data dismissione
                 ):
+                logger.debug('Entro nelle np')
                 cod_percorso.append(aa[0])
                 data_percorso.append(day.strftime("%Y%m%d"))
                 id_turno.append(aa[1])
@@ -429,6 +434,7 @@ and ve.id_causale <> %s'''
                 and aa[6] <= day # data attivazione
                 and (aa[7] is None or aa[7] > day) # data dismissione
                 ):
+                logger.debug('Entro nelle previste')
                 cod_percorso.append(aa[0])
                 data_percorso.append(day.strftime("%Y%m%d"))
                 id_turno.append(aa[1])
@@ -468,7 +474,7 @@ and ve.id_causale <> %s'''
             join elem.percorsi p on p.id_percorso = ap.id_percorso 
             where ap.id_percorso = 
             (
-                select id_percorso_sit  from anagrafe_percorsi.date_percorsi_sit_uo ep 
+                select distinct id_percorso_sit  from anagrafe_percorsi.date_percorsi_sit_uo ep 
                 where id_percorso_sit is not null  
                 and cod_percorso = %s 
                 and data_inizio_validita < %s 
@@ -482,6 +488,9 @@ and ve.id_causale <> %s'''
             else:
                 #query_aste='''{} and trim(ap.nota) like %s'''.format(query_aste) 
                 query_aste='''{} and similarity(trim(ap.nota), trim(%s))>=1'''.format(query_aste) 
+            
+            
+            
                 
             # prima di lanciare la query faccio questo check
             query_check='''select *  
@@ -509,6 +518,12 @@ and ve.id_causale <> %s'''
                 logger.warning('''Tappa {} del {} già consuntivata con punteggio maggiore. Non passo il dato a Ekovision'''.format(vv[11], vv[2].strftime('%Y-%m-%d')))
             else:
                 # devo passare i dati a ekovision quindi procedo con il resto dello script
+                if int(vv[3]) ==38020:
+                    logger.debug('Query aste: {}'.format(query_aste))
+                    logger.debug('cod_percorso = {}'.format(vv[1]))
+                    logger.debug('data rif = {}'.format(vv[2]))
+                    logger.debug('Id Via = {}'.format(vv[3]))
+                    logger.debug('Nota = {}'.format(vv[4]))
                 try:
                     # se nota asta fosse nulla
                     if vv[4]==None:
@@ -665,7 +680,7 @@ if __name__ == "__main__":
     
     
     #0203005001-20250923-300
-    #main('711763',	'0203005001',	'20250923', 'dati_persi') # consuntivazione su totem assente
+    #main('584835',	'0203009303',	'20250504', 'dati_persi') # consuntivazione su totem assente
     
 
     

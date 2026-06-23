@@ -416,7 +416,7 @@ and ve.id_causale::int <> %s'''
         
         
             # cerco ID_percorso_sit
-            query_id_percorso='''select id_percorso_sit, p.id_turno 
+            query_id_percorso='''select distinct id_percorso_sit, p.id_turno 
             from anagrafe_percorsi.date_percorsi_sit_uo ep
             join elem.percorsi p on p.id_percorso = ep.id_percorso_sit 
             join elem.turni t on t.id_turno =p.id_turno  

@@ -806,7 +806,7 @@ and ve.id_causale <> %s'''
                         join elem.percorsi p on p.id_percorso = ap.id_percorso 
                         where ap.id_percorso = 
                         (
-                            select id_percorso_sit  from anagrafe_percorsi.date_percorsi_sit_uo ep 
+                            select distinct id_percorso_sit  from anagrafe_percorsi.date_percorsi_sit_uo ep 
                             where id_percorso_sit is not null  
                             and cod_percorso = %s 
                             and data_inizio_validita < %s 
