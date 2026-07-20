@@ -768,7 +768,7 @@ and ve.id_causale::int <> %s'''
                             logger.info(id_scheda)
                             if id_turno_ekovision != int(turno_distinct[k]):
                                 logger.warning('Anomalia turni per percorso {0}. Scheda di lavoro {1} del {2}. Turno UO ={3}, Turno Ekovision={4}'.format(cod_percorsi_distinct[k], id_scheda, date_distinct[k], turno_distinct[k], id_turno_ekovision))
-                                warning_log_mail(logfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                #warning_log_mail(logfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
                     except Exception as e:
                         logger.error(e)
                         logger.error(letture)
