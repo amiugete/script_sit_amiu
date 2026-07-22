@@ -280,8 +280,9 @@ def main():
     cartella=  Path(f'{path}/segnalazioni_nuovo_sito')
     # cerca file Excel (.xlsx e .xls)
     excel_files = list(cartella.glob("*.xlsx")) + list(cartella.glob("*.xls"))
-    logger.debug(len(excel_files))
-    
+    logger.debug('Len: {}'.format(len(excel_files)))
+    logger.debug('Lista file: {}'.format(excel_files))
+    #exit()
     if len(excel_files) == 1:
         logger.info("Trovato un file Excel:")
         for f in excel_files:

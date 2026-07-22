@@ -57,6 +57,9 @@ RESULT_QUERY =[
                 "Cause imputabili al gestore"
                 ]
 
+
+start_anno = 2026
+
 class Spazzamento():
     def __init__(self, comune=None, anno=None, mese=None, causale_arera=None, interruzione=None, round=None):
         # attributi espliciti per chiarezza
@@ -309,15 +312,16 @@ def main():
 
                         logger.info(f'Inizio ciclo spazzamento comune {desc_comune} .....')
                         for row in rows_spazz:
-                            spazzamento = Spazzamento(
-                                row['comune'],
-                                row['anno'],
-                                row['mese'],
-                                row['causale_arera'],
-                                row['interruzione'],
-                                row['round']
-                            )
-                            lista_spazzamenti.append(spazzamento)
+                            if int(row['anno'])>= start_anno:
+                                spazzamento = Spazzamento(
+                                    row['comune'],
+                                    row['anno'],
+                                    row['mese'],
+                                    row['causale_arera'],
+                                    row['interruzione'],
+                                    row['round']
+                                )
+                                lista_spazzamenti.append(spazzamento)
                         logger.info(f'Fine ciclo spazzamento comune {desc_comune} .....')
 
                         # QUERY RACCOLTA
@@ -326,15 +330,16 @@ def main():
 
                         logger.info(f'Inizio ciclo raccolta comune {desc_comune} .....')
                         for row in rows_raccolta:
-                            raccolta = Raccolta(
-                                row['comune'],
-                                row['anno'],
-                                row['mese'],
-                                row['causale_arera'],
-                                row['interruzione'],
-                                row['count']
-                            )
-                            lista_raccolta.append(raccolta)
+                            if int(row['anno'])>= start_anno:
+                                raccolta = Raccolta(
+                                    row['comune'],
+                                    row['anno'],
+                                    row['mese'],
+                                    row['causale_arera'],
+                                    row['interruzione'],
+                                    row['count']
+                                )
+                                lista_raccolta.append(raccolta)
                         logger.info(f'Fine ciclo raccolta comune {desc_comune} .....')
     except psycopg2.Error as e:
         logger.error(e)

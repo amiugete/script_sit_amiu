@@ -26,6 +26,7 @@ from urllib.parse import urlencode
 import cx_Oracle
 
 from datetime import date, datetime, timedelta
+import time
 
 currentdir = os.path.dirname(os.path.realpath(__file__))
 parentdir = os.path.dirname(currentdir)
@@ -94,8 +95,17 @@ from email.mime.image import MIMEImage
 from email.mime.text import MIMEText
 from invio_messaggio import *
 
+# variabili che mi servono per gestire il refresh del token
+durata_token = 14400
+cretiontime_token = 0
+token = None
+
 
 def token_edok():
+
+    global token
+    global cretiontime_token
+
     api_url='{}/connect/token'.format(url_autenticazione_edok)
     payload_edok = {"username": user_edok, "password": pwd_edok, "grant_type":"password", 
                     "client_id":"95a9b259-7fb1-454f-93ea-bbf43725aebd",
@@ -114,12 +124,33 @@ def token_edok():
     except HTTPError as http_err:
         logger.error(f'HTTP error occurred: {http_err}')
         check=500
+        return None
     except Exception as err:
         logger.error(f'Other error occurred: {err}')
         logger.error(response.json())
         check=500
+        return None
     
     token=response.json()['access_token']
+    cretiontime_token = time.time()
+
+    return token
+
+def token_scaduto():
+    # tempo trascorso dalla creazione token
+    sec_trascorsi = time.time() - cretiontime_token
+
+    # refresh 5 minuti prima della scadenza
+    return sec_trascorsi > (durata_token - 300)
+
+def get_token():
+
+    if token is None:
+        token_edok()
+    elif token_scaduto():
+        logger.info("Token in scadenza, ne creo uno nuovo")
+        token_edok()
+
     return token
 
 def main():
@@ -151,15 +182,6 @@ def main():
     curr = conn.cursor()
     #conn.autocommit = True
     
-    # richiamo token, creo sessione per EDOK e header chiamata API
-    token1= token_edok().strip()
-    session = requests.Session()
-    session.headers.update({
-    'Authorization': 'Bearer {}'.format(token1.strip()),
-    'Accept': '*/*',
-    'Accept-Encoding': 'gzip, deflate, br',
-    })
-
     # recupero tutti i protocolli delle pratiche TARI su DB
     query_ist = '''
         select it.cusprotocollo, it.id_archivio, it.cusmetadatitipopratica, it.statusdescription from treg_edok.istanze_tari it
@@ -198,11 +220,23 @@ def main():
         logger.error(lista_protocolli)
         logger.error(e)
 
+    # creo sessione per EDOK e header chiamata API
+    session = requests.Session()
+    session.headers.update({
+    'Accept': '*/*',
+    'Accept-Encoding': 'gzip, deflate, br',
+    })
+
     i=0
     for p in lista_protocolli:
         i+=1
         if i % 1000 == 0:
             logger.info(f'Elaborate {i} pratiche su {len(lista_protocolli)}')
+
+        # aggiorno header con token dentro al for così ogni volta verifica se è necessario ricrearlo
+        session.headers.update({
+        'Authorization': 'Bearer {}'.format(get_token().strip())
+        })
         # recupero il tipo pratica da EDOK
         params2 = {
             '$select': 'id',

@@ -263,13 +263,13 @@ def InserisciRiga(riga, nomefile, cursor):
     date.today(),
     nomefile,
     clean(riga['indirizzo']),
-    clean(riga['Data_di_arrivo_sul_luogo']),
-    clean(riga['Data_di_messa_in_sicurezza_del_sito']),
-    clean(riga['Data_di_rimozione_dei_rifiuti']),
-    clean(riga['Motivazioni_ritardo']),
-    clean(riga['Ora_di_arrivo_sul_luogo']),
-    clean(riga['Ora_di_messa_in_sicurezza_del_sito']),
-    clean(riga['Ora_di_rimozione_dei_rifiuti']),
+    clean(riga['data_di_arrivo_sul_luogo']),
+    clean(riga['data_di_messa_in_sicurezza_del_sito']),
+    clean(riga['data_di_rimozione_dei_rifiuti']),
+    clean(riga['motivazioni_ritardo']),
+    clean(riga['ora_di_arrivo_sul_luogo']),
+    clean(riga['ora_di_messa_in_sicurezza_del_sito']),
+    clean(riga['ora_di_rimozione_dei_rifiuti']),
     ))
         
 

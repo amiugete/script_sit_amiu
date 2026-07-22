@@ -247,7 +247,7 @@ def main():
       
     # 1 - cerco il giono da cui partire
     query_first_day='''select min(data_last_update) from treg_eko.consunt_ekovision ce
-        where ce.tipo_servizio != 'SPAZZ' and ce.data_last_update >= (
+        where ce.tipo_servizio != 'S' and ce.data_last_update >= (
         select coalesce(max(data_last_update), to_date('20250101', 'YYYYMMDD')) 
         from treg_eko.last_import_treg_racc_cons
         where commit_code=200 and deleted = false
@@ -268,6 +268,7 @@ def main():
         where ce.data_last_update > %s
         and gestione_arera = 't'
         and at2.id_famiglia not in (2,3)
+        and ce.solo_esec is NULL
         /*ATTENZIONE A QUEST'ORDINAMENTO CHE SERVE PER GESTIRE I GIRI SUCCESSIVI*/
         order by ce.data_last_update asc
         /*limit 100000*/
@@ -315,12 +316,12 @@ def main():
 -- PRIMO STEP PER TOGLIERE I RIPASSI (al secondo step dovrò considerare le possibili schede doppie)
 	SELECT distinct 
 	case
-		when ce.flg_riprogrammato = 0 then ce.id_scheda
+		when ce.flg_riprogrammato is null then ce.id_scheda
 		else ce.id_scheda_riprogr
 	end id_scheda, 
 	ce.codice_servizio_pred,
 	case
-        when ce.flg_riprogrammato = 0 then ce.data_pianif_iniziale
+        when ce.flg_riprogrammato is null then ce.data_pianif_iniziale
         else ce_riprogr.data_pianif_iniziale
     end data_pianif_iniziale, 
 	ce.data_esecuzione_prevista,
@@ -363,22 +364,22 @@ def main():
 			) tab 
 			on tab.codice_modello_servizio = ce.codice_servizio_pred 
 			and to_date(ce.data_pianif_iniziale, 'YYYYMMDD') 
-			between to_date(tab.data_inizio,'YYYYMMDD')  and to_date(tab.data_fine, 'YYYYMMDD')
+			between to_date(tab.data_inizio,'YYYYMMDD') and to_date(tab.data_fine, 'YYYYMMDD')
 			and tab.codice = ce.codice
     left join treg_eko.consunt_ekovision ce_riprogr 
     on ce_riprogr.id_scheda = ce.id_scheda_riprogr
-    and ce.flg_riprogrammato != 0
-	where ce.tipo_servizio in ('RACC', 'RACC-LAV')
+    and ce.flg_riprogrammato = 1
+	where ce.tipo_servizio in ('R', 'RL')
 	and ce.codice_servizio_pred = %s
     and ce.data_pianif_iniziale = %s
 	group by 
 	case
-		when ce.flg_riprogrammato = 0 then ce.id_scheda
+		when ce.flg_riprogrammato is null then ce.id_scheda
 		else ce.id_scheda_riprogr
 	end , 
 	ce.codice_servizio_pred,
 	case
-        when ce.flg_riprogrammato = 0 then ce.data_pianif_iniziale
+        when ce.flg_riprogrammato is null then ce.data_pianif_iniziale
         else ce_riprogr.data_pianif_iniziale
     end ,
 	ce.data_esecuzione_prevista,
@@ -453,7 +454,7 @@ and data_pianif_iniziale = %s /* non prendo i soccorsi di giorni precedenti */
 group by codice_servizio_pred,
 	data_pianif_iniziale,
 	codice, ep2.giorno_competenza,
-    ep2.freq_settimane,
+    /*ep2.freq_settimane,*/
 	ep.id_elemento_privato, 
     ee.id_piazzola, 
     ee.tipo_elemento

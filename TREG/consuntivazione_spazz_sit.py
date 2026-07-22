@@ -140,14 +140,14 @@ from psycopg2.extras import execute_values
 def main():
     
     ##################################################
-    debug = 1
+    debug = 0
     # se non specifico id_scheda_test lavora con una query specifica dove individuo un elenco di percorsi 
     # da correggere in base a specifiche caratteristiche
     # ATTENZIONE in entambi i casi non scrive null nella tabella di log dei processamenti quindi il rischio e che da crontab vada in loop!!
     
     # volendo si può definire se fare o meno il commit in fondo 
     
-    id_scheda_test = 567233 #483903 #None # 748395
+    id_scheda_test = None #479299 #483903 #None # 748395
     ##################################################
 
 
@@ -206,7 +206,7 @@ def main():
 
     # 1 - cerco il giono da cui partire
     query_first_day='''select min(data_last_update) from treg_eko.consunt_ekovision ce
-        where ce.tipo_servizio = 'SPAZZ' and ce.data_last_update >= (
+        where ce.tipo_servizio = 'S' and ce.data_last_update >= (
         select coalesce(max(data_last_update), to_date('20250101', 'YYYYMMDD')) 
         from consunt.last_import_sit_spazz_cons
         );'''
@@ -385,12 +385,12 @@ INSERT INTO consunt.report_spazz (
         -- PRIMO STEP PER TOGLIERE I RIPASSI (al secondo step dovrò considerare le possibili schede doppie)
             SELECT distinct 
             case
-                when flg_riprogrammato = 0 then id_scheda
+                when flg_riprogrammato is null then id_scheda
                 else id_scheda_riprogr
             end id_scheda, 
             codice_servizio_pred,
             case
-                when flg_riprogrammato = 0 then data_pianif_iniziale
+                when flg_riprogrammato is null then data_pianif_iniziale
                 else (select distinct data_pianif_iniziale from treg_eko.consunt_ekovision ce1 
                 where ce1.id_scheda = ce.id_scheda_riprogr)
             end data_pianif_iniziale, 
@@ -440,17 +440,17 @@ INSERT INTO consunt.report_spazz (
             /*and tab.ordine = ce.pos*/
             /* codice e posizione dovrebbero essere chiave primaria.. un po' come id_asta_percorso... 
             ma non funziona per casini di Ekovision dovuti alle variazioni dei percorsi */
-            where ce.tipo_servizio = 'SPAZZ'
+            where ce.tipo_servizio = 'S'
             and codice_servizio_pred = %s
             and data_pianif_iniziale = %s
             group by 
             case
-                when flg_riprogrammato = 0 then id_scheda
+                when flg_riprogrammato is null then id_scheda
                 else id_scheda_riprogr
             end , 
             codice_servizio_pred,
             case
-                when flg_riprogrammato = 0 then data_pianif_iniziale
+                when flg_riprogrammato is null then data_pianif_iniziale
                 else (select distinct data_pianif_iniziale from treg_eko.consunt_ekovision ce1 
                 where ce1.id_scheda = ce.id_scheda_riprogr)
             end ,

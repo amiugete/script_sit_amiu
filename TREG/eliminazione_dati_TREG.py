@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# AMIU copyleft 2023
-# Roberto Marzocchi
+# AMIU copyleft 2026
+# Roberto Marzocchi, Roberta Fagandini
 
 '''
-
+Script per effettuare il reset dei dati di un anno e comune specifico (o di un anno intero) su TREG, in modo da poter poi ricaricare i dati corretti.
 
 '''
 
@@ -55,50 +55,8 @@ from crea_dizionario_da_query import *
 
 
 
-filename = inspect.getframeinfo(inspect.currentframe()).filename
-path=os.path.dirname(sys.argv[0]) 
-path1 = os.path.dirname(os.path.dirname(os.path.abspath(filename)))
-nome=os.path.basename(__file__).replace('.py','')
-#tmpfolder=tempfile.gettempdir() # get the current temporary directory
-logfile='{0}/log/{1}.log'.format(path,nome)
-errorfile='{0}/log/error_{1}.log'.format(path,nome)
-#if os.path.exists(logfile):
-#    os.remove(logfile)
 
 
-
-
-
-
-
-# Create a custom logger
-logging.basicConfig(
-    level=logging.DEBUG,
-    handlers=[
-    ]
-)
-
-logger = logging.getLogger()
-
-# Create handlers
-c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-#f_handler = logging.StreamHandler()
-f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
-
-
-c_handler.setLevel(logging.ERROR)
-f_handler.setLevel(logging.DEBUG)
-
-
-# Add handlers to the logger
-logger.addHandler(c_handler)
-logger.addHandler(f_handler)
-
-
-cc_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
-
-c_handler.setFormatter(cc_format)
-f_handler.setFormatter(cc_format)
 
 
 # libreria per invio mail
@@ -123,6 +81,77 @@ import uuid
 
 def main():
 
+    try:
+        if sys.argv[1]== 'prod':
+            test=0
+            URL = url_ws_treg
+        elif sys.argv[1]== 'test':
+            test=1
+            URL = url_ws_treg_test
+        else: 
+            print('Il parametro {} passato non è riconosciuto'.format(sys.argv[1]))
+            exit()
+    except Exception as e:
+        #test=1
+        print('Non è stato passato alcun parametro. DEVO specificare se test o prod')
+        exit()
+    
+    
+    
+    filename = inspect.getframeinfo(inspect.currentframe()).filename
+    path=os.path.dirname(sys.argv[0]) 
+    path1 = os.path.dirname(os.path.dirname(os.path.abspath(filename)))
+    nome=os.path.basename(__file__).replace('.py','')
+    #tmpfolder=tempfile.gettempdir() # get the current temporary directory
+    if test==0:
+        logfile='{0}/log/{1}.log'.format(path,nome)
+        errorfile='{0}/log/error_{1}.log'.format(path,nome)
+    else: 
+        logfile='{0}/log/{1}_test.log'.format(path,nome)
+        errorfile='{0}/log/error_{1}_test.log'.format(path,nome)
+    #if os.path.exists(logfile):
+    #    os.remove(logfile)
+
+
+
+
+
+
+
+    # Create a custom logger
+    logging.basicConfig(
+        level=logging.DEBUG,
+        handlers=[
+        ]
+    )
+
+    logger = logging.getLogger()
+
+    # Create handlers
+    c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
+    #f_handler = logging.StreamHandler()
+    f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+
+
+    c_handler.setLevel(logging.ERROR)
+    f_handler.setLevel(logging.DEBUG)
+
+
+    # Add handlers to the logger
+    logger.addHandler(c_handler)
+    logger.addHandler(f_handler)
+
+
+    cc_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
+
+    c_handler.setFormatter(cc_format)
+    f_handler.setFormatter(cc_format)
+    
+    if test==1:
+        logger.info('Ambiente di TEST')
+        logger.info(f'URL WS TREG: {URL}')
+    
+    #exit()  
     logger.info('Il PID corrente è {0}'.format(os.getpid()))
     
     ###################################
@@ -130,10 +159,10 @@ def main():
     ###################################
 
     logger.info("START READ WS")
-    api_url='{}atrif/api/v1/tobin/auth/login'.format(url_ws_treg)
+    api_url='{}atrif/api/v1/tobin/auth/login'.format(URL)
     payload_treg = {"username": user_ws_treg, "password": pwd_ws_treg, }
     logger.debug(payload_treg)
-    response = requests.post(api_url, json=payload_treg, verify=False)
+    response = requests.post(api_url, json=payload_treg, verify=True)
     logger.debug(response)
     #response.json()
     logger.info("Status code: {0}".format(response.status_code))
@@ -160,12 +189,12 @@ def main():
      # check_anno_comune = 1 cancello i dati di un anno dato comune per comune (va fatto per raccolta e spazzamento)
     
     check_anno_comune = 1
-    tipo_dati =  'sweepings' #'wastecollections'  # 'overfilledbins'
+    tipo_dati = 'wastecollections' #'sweepings' #'wastecollections'  # 'overfilledbins'
     anno_input=2026
     ##################################################################################################################################################################
 
     # costruisco l'url per la cancellazione dei dati con tipo_dati definito sopra
-    api_url_reset='{}atrif/api/v1/tobin/b2b/process/rifqt-{}/reset-data/av1'.format(url_ws_treg_interno, tipo_dati)
+    api_url_reset='{}atrif/api/v1/tobin/b2b/process/rifqt-{}/reset-data/av1'.format(URL, tipo_dati)
 
     ######################################################
     # Eliminazione dati caricati su TREG per anno e comune
@@ -188,7 +217,9 @@ def main():
 
         curr = conn.cursor()
 
-        query_code_istat='SELECT cod_istat from topo.comuni where id_comune <> 3'
+        query_code_istat='''SELECT cod_istat from topo.comuni 
+        where id_comune <> 3 /* tolgo Rapallo*/
+        '''
 
         try:
             curr.execute(query_code_istat)
@@ -211,8 +242,8 @@ def main():
             
                       
             
-            response_reset = requests.post(api_url_reset, json=body_upload, verify=False, headers={'accept':'*/*', 
-                                                                                    'mde': 'PROD',
+            response_reset = requests.post(api_url_reset, json=body_upload, verify=True, headers={'accept':'*/*', 
+                                                                                    'mde': '{}'.format('PROD' if test==0 else 'TEST'),
                                                                                     'Authorization': 'EIP {}'.format(token),
                                                                                     'Content-Type': 'application/json'})
             logger.debug(response_reset.status_code)
@@ -226,8 +257,8 @@ def main():
             'id': str(guid),
             'year': anno_input
         }
-        response_reset = requests.post(api_url_reset, json=body_upload, verify=False, headers={'accept':'*/*', 
-                                                                                    'mde': 'PROD',
+        response_reset = requests.post(api_url_reset, json=body_upload, verify=True, headers={'accept':'*/*', 
+                                                                                    'mde':  '{}'.format('PROD' if test==0 else 'TEST'),
                                                                                     'Authorization': 'EIP {}'.format(token),
                                                                                     'Content-Type': 'application/json'})
         logger.debug(response_reset.status_code)

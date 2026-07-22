@@ -252,7 +252,7 @@ def main():
 
     # 1 - cerco il giono da cui partire
     query_first_day='''select min(data_last_update) from treg_eko.consunt_ekovision ce
-        where ce.tipo_servizio = 'SPAZZ' and ce.data_last_update >= (
+        where ce.tipo_servizio = 'S' and ce.data_last_update >= (
         select coalesce(max(data_last_update), to_date('20250101', 'YYYYMMDD')) from treg_eko.last_import_treg_spazz_cons
         where commit_code=200 and deleted = false
         );'''
@@ -271,13 +271,14 @@ def main():
         where ce.data_last_update > %s
         and gestione_arera = 't'
         and at2.id_famiglia in (2,3)
+        and ce.solo_esec is NULL
         /*ATTENZIONE A QUEST'ORDINAMENTO CHE SERVE PER GESTIRE I GIRI SUCCESSIVI*/
         order by ce.data_last_update asc
         /*limit 100000*/
         ) select cod_percorso, versione_testata, freq_binaria, freq_settimane, id_turno, gestione_arera, data_pianif_iniziale, max(data_last_update)
         from step0
         group by cod_percorso, versione_testata, freq_binaria, freq_settimane, id_turno, gestione_arera, data_pianif_iniziale
-        order by 8 asc limit 1150;
+        order by 8 asc limit 1350;
     '''
     
     # cerco quelle di SIT
@@ -287,12 +288,12 @@ def main():
         -- PRIMO STEP PER TOGLIERE I RIPASSI (al secondo step dovrò considerare le possibili schede doppie)
             SELECT distinct 
             case
-                when flg_riprogrammato = 0 then id_scheda
+                when flg_riprogrammato is null then id_scheda
                 else id_scheda_riprogr
             end id_scheda, 
             codice_servizio_pred,
             case
-                when flg_riprogrammato = 0 then data_pianif_iniziale
+                when flg_riprogrammato is null then data_pianif_iniziale
                 else (select distinct data_pianif_iniziale from treg_eko.consunt_ekovision ce1 
                 where ce1.id_scheda = ce.id_scheda_riprogr)
             end data_pianif_iniziale, 
@@ -337,17 +338,17 @@ def main():
             and to_date(ce.data_pianif_iniziale, 'YYYYMMDD') 
             between to_date(tab.data_inizio,'YYYYMMDD')  and to_date(tab.data_fine, 'YYYYMMDD')
             and tab.codice = ce.codice
-            where ce.tipo_servizio = 'SPAZZ'
+            where ce.tipo_servizio = 'S'
             and codice_servizio_pred = %s
             and data_pianif_iniziale = %s
             group by 
             case
-                when flg_riprogrammato = 0 then id_scheda
+                when flg_riprogrammato is null then id_scheda
                 else id_scheda_riprogr
             end , 
             codice_servizio_pred,
             case
-                when flg_riprogrammato = 0 then data_pianif_iniziale
+                when flg_riprogrammato is null then data_pianif_iniziale
                 else (select distinct data_pianif_iniziale from treg_eko.consunt_ekovision ce1 
                 where ce1.id_scheda = ce.id_scheda_riprogr)
             end ,
