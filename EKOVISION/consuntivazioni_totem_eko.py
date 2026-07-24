@@ -202,7 +202,7 @@ def main():
         '''.format(schema)    
         
         
-        mail_sit='''select email from util.sys_users where "name" like %s '''
+        mail_sit='''select email from util.sys_users where "name" ilike %s '''
 
         update= '''
             update {}.percorsi_non_effettuati_x_ekovision

@@ -112,6 +112,7 @@ from email.mime.image import MIMEImage
 from email.mime.text import MIMEText
 from invio_messaggio import *
 
+from generic_functions import get_fascia_turno
 
 import fnmatch
 
@@ -130,15 +131,35 @@ def get_id_ut_percorso(curr, cod_percorso, data_esecuzione, logger):
         /*AND (responsabile = 'S' or pu.rimessa ='S')*/
         AND to_date(%s, 'YYYYMMDD') BETWEEN pu.data_attivazione AND pu.data_disattivazione
     '''
+    
+    # seconda query senza data esecuzione per verificare se il percorso è attivo o no
+    query2 = '''
+        SELECT u.id_zona 
+        FROM anagrafe_percorsi.percorsi_ut pu
+        join anagrafe_percorsi.cons_mapping_uo cmu on cmu.id_uo = pu.id_ut 
+        join topo.ut u on u.id_ut = cmu.id_uo_sit  
+        WHERE pu.cod_percorso = %s
+    '''
     try:
         curr.execute(query, (cod_percorso, data_esecuzione))
         results = curr.fetchall()
+        if len(results) == 0:
+            messaggio_warning=f'''Non trovato id_ut per percorso {cod_percorso} alla data {data_esecuzione}.
+            Probabilmente il percorso non è attivo alla data di esecuzione prevista (scheda di percorso stagionale generata per baco di ekovision)'''
+            logger.warning(messaggio_warning)
+            warning_message_mail(messaggio_warning, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+
+            #curr.execute(query2, (cod_percorso,))
+            #results = curr.fetchall()
         return [r[0] for r in results]
     except Exception as e:
         logger.error("Errore eseguendo get_id_ut_percorso:")
         logger.error(query)
         logger.error(e)
         return []
+    
+    
+    
 
 def main():
     
@@ -160,7 +181,12 @@ def main():
     
     data_start_ekovision='20231120'
     
-    
+    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+
+    data_json={'user': eko_user, 
+        'password': eko_pass,
+        'o2asp' :  eko_o2asp
+    }
     
     cartella_sftp_eko='sch_lav_cons/out/'    
     logger.info('Leggo e scarico file SFTP da cartella {}'.format(cartella_sftp_eko))
@@ -170,7 +196,7 @@ def main():
     # IN caso di debug gli passo a mano il nome di un file 
 
     debug=0
-    nome_file_debug='sch_lav_consuntivi_20251031_054607_69043f0f1cf05.json'
+    nome_file_debug='sch_lav_consuntivi_20260213_204632_698f7fb15d37a.json'
 
 
     # Mi connetto a SIT (PostgreSQL) per poi recuperare le mail
@@ -224,7 +250,10 @@ def main():
         #for filename in srv.listdir_attr(cartella_sftp_eko): #chdir to public
             #print(srv.listdir('./'))
             #logger.info('sonoquiquiqui')
-        for f in srv.listdir_attr(cartella_sftp_eko):
+        
+        files = sorted(srv.listdir_attr(cartella_sftp_eko), key=lambda f: f.filename)
+        
+        for f in files:
             filename = f.filename
             if stat.S_ISREG(f.st_mode) and filename.startswith("sch_lav_consuntivi"):
                 if debug ==0 or (debug == 1 and filename==nome_file_debug):
@@ -234,7 +263,7 @@ def main():
                     
                     # imposto a 0 un controllo sulla lettura del file
                     check_lettura=0
-                    
+
                     # Opening JSON file
                     f = open(path + "/eko_output/" + filename)
                     
@@ -265,7 +294,9 @@ def main():
                                     
                                     select_scheda='''SELECT ID_SCHEDA, NOMEFILE FROM SCHEDE_ESEGUITE_EKOVISION see 
                                         WHERE ID_SCHEDA =:i1'''
-                                        
+
+                                    select_scheda_sit='''SELECT id_scheda, nomefile FROM consunt.schede_eseguite_ekovision see 
+                                        WHERE id_scheda = %s'''
                                     
                                     try:
                                         cur.execute(select_scheda, (data[i]['id_scheda'],))
@@ -273,20 +304,19 @@ def main():
                                     except Exception as e:
                                         logger.error(select_scheda)
                                         logger.error(e)
+
+                                    try:
+                                        curr.execute(select_scheda_sit, (data[i]['id_scheda'],))
+                                        schede_eseguite_sit=curr.fetchall()
+                                    except Exception as e:
+                                        logger.error(select_scheda_sit)
+                                        logger.error(e)
                                     
-                                    if data[i]['cod_caus_srv_non_eseg_ext']=='':
-                                        causale_non_es=None
-                                    else:
-                                        try:
-                                            causale_non_es=int(data[i]['cod_caus_srv_non_eseg_ext'])
-                                        except Exception as e:
-                                            logger.error('PROBLEMA INSERIMENTO CAUSALE NON ESEGUITO')
-                                            logger.error(e)
-                                    
-                                    
-                                            
-                                    check_update=0       
+
+                                    check_update=0 
+                                    check_update_sit=0      
                                     check_scheda=0
+                                    check_scheda_sit=0
                                                                         
                                     if len(schede_eseguite)>=1:
                                         check_scheda=1
@@ -299,7 +329,7 @@ def main():
                                         if check_update == 1:    
                                             update_schede='''UPDATE UNIOPE.SCHEDE_ESEGUITE_EKOVISION 
                                             SET RECORD_VALIDO='N'
-                                            WHERE ID_SCHEDA=:s1'''
+                                            WHERE ID_SCHEDA=:s1 AND RECORD_VALIDO='S' '''
                                             try:
                                                 cur.execute(update_schede, (
                                                         data[i]['id_scheda'],
@@ -311,19 +341,104 @@ def main():
                                                 ))
                                                 logger.error(e)
                                                 check_lettura+=1
+
+                                    if len(schede_eseguite_sit)>=1:
+                                        check_scheda_sit=1
+                                        #update                                      
+                                        
+                                        for ffs in schede_eseguite_sit:
+                                            if ffs[1]<filename:
+                                                check_update_sit=1
+                                        
+                                        if check_update_sit == 1:    
+                                            update_schede_sit='''
+                                            UPDATE consunt.schede_eseguite_ekovision 
+                                            SET record_valido ='N'
+                                            WHERE id_scheda = %s and record_valido='S' 
+                                            '''
+                                            try:
+                                                curr.execute(update_schede_sit, (
+                                                        data[i]['id_scheda'],
+                                                    ))
+                                            except Exception as e:
+                                                logger.error(update_schede_sit)
+                                                logger.error('1:{}'.format(
+                                                data[i]['id_scheda']
+                                                ))
+                                                logger.error(e)
                                     #else:
-                                    # in qualunque caso faccio gli insert
+                                    # recupero da WS l'orario effettivo di esecuzione
+                                    params={'obj':'schede_lavoro',
+                                        'act' : 'r',
+                                        'id': data[i]['id_scheda'],
+                                        'flg_esponi_consunt': 1
+                                    }
+                                    check_ws=0
+                                    response_oe = requests.post(eko_url, params=params, data=data_json, headers=headers)
+                                    #response.json()
+                                    #logger.debug(response.status_code)
+                                    try:      
+                                        response_oe.raise_for_status()
+                                        # access JSOn content
+                                        #jsonResponse = response.json()
+                                        #print("Entire JSON response")
+                                        #print(jsonResponse)
+                                    except HTTPError as http_err:
+                                        logger.error(f'HTTP error occurred: {http_err}')
+                                        check_ws=1
+                                        logger.error('''In questo caso non riesco a recuperare l\'orario di esecuzione effettivo, mi fermo e proverò a riprocessare le schede 
+                                                     l'ora dopo''')
+                                        # check se c_handller contiene almeno una riga 
+                                        error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                                        exit()
+                                    except Exception as err:
+                                        logger.error(f'Other error occurred: {err}')
+                                        logger.error(response_oe.json())
+                                        check_ws=1
+                                    if check_ws<1:
+                                        letture_oe = response_oe.json()
+                                        logger.info('ID scheda per cui recupero da WS orario effettivo  = {}'.format(data[i]['id_scheda']))
+                                        #logger.debug(letture_oe)
+                                        ora_inizio_lav_2=''
+                                        ora_fine_lav_2 = ''
+                                        orario_esecuzione=''
+                                        kws=0
+                                        
+                                        while kws < len(letture_oe['schede_lavoro']): 
+                                            #controllo se la scheda è la stessa (escludo eventuali soccorsi o schede duplicate per sbaglio)
+                                            if data[i]['id_scheda']==letture_oe['schede_lavoro'][kws]['id_scheda_lav']:
+                                                ora_inizio_lav=letture_oe['schede_lavoro'][kws]['servizi'][0]['ora_inizio']
+                                                ora_inizio_lav_2=letture_oe['schede_lavoro'][kws]['servizi'][0]['ora_inizio_2']
+                                                ora_fine_lav=letture_oe['schede_lavoro'][kws]['servizi'][0]['ora_fine']
+                                                ora_fine_lav_2=letture_oe['schede_lavoro'][kws]['servizi'][0]['ora_fine_2']
+                                                if (ora_inizio_lav_2=='000000' or ora_inizio_lav_2=='') and (ora_fine_lav_2=='000000' or ora_fine_lav_2==''):
+                                                    orario_esecuzione='{} - {}'.format(ora_inizio_lav, ora_fine_lav)
+                                                else:
+                                                    orario_esecuzione='{} - {} / {} - {}'.format(ora_inizio_lav, ora_fine_lav, ora_inizio_lav_2 ,ora_fine_lav_2)   
+                                                logger.info('Orario esecuzione:{}'.format(orario_esecuzione))
+                                                fascia_t = get_fascia_turno(ora_inizio_lav, ora_fine_lav, ora_inizio_lav_2 ,ora_fine_lav_2)
+                                                logger.info('Fascia turno :{}'.format(fascia_t))
+                                            kws+=1
                                     
+                                    if data[i]['cod_caus_srv_non_eseg_ext']=='':
+                                        causale_non_es=None
+                                    else:
+                                        try:
+                                            causale_non_es=int(data[i]['cod_caus_srv_non_eseg_ext'])
+                                        except Exception as e:
+                                            logger.error('PROBLEMA INSERIMENTO CAUSALE NON ESEGUITO')
+                                            logger.error(e)
+
                                     insert_schede='''INSERT INTO UNIOPE.SCHEDE_ESEGUITE_EKOVISION 
                                         (ID_SCHEDA, DATA_PIANIF_INIZIALE, DATA_ESECUZIONE_PREVISTA, CODICE_SERV_PRED,
                                         COD_CAUS_SRV_NON_ESEG_EXT, COD_CAUS_SRV_NON_COMPL_EXT, 
                                         FLG_SEGN_SRV_NON_EFFETT, FLG_SEGN_SRV_NON_COMPL,
-                                        NOMEFILE, NR_RIGA, RECORD_VALIDO, ID
+                                        NOMEFILE, NR_RIGA, RECORD_VALIDO, ID, ORARIO_ESECUZIONE
                                         ) 
                                         VALUES
                                         (:s1, :s2, :s3, :s4, :s5, :s6, :s7, :s8, :s9,
                                         (select (max(NR_RIGA)+1) from UNIOPE.SCHEDE_ESEGUITE_EKOVISION),
-                                        :s10, SEE_ID_seq.nextval)'''
+                                        :s10, SEE_ID_seq.nextval, :s11)'''
                                     if check_update == 0 and check_scheda == 1: 
                                         rvalido='N'
                                     else:
@@ -335,16 +450,55 @@ def main():
                                             data[i]['data_esecuzione_prevista'], data[i]['codice_serv_pred'], 
                                             causale_non_es, data[i]['cod_caus_srv_non_compl_ext'], 
                                             int(data[i]['flg_segn_srv_non_effett']), int(data[i]['flg_segn_srv_non_compl']),
-                                            filename, rvalido
+                                            filename, rvalido, orario_esecuzione
                                             ))
                                     except Exception as e:
                                         logger.error(insert_schede)
-                                        logger.error('1:{}, 2:{}, 3:{}, 4:{}, 5:{}, 6:{}, 7:{}, 8:{}, 9:{}, 10:{}'.format(
+                                        logger.error('1:{}, 2:{}, 3:{}, 4:{}, 5:{}, 6:{}, 7:{}, 8:{}, 9:{}, 10:{}, 11:{}'.format(
                                             data[i]['id_scheda'], data[i]['data_pianif_iniziale'],
                                             data[i]['data_esecuzione_prevista'], data[i]['codice_serv_pred'], 
                                             causale_non_es, data[i]['cod_caus_srv_non_compl_ext'], 
                                             int(data[i]['flg_segn_srv_non_effett']), int(data[i]['flg_segn_srv_non_compl']), 
-                                            filename, rvalido
+                                            filename, rvalido, orario_esecuzione
+                                        ))
+                                        logger.error(e)
+                                        check_lettura+=1
+
+                                    insert_schede_sit='''INSERT INTO consunt.schede_eseguite_ekovision
+                                    (id_scheda, data_pianif_iniziale, data_esecuzione_prevista, 
+                                    codice_serv_pred, cod_caus_srv_non_eseg_ext, cod_caus_srv_non_compl_ext, 
+                                    flg_segn_srv_non_effett, flg_segn_srv_non_compl, nomefile,
+                                    nr_riga, record_valido, orario_esecuzione,
+                                    flg_chiuso
+                                    ) 
+                                    VALUES
+                                    (%s, %s, %s, 
+                                    %s, %s, %s, 
+                                    %s, %s, %s,
+                                    (select (max(nr_riga)+1) from consunt.schede_eseguite_ekovision), %s, %s,
+                                    %s)'''
+
+                                    if check_update_sit == 0 and check_scheda_sit == 1: 
+                                        rvalido_sit='N'
+                                    else:
+                                        rvalido_sit='S'
+
+                                    try:
+                                        curr.execute(insert_schede_sit, (
+                                            data[i]['id_scheda'], data[i]['data_pianif_iniziale'],
+                                            data[i]['data_esecuzione_prevista'], data[i]['codice_serv_pred'], 
+                                            causale_non_es, data[i]['cod_caus_srv_non_compl_ext'], 
+                                            int(data[i]['flg_segn_srv_non_effett']), int(data[i]['flg_segn_srv_non_compl']),
+                                            filename, rvalido_sit, orario_esecuzione, int(data[i]['flg_chiuso'])
+                                            ))
+                                    except Exception as e:
+                                        logger.error(insert_schede_sit)
+                                        logger.error('1:{}, 2:{}, 3:{}, 4:{}, 5:{}, 6:{}, 7:{}, 8:{}, 9:{}, 10:{}, 11:{}'.format(
+                                            data[i]['id_scheda'], data[i]['data_pianif_iniziale'],
+                                            data[i]['data_esecuzione_prevista'], data[i]['codice_serv_pred'], 
+                                            causale_non_es, data[i]['cod_caus_srv_non_compl_ext'], 
+                                            int(data[i]['flg_segn_srv_non_effett']), int(data[i]['flg_segn_srv_non_compl']), 
+                                            filename, rvalido_sit, orario_esecuzione, data[i]['flg_chiuso']
                                         ))
                                         logger.error(e)
                                         check_lettura+=1
@@ -841,15 +995,24 @@ def main():
 
                                     # pulisco la HIST_SERVIZI e consunt.persone se ci fosse già qualcosa
                                     cur = con.cursor()
+                                    # il 01/04/2026 abbiamo aggiunto anche la scrittura dell'ID_SCHEDA_EKOVISION su HIST_SERVIZI 
+                                    # per cui ora la cancellazione dei dati è più precisa e non rischia di cancellare dati di altre schede
+                                    # nel caso di soccorsi o di percorsi con più schede create per errore
+                                
                                     query_delete='''DELETE FROM UNIOPE.HIST_SERVIZI 
                                     WHERE DTA_SERVIZIO=to_date(:h1,'YYYYMMDD') AND 
-                                    ID_SER_PER_UO=:h2 
-                                    '''
+                                    ID_SER_PER_UO=:h2 and 
+                                    (ID_SCHEDA_EKOVISION=:h3 or ID_SCHEDA_EKOVISION is null)'''
+                                    
+                                    
+                                    
                                     try:
-                                        cur.execute(query_delete, (data[i]['data_esecuzione_prevista'], id_ser_per_uo))
+                                        cur.execute(query_delete, (data[i]['data_esecuzione_prevista'], id_ser_per_uo, int(data[i]['id_scheda'])))
                                     except Exception as e:
                                         logger.error(query_delete)
-                                        logger.error('1:{}, 2:{}'.format(data[i]['data_esecuzione_prevista'], id_ser_per_uo))
+                                        logger.error('1:{}, 2:{}, 3:{}'.format(data[i]['data_esecuzione_prevista'],
+                                                                               id_ser_per_uo, 
+                                                                               int(data[i]['id_scheda'])))
                                         logger.error(e)
 
                                     cur.close()
@@ -915,26 +1078,54 @@ def main():
                                                 
                                                 o+=1
                                     
-                                            query_insert='''INSERT INTO UNIOPE.HIST_SERVIZI 
+                                            query_insert_hs='''INSERT INTO UNIOPE.HIST_SERVIZI 
                                             (DTA_SERVIZIO, ID_SER_PER_UO, COD_DIPENDENTE,
                                             PROG_SERVIZIO, ID_UO_LAVORO, DURATA,
-                                            ID_TURNO) 
+                                            ID_TURNO, ID_SCHEDA_EKOVISION) 
                                             VALUES(to_date(:h1,'YYYYMMDD'), :h2, :h3,
                                             1 , :h4, :h5,
-                                            :h6)'''
+                                            :h6, :h7)'''
                                             try:
-                                                cur.execute(query_insert, (data[i]['data_esecuzione_prevista'], 
+                                                cur.execute(query_insert_hs, (data[i]['data_esecuzione_prevista'], 
                                                                         id_ser_per_uo, idpersona,
                                                                         id_ut_ok, durata, 
-                                                                        id_turno)
+                                                                        id_turno, int(data[i]['id_scheda']))
                                                             )
                                             except Exception as e:
-                                                logger.error(query_insert)
-                                                logger.error('1:{}, 2:{}, 3:{}, 4:{}, 5:{}, 6:{}'.format(data[i]['data_esecuzione_prevista'], 
-                                                                        id_ser_per_uo, idpersona,
-                                                                        id_ut_ok, durata, 
-                                                                        id_turno))
+                                                logger.error(query_insert_hs)
                                                 logger.error(e)
+                                                messaggio= f'''
+                                                            Problema con INSERT INTO UNIOPE.HIST_SERVIZI 
+                                                            Id scheda: {data[i]["id_scheda"]}, 
+                                                            Data pianificata: {data[i]["data_pianif_iniziale"]},
+                                                            Data esecuzione: {data[i]["data_esecuzione_prevista"]}, 
+                                                            cod_servizio: {data[i]["codice_serv_pred"]})'''
+                                                try: 
+                                                    id_ser_per_uo=int(id_ser_per_uo)
+                                                except:
+                                                    logger.error('id_ser_per_uo non è un intero: {}'.format(id_ser_per_uo)) 
+                                                try: 
+                                                    logger.error('Idpersona: {}'.format(idpersona))
+                                                except:
+                                                    logger.error('Non riesco a scrivere idpersona')
+                                                try: 
+                                                    logger.error('Durata: {}'.format(durata))
+                                                except:
+                                                    logger.error('Non riesco a scrivere durata')
+                                                try:                                                     
+                                                    logger.error('id_ut_ok: {}'.format(id_ut_ok))
+                                                except: 
+                                                    logger.error('Non riesco a scrivere id_ut_ok')
+                                                try: 
+                                                    logger.error('id_turno: {}'.format(id_turno))
+                                                except:
+                                                    logger.error('Non riesco a scrivere id_turno')
+                                                                                                    
+
+                                                
+                                                logger.error(messaggio)
+                                                # mando mail e mi fermo
+                                                warning_message_mail(messaggio, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
 
                                             query_insert_sit='''INSERT INTO consunt.persone
                                             (id_scheda_ekovision, cod_dipendente, durata, filename)
@@ -1023,7 +1214,7 @@ def main():
                                             uni_cod_ecos=impianto[1]
                                         except: 
                                             check_pesi=1
-                                            messaggio = '''ERRORE CONFERIMENTI: Nella scheda {0} (cod_percorso = {2}, data={3})  
+                                            messaggio_errore_conf = '''ERRORE CONFERIMENTI: Nella scheda {0} (cod_percorso = {2}, data={3})  
                                             è stato selezionato un impianto {1} per cui  
                                             non riconosciamo il codice nella tabella ANAGR_DESTINAZIONI della UO. 
                                             <br>Il dato potrebbe già essere stato corretto, in tal caso si può ignorare la mail. 
@@ -1040,9 +1231,9 @@ def main():
                                                 data[i]['codice_serv_pred'], 
                                                 data[i]['data_esecuzione_prevista']
                                             )
-                                            logger.error(messaggio)
+                                            warning_message_mail(messaggio_errore_conf, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger, 'Problema conferimenti')
+                                            logger.error(messaggio_errore_conf)
                                             # mando mail e mi fermo
-                                            warning_message_mail(messaggio, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                             #error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                                             #exit()
                                         #logger.debug('Conferimento {} -  {}, {}, {}, {}, {}, {}'.format(c,data_percorso, data_conferimento, ora_conferimento, imp_cod_ecos, uni_cod_ecos, peso_netto))  
@@ -1272,10 +1463,11 @@ def main():
                                                 (select id_ut from anagrafe_percorsi.percorsi_ut 
                                                     where cod_percorso = %s 
                                                     and responsabile = 'S' 
-                                                    and %s between data_attivazione and data_disattivazione),
-                                                (SELECT ep2.codice_cer from anagrafe_percorsi.elenco_percorsi ep2
+                                                    and %s >= data_attivazione 
+                                                    and %s < data_disattivazione),
+                                                (SELECT distinct ep2.codice_cer from anagrafe_percorsi.elenco_percorsi ep2
                                                 where cod_percorso = %s
-                                                and to_date(%s, 'YYYYMMDD') between data_inizio_validita and data_fine_validita),
+                                                and to_date(%s, 'YYYYMMDD') between data_inizio_validita and data_fine_validita -1),
                                                 %s, %s)'''
                                                 try:
                                                     curr.execute(insert_query_sit, (
@@ -1288,6 +1480,7 @@ def main():
                                                                         uni_cod_ecos,
                                                                         data[i]['codice_serv_pred'],
                                                                         data[i]['data_esecuzione_prevista'],
+                                                                        data[i]['data_esecuzione_prevista'],
                                                                         data[i]['codice_serv_pred'],
                                                                         data[i]['data_esecuzione_prevista'],
                                                                         id_pesata, 
@@ -1296,7 +1489,7 @@ def main():
                                                             )
                                                 except Exception as e:
                                                     logger.error(insert_query_sit)
-                                                    logger.error('1:{}, 2:{}, 3:{}, 4:{}, 5:{}, 6:{}, 7:{}, 8:{}, 9:{}, 10:{}, 11:{}, 12:{}, 13:{}'.format(
+                                                    logger.error('1:{}, 2:{}, 3:{}, 4:{}, 5:{}, 6:{}, 7:{}, 8:{}, 9:{}, 10:{}, 11:{}, 12:{}, 13:{}, 14:{}'.format(
                                                                         data[i]['codice_serv_pred'],
                                                                         data[i]['data_esecuzione_prevista'],
                                                                         data_conferimento,
@@ -1305,6 +1498,7 @@ def main():
                                                                         imp_cod_ecos,
                                                                         uni_cod_ecos,
                                                                         data[i]['codice_serv_pred'],
+                                                                        data[i]['data_esecuzione_prevista'],
                                                                         data[i]['data_esecuzione_prevista'],
                                                                         data[i]['codice_serv_pred'],
                                                                         data[i]['data_esecuzione_prevista'],
@@ -1814,7 +2008,7 @@ def main():
                                                                                                 data[i]['data_esecuzione_prevista'], 
                                                                                                 id_tappa))
                                                                 except Exception as e:
-                                                                    logger.error(query_insert)
+                                                                    logger.error(query_update)
                                                                     logger.error('{} {} {} {} {}'.format(int(data[i]['cons_works'][t]['cod_std_qualita'].strip()),
                                                                                                 causale,
                                                                                                 nota_consuntivazione,
@@ -2472,7 +2666,7 @@ def main():
                                                                                             int(id_tappa),
                                                                                             tipo_elemento))
                                                             except Exception as e:
-                                                                logger.error(query_insert)
+                                                                logger.error(query_update)
                                                                 logger.error('1:{} 2:{} 3:{} 4:{} 5:{}, 6:{}'.format((count_elementi-count_fatti),
                                                                                                         causale,
                                                                                                         nota_consuntivazione,
@@ -2532,6 +2726,8 @@ def main():
                                 logger.error('Error on line {}'.format(sys.exc_info()[-1].tb_lineno))
                                 logger.error(type(e).__name__)
                                 logger.error('Non processo la riga {}'.format(i))
+                                logger.error('Codice percorso = {}'.format(data[i]['codice_serv_pred']))
+                                logger.error('Data pianificata = {}'.format(data[i]['data_pianif_iniziale']))
                             i+=1
                         con.commit()
                         # Closing file
@@ -2568,11 +2764,13 @@ def main():
                     except Exception as e:
                         logger.error(e)
                         logger.error('Problema processamemto file {}'.format(filename))
+                        messagio_warning = f'Problema {e} nel processamemto del file {filename} che dovrebbe stato essere spostato nella cartella json_error'
+                        warning_message_mail(messagio_warning, 'assterritorio@amiu.genova.it, andrea.volpi@ekovision.it, francesco.venturi@ekovision.it', os.path.basename(__file__), logger, 'Problema file json ekovision')
                         logger.error('File spostato nella cartella json_error')
                         f.close()
                         #error_log_mail(errorfile, 'AssTerritorio@amiu.genova.it', os.path.basename(__file__), logger)
-                        srv.rename(filename, "json_error/" + filename)
-                        error_log_mail(errorfile, 'AssTerritorio@amiu.genova.it, andrea.volpi@ekovision.it, francesco.venturi@ekovision.it', os.path.basename(__file__), logger)
+                        srv.rename(cartella_sftp_eko + '/' + filename, cartella_sftp_eko + "/json_error/" + filename)
+                        #error_log_mail(errorfile, 'AssTerritorio@amiu.genova.it, andrea.volpi@ekovision.it, francesco.venturi@ekovision.it', os.path.basename(__file__), logger)
                     
 
 

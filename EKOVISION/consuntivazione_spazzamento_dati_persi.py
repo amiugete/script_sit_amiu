@@ -205,6 +205,7 @@ and s.riempimento = 0
 order by p.cod_percorso, ap.num_seq'''
     
     
+    # recupero dati da totem
     query_spazz= '''
     select p.cod_percorso, 
 p.id_turno, 

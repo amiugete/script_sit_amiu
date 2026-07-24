@@ -134,8 +134,8 @@ def tappa_prevista(day,frequenza_binaria):
 def main():
       
 
-    cp='0201007701'
-    data_check='20231128'
+    cp='0111007002'
+    data_check='20260106'
 
     #
     
@@ -192,7 +192,7 @@ def main():
         'flg_includi_chiuse': 1
         }
 
-    response = requests.post(eko_url, params=params, data=data_json, headers=headers)
+    response = requests.post(eko_url_test, params=params, data=data_json, headers=headers)
     #response.json()
     #logger.debug(response.status_code)
     try:      

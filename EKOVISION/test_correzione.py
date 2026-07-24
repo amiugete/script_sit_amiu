@@ -146,7 +146,11 @@ def main():
     
     data_start_ekovision='20231120'
     
-
+    
+    messaggio= '''Messaggio di test'''
+    logger.error(messaggio)
+    warning_message_mail(messaggio, 'assterritorio@amiu.genova.it, roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger, 'Con soggetto personalizzato e ,')
+    exit()
     
 
 

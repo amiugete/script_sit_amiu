@@ -122,11 +122,8 @@ def main():
       
 
 
-    
 
 
-    # Get today's date
-    #presentday = datetime.now() # or presentday = datetime.today()
     oggi=datetime.today()
     oggi=oggi.replace(hour=0, minute=0, second=0, microsecond=0)
     oggi=date(oggi.year, oggi.month, oggi.day)
@@ -138,7 +135,8 @@ def main():
     
 
     
-    id_scheda = 928753  
+    id_scheda = 477972 #696205 #478360 #600883  #484922 #502441   #423341 OK #   423319 da problemi
+    
     
     
 
@@ -156,18 +154,12 @@ def main():
     params2={'obj':'schede_lavoro',
             'act' : 'r',
             'id': '{}'.format(id_scheda),
-            'flg_esponi_consunt' : 1
             }
     
-    response2 = requests.post(eko_url_test, params=params2, data=auth_data_eko, headers=headers)
+    response2 = requests.post(eko_url, params=params2, data=auth_data_eko, headers=headers)
     #letture2 = response2.json()
     letture2 = response2.json()
-    logger.debug(letture2)
 
-    if letture2['status'] == 'error':
-        logger.error(letture2)
-        exit()
-    
     logger.debug(len(letture2['schede_lavoro'][0]['trips'][0]['waypoints']))
 
     #exit()
@@ -175,25 +167,11 @@ def main():
     data_ora_ini =[]
     data_ora_fine=[]
     
-    # orario programmato di inizio lavoro e di fine lavoro recuperati da API Ekovision (non sono quelli reali)
+    
     do_ini=datetime.strptime(f'{letture2["schede_lavoro"][0]["data_inizio_lav"]} {letture2["schede_lavoro"][0]["ora_inizio"]}', 
                                                               '%Y%m%d %H%M%S')
     data_ora_ini.append(do_ini)
-    logger.debug('Data e ora scheda di lavoro (inizio)recuperata da API Ekovision: {}'.format(data_ora_ini[-1]))
-    
-    
-    
-    # COME TEST FACCIO STESSA COSA PER VEDERE I CONSUNTIVI DELLE RISORSE UMANE (la prima)
-    logger.debug(letture2["schede_lavoro"][0]["risorse_umane"][0]) 
-    
-    
-    #
-    
-    
-    do_ini_risorsa=datetime.strptime(f'{letture2["schede_lavoro"][0]["risorse_umane"][0]["data_inizio"]} {letture2["schede_lavoro"][0]["risorse_umane"][0]["ora_inizio"]}', 
-                                                              '%Y%m%d %H%M%S')
-    logger.debug('Data e ora risorsa umana  (inizio) recuperata da API Ekovision: {}'.format(do_ini_risorsa))
-    exit()
+    logger.debug('Data e ora inizio recuperata da API Ekovision: {}'.format(data_ora_ini[-1]))
     
     logger.debug(letture2["schede_lavoro"][0]["servizi"][0]["flg_segn_srv_non_effett"])
     
@@ -215,19 +193,27 @@ def main():
                 logger.error('Qua non dovrei mai entrarci')   
         else: 
             logger.debug(f'{do_fine} > {do_ini}')    
-        data_ora_fine.append(do_fine)
         
     
     else: 
         do_fine= datetime.strptime(f'{letture2["schede_lavoro"][0]["data_inizio_lav"]} {letture2["schede_lavoro"][0]["ora_inizio"]}', 
                                                               '%Y%m%d %H%M%S')
+    
+    data_ora_fine.append(do_fine)
         
     logger.debug('Data e ora fine recuperata da API Ekovision: {}'.format(data_ora_fine[-1]))
 
-    exit()
+
     #logger.info(letture2)
-    logger.info(letture2["schede_lavoro"][0]["trips"])
+    if int(letture2["schede_lavoro"][0]["servizi"][0]["flg_segn_srv_non_effett"])==1:
+        causale=letture2["schede_lavoro"][0]["servizi"][0]["id_caus_srv_non_eseg"] 
+    else:
+        causale = 100
+    logger.debug('Causale servizio non effettuato: {}'.format(causale))
+    exit()
+    #logger.info(letture2["schede_lavoro"][0]["trips"])
     trips=letture2["schede_lavoro"][0]["trips"]
+    
     # ciclo sulle aste 
     componenti_eko=[]
     tr=0

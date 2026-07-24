@@ -67,34 +67,6 @@ errorfile='{0}/log/error_{1}.log'.format(path,nome)
 
 
 
-# Create a custom logger
-logging.basicConfig(
-    level=logging.DEBUG,
-    handlers=[
-    ]
-)
-
-logger = logging.getLogger()
-
-# Create handlers
-c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-#f_handler = logging.StreamHandler()
-f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
-
-
-c_handler.setLevel(logging.ERROR)
-f_handler.setLevel(logging.DEBUG)
-
-
-# Add handlers to the logger
-logger.addHandler(c_handler)
-logger.addHandler(f_handler)
-
-
-cc_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
-
-c_handler.setFormatter(cc_format)
-f_handler.setFormatter(cc_format)
 
 
 # libreria per invio mail
@@ -120,9 +92,45 @@ import csv
 def main():
       
 
+    
+    # Create a custom logger
+    logging.basicConfig(
+        level=logging.DEBUG,
+        handlers=[
+        ]
+    )
+
+    logger = logging.getLogger()
+
+    # Create handlers
+    c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
+    #f_handler = logging.StreamHandler()
+    f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+
+
+    c_handler.setLevel(logging.ERROR)
+    f_handler.setLevel(logging.DEBUG)
+
+
+    # Add handlers to the logger
+    logger.addHandler(c_handler)
+    logger.addHandler(f_handler)
+
+
+    cc_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
+
+    c_handler.setFormatter(cc_format)
+    f_handler.setFormatter(cc_format)
+
 
     
 
+    
+    logger.info('Il PID corrente è {0}'.format(os.getpid()))
+    
+    
+    # variabile di per l'invio mail 
+    check_debug=1
     
     
     # Get today's date
@@ -227,13 +235,23 @@ where anno::text||lpad(mese::text,2,'0')::text =
         end_date = date(anno, mese+1, 1)
     '''
 
+
+
+    # sposto questo controllo sotto. In modo da fare le verifiche ma non inviare la mail
+    """
     if oggi.day<5:
         # vado fino al primo del mese corrente
         cinque_giorni_fa = oggi - timedelta(days=5)
         end_date = date(cinque_giorni_fa.year, cinque_giorni_fa.month, 1) 
     else:    
         end_date = date(oggi.year, oggi.month, 1)    
-
+    """
+    if oggi.day<5:
+        send_mail = 0
+    else:
+        send_mail = 1
+        
+    end_date = date(oggi.year, oggi.month, 1)
 
     end_date_mail= end_date - timedelta(days=1)
     
@@ -406,7 +424,12 @@ where anno::text||lpad(mese::text,2,'0')::text =
     zone_ne=[]   
     
     schede_eseguire_automaticamente=[]
+    
+    #id_scheda_ne=[]
     sne=0
+    logger.info(f'Ci sono {len(id_scheda_ne)} schede non eseguite da processare')
+    
+    
     while sne<len(id_scheda_ne):
         #logger.info('cod_servizio_ne[sne] {}'.format(cod_servizio_ne[sne]))
         #logger.info('data_ne[sne] {}'.format(data_ne[sne]))
@@ -427,14 +450,14 @@ where anno::text||lpad(mese::text,2,'0')::text =
             check_rimessa=1
             #exit()
         for une in lista_ut_ne:
-            
-            
+                       
             if check_rimessa == 1: # in questo caso salvo solo la rimessa e non l'UT
                 if une[2] == 5:
                     ut_ne.append((une[1]))
                     zone_ne.append((une[2]))
                     
                 else:
+                    # non inserisco UT che non sono rimessa
                     logger.warning(f"Nessuna rimessa trovata per scheda {id_scheda_ne[sne]}")
             elif une[1] == 804: # caso della piattaforma volpara
                 # in questo caso devo eseguire le schede
@@ -455,7 +478,14 @@ where anno::text||lpad(mese::text,2,'0')::text =
         logger.info('Richiamo la funzione per eseguire automaticamente le schede su piattaforma volpara')
         dati_consuntivazione_annulla_schede_ut_dismesse.main(check_schede=schede_eseguire_automaticamente)
     else:
-        logger.info('Nessuna scheda da eseguire automaticamente su piattaforma volpara, procedo direttamente con l\'invio mail')
+        logger.info('Nessuna scheda da eseguire automaticamente su piattaforma volpara, procedo direttamente con l\'invio delle mail')
+    
+    
+
+    
+    if send_mail == 0:
+        logger.info('Schede da eseguire automaticamente su piattaforma volpara processate, ma siamo nei primi 5 giorni del mese, non invio mail e aspetto il prossimo giro')
+        exit()
     
     #logger.debug('ut_ne len: {}'.format(len(ut_ne)))
     #logger.debug('id_scheda_ne len: {}'.format(len(id_scheda_ne)))
@@ -464,6 +494,8 @@ where anno::text||lpad(mese::text,2,'0')::text =
     #zones = list(set(zone_ne))
     #logger.debug('zone con schede non eseguite: {}'.format(zones))
 
+
+    # rimuovo i duplicati di ut_ne
     uts = list(set(ut_ne))
     #logger.info('ut_ne: {}'.format(ut_ne))
     logger.info('UT con schede non eseguite: {}'.format(uts))
@@ -492,6 +524,9 @@ where id_ut = %s'''
     while uu < len(uts):
         
         logger.debug('id UT: {}'.format(uts[uu]))
+        logger.debug('len ut_ne={}, len id_scheda_ne={}, len data_ne={}, len servizio_ne={}'.format(
+            len(ut_ne), len(id_scheda_ne), len(data_ne), len(servizio_ne)
+        ))
         messaggio_start = '''ALERT AUTOMATICO EKOVISION
     <br><br><font color="red">{0} {1} schede ancora da eseguire</font>. 
     <br><br> <b>Si ricorda che, ai fini della chiusura delle schede da parte dei capi zona, è necessario che tutte le schede siano <i>salvate come eseguite</i>.
@@ -516,13 +551,23 @@ Pertanto si richiede gentilmente di controllare le schede ancora aperte sotto el
             subject = "{} Schede da eseguire".format(mune[1])
             mail_to=mune[2]
             mail_cc=mune[4] 
+            
         sne=0
-        #logger.debug(ut_ne)
-        while sne<len(id_scheda_ne):
+        logger.debug('ut_ne: {}'.format(ut_ne))
+        logger.debug('uts[uu]: {}'.format(uts[uu]))
+        logger.debug('uts_ne: {}'.format(uts_ne))
+        logger.debug('data_ne: {}'.format(data_ne))
+        logger.debug('id_scheda_ne: {}'.format(id_scheda_ne))
+        logger.debug('servizio_ne: {}'.format(servizio_ne))
+        #exit()
+        # faccio il ciclo su tutte le schede ad esclusione di quelle da eseguire automaticamente
+        # (in questo momento piattaforma volpara)
+        while sne<len(ut_ne):
             #logger.debug('sne= {}'.format(sne))
             #logger.debug('uu= {}'.format(uu))
             #logger.debug(ut_ne[sne])
             #logger.debug(uts[uu])
+            
             if ut_ne[sne] == uts[uu]:
                 messaggio='{0}<li>Data: {1} - {2} - id scheda: {3}</li>'.format(messaggio, 
                                                                                 datetime.strptime(data_ne[sne], '%Y%m%d').strftime('%d/%m/%Y'),
@@ -532,7 +577,7 @@ Pertanto si richiede gentilmente di controllare le schede ancora aperte sotto el
         
         messaggio='{}'.format(messaggio,messaggio_end)
         
-        
+        #exit()
             
         ##sender_email = user_mail
         receiver_email='assterritorio@amiu.genova.it'

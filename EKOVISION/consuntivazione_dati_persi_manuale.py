@@ -7,7 +7,11 @@
 '''
 Lo script si occupa della consuntivazione raccolta di dati persi su EKOVISION
 
-Usato per corregger baco del ticket #6465
+Usato per correggere baco del ticket #6465
+
+Usa 
+- consuntivazione_spazzamento_dati_persi
+- consuntivazione_raccolta_dati_persi
 
 '''
 
@@ -131,7 +135,9 @@ def main():
         os.makedirs(f'{path}/consuntivazioni/{subfolder_amiu}/')
         
     #exit()
-    subfolder_ekovision='dati_persi'
+    
+    
+    subfolder_ekovision=''
     cartella_dati_persi = f'{path}/consuntivazioni/{subfolder_amiu}/'
     
     if subfolder_ekovision=='':
@@ -164,119 +170,25 @@ def main():
     
     
     
-    # prima faccio un giro di pre-consuntivazione per le giornate mancant
-    """query_percorsi_correggere='''select 
-    id_scheda, ce.codice_servizio_pred,
-to_date(data_esecuzione_prevista, 'YYYYMMDD') data_effettiva,
-ce.tipo_servizio,
-max(u.descrizione) as ut,
-za.cod_zona as zona,
-count(*) as comp_senza_causale
-from treg_eko.consunt_ekovision ce
-left join anagrafe_percorsi.v_servizi_per_ekovision vspe 
-	on vspe.cod_percorso = ce.codice_servizio_pred 
-	and to_date(ce.data_pianif_iniziale, 'YYYYMMDD') between vspe.data_inizio_validita and vspe.data_fine_validita
-left join anagrafe_percorsi.elenco_sedi es on es.cod_sede = vspe.cod_sede 
-left join anagrafe_percorsi.cons_mapping_uo cmu on cmu.id_uo = es.id_gruppo_coordinamento 
-left join topo.ut u on u.id_ut = cmu.id_uo_sit 
-left join topo.zone_amiu za on za.id_zona = u.id_zona 
-where causale::int = -1
-group by id_scheda, ce.codice_servizio_pred,
-to_date(data_esecuzione_prevista, 'YYYYMMDD'),
-ce.tipo_servizio, 
-za.cod_zona 
-order by 1 '''
-"""
-
-
-
-    
-
-    # Usato per corregger baco del ticket #6465
-    query_percorsi_correggere='''with cons_eko as (
-select id_scheda, 
-codice_servizio_pred,
-data_esecuzione_prevista,
-data_pianif_iniziale,
-tipo_servizio,
-case
-	when 100 = ANY (array_agg(distinct causale::int)::int[]) then 100
-    else max(distinct causale::int)
-end causale
-from treg_eko.consunt_ekovision
-group by
-id_scheda,
-codice_servizio_pred,
-data_esecuzione_prevista, 
-data_pianif_iniziale,
-tipo_servizio 
-)
-select 
-    id_scheda, ce.codice_servizio_pred,
-to_date(data_esecuzione_prevista, 'YYYYMMDD') data_effettiva,
-ce.tipo_servizio,
-max(u.descrizione) as ut,
-za.cod_zona as zona,
-count(*) as comp_senza_causale
-from cons_eko ce
-left join anagrafe_percorsi.v_servizi_per_ekovision vspe 
-	on vspe.cod_percorso = ce.codice_servizio_pred 
-	and to_date(ce.data_pianif_iniziale, 'YYYYMMDD') between vspe.data_inizio_validita and vspe.data_fine_validita
-left join anagrafe_percorsi.elenco_sedi es on es.cod_sede = vspe.cod_sede 
-left join anagrafe_percorsi.cons_mapping_uo cmu on cmu.id_uo = es.id_gruppo_coordinamento 
-left join topo.ut u on u.id_ut = cmu.id_uo_sit 
-left join topo.zone_amiu za on za.id_zona = u.id_zona 
-where causale::int = -1
-group by id_scheda, ce.codice_servizio_pred,
-to_date(data_esecuzione_prevista, 'YYYYMMDD'),
-ce.tipo_servizio, 
-za.cod_zona 
-order by 1'''
-
-
-
-
-    # usate per il percorso centro storico + rimessa volpara (ticket 7678)
-    """query_percorsi_correggere='''select 
-    distinct id_scheda, 
-    see.codice_serv_pred, 
-    to_date(data_esecuzione_prevista, 'YYYYMMDD') data_effettiva,
-    'RACC' as tipo_servizio,
-    see.data_pianif_iniziale from consunt.schede_eseguite_ekovision see 
-where see.codice_serv_pred  = '0508040501'
-and see.data_pianif_iniziale  >= '20260113'
-    '''
-    
-
-    query_percorsi_correggere='''select 
-    distinct id_scheda, 
-    see.codice_serv_pred, 
-    to_date(data_esecuzione_prevista, 'YYYYMMDD') data_effettiva,
-    'RACC' as tipo_servizio,
-    see.data_pianif_iniziale from consunt.schede_eseguite_ekovision see 
-    where see.codice_serv_pred  = '0508040501'
-    and see.data_pianif_iniziale  = '20260122'
-    '''
-    """
-    
-    #day=datetime.strptime(data_percorso_input, '%Y%m%d').date()            
-    try:
-        curr.execute(query_percorsi_correggere)
-        lista_percorsi=curr.fetchall()
-    except Exception as e:
-        logger.error(e)
-        
+    lista_percorsi=[
+        (854145,'0101361401', '20260315', 'RACC'),
+        (841993,'0201015403', '20260301', 'SPAZZ'),
+        (849135,'0101388503', '20260302', 'RACC'),
+        (847550,'0201016103', '20260302', 'SPAZZ'),
+        (847639,'0201016103', '20260303', 'SPAZZ')
+    ]
         
     logger.info(f'Ci sono {len(lista_percorsi)} da correggere')
     for aa in lista_percorsi:
         id_scheda= aa[0]
         cod_percorso = aa[1]
-        data_cons=aa[2].strftime("%Y%m%d")
+        #data_cons=aa[2].strftime("%Y%m%d")
+        data_cons=aa[2]
         tipo=aa[3]
         logger.info(f'La data testuale è {data_cons}')
         
-       
-        if tipo=='S':
+           
+        if tipo=='SPAZZ':
             consuntivazione_spazzamento_dati_persi.main(id_scheda, cod_percorso, data_cons, subfolder_amiu)
         else:
             consuntivazione_raccolta_dati_persi.main(id_scheda, cod_percorso, data_cons, subfolder_amiu)    

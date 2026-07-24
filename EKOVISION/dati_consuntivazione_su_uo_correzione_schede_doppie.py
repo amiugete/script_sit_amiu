@@ -791,8 +791,8 @@ ORDER BY  CODICE_SERV_PRED, DATA_ESECUZIONE_PREVISTA, COD_TRATTO, POSIZIONE'''
     
     cur.close()
     cur = con.cursor()
-    cur1 = con.cursor()
-    cur2 = con.cursor()
+    #cur1 = con.cursor()
+    #cur2 = con.cursor()
     
     
     # aggiornamento tabella EKOVISION_CONSUNT_DOPP_PERC_SP
@@ -964,7 +964,9 @@ cmt2.QTA_SPAZZATA, cmt2.CAUSALE_SPAZZ, cmt2.ID_TAPPA, cmt.ID_ASTA'''
     except Exception as e:
         logger.error(select_MT_correggere)
         logger.error(e)
-        
+
+    cur1 = con.cursor()
+    cur2 = con.cursor() 
     if len(tappe_correggere)> 1:
         logger.info('Inizio correzione tappe')
         update_consunt_macro_tappe='''UPDATE UNIOPE.CONSUNT_SPAZZAMENTO

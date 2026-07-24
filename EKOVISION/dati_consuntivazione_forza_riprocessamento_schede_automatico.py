@@ -154,7 +154,7 @@ def main():
     cur = con.cursor()
     
     
-    
+    # dal 5/3/2026 non tocco più i dati del 2025 che vanno freezati
 
 
     # raccolta
@@ -164,14 +164,14 @@ def main():
         (
         SELECT ID_PERCORSO || '_' || TO_CHAR(DATA_CONS, 'YYYYMMDD') AS ID_DATA
         FROM consunt_macro_tappa
-        WHERE DATA_CONS >= TO_DATE('20250101', 'YYYYMMDD')
+        WHERE DATA_CONS >= TO_DATE('20260101', 'YYYYMMDD')
         /*UNION
         SELECT ID_PERCORSO || '_' || TO_CHAR(DATA_CONS, 'YYYYMMDD') AS ID_DATA
         FROM consunt_spazzamento
-        WHERE DATA_CONS >= TO_DATE('20250101', 'YYYYMMDD') */
+        WHERE DATA_CONS >= TO_DATE('20260101', 'YYYYMMDD') */
         ) SELECT DISTINCT see.ID_SCHEDA
         FROM CONSUNT_EKOVISION_RACCOLTA see
-        WHERE see.DATA_ESECUZIONE_PREVISTA >= '202501'
+        WHERE see.DATA_ESECUZIONE_PREVISTA >= '202601'
         AND see.record_valido='S'
         AND NOT EXISTS (
         SELECT 1
@@ -180,7 +180,7 @@ def main():
         )
         AND EXISTS 
         (SELECT 1 FROM anagr_ser_per_uo aspu 
-        WHERE aspu.DTA_DISATTIVAZIONE >= TO_DATE('20250101', 'YYYYMMDD')
+        WHERE aspu.DTA_DISATTIVAZIONE >= TO_DATE('20260101', 'YYYYMMDD')
         AND aspu.ID_PERCORSO = see.CODICE_SERV_PRED  
         AND to_date(see.DATA_ESECUZIONE_PREVISTA, 'YYYYMMDD') BETWEEN aspu.DTA_ATTIVAZIONE AND aspu.DTA_DISATTIVAZIONE)
         """    
@@ -203,14 +203,14 @@ def main():
 (
 SELECT ID_PERCORSO || '_' || TO_CHAR(DATA_CONS, 'YYYYMMDD') AS ID_DATA
 FROM consunt_spazzamento
-WHERE DATA_CONS >= TO_DATE('20250101', 'YYYYMMDD')
+WHERE DATA_CONS >= TO_DATE('20260101', 'YYYYMMDD')
 /*UNION
 SELECT ID_PERCORSO || '_' || TO_CHAR(DATA_CONS, 'YYYYMMDD') AS ID_DATA
 FROM consunt_spazzamento
-WHERE DATA_CONS >= TO_DATE('20250101', 'YYYYMMDD') */
+WHERE DATA_CONS >= TO_DATE('20260101', 'YYYYMMDD') */
 ) SELECT DISTINCT see.ID_SCHEDA
 FROM CONSUNT_EKOVISION_SPAZZAMENTO see
-WHERE see.DATA_ESECUZIONE_PREVISTA >= '202501'
+WHERE see.DATA_ESECUZIONE_PREVISTA >= '202601'
 AND see.record_valido='S'
   AND NOT EXISTS (
    SELECT 1
@@ -219,7 +219,7 @@ AND see.record_valido='S'
   )
   AND EXISTS 
   (SELECT 1 FROM anagr_ser_per_uo aspu 
-  WHERE aspu.DTA_DISATTIVAZIONE >= TO_DATE('20250101', 'YYYYMMDD')
+  WHERE aspu.DTA_DISATTIVAZIONE >= TO_DATE('20260101', 'YYYYMMDD')
   AND aspu.ID_PERCORSO = see.CODICE_SERV_PRED  
   AND to_date(see.DATA_ESECUZIONE_PREVISTA, 'YYYYMMDD') BETWEEN aspu.DTA_ATTIVAZIONE AND aspu.DTA_DISATTIVAZIONE)  
         """    

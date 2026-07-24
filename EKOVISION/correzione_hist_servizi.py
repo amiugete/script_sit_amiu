@@ -129,17 +129,40 @@ select_schede_uo= '''with schede_multiple as (
 select distinct id_scheda from SCHEDE_ESEGUITE_EKOVISION ce
 join schede_multiple sm on ce.codice_serv_pred = sm.codice_serv_pred 
 	and ce.data_esecuzione_prevista = sm.data_esecuzione_prevista 
-where ce.data_esecuzione_prevista >= '20240101' and ce.data_esecuzione_prevista < '20260402'
+where ce.data_esecuzione_prevista >= '20260101' and ce.data_esecuzione_prevista < '20260110'
 	order by id_scheda'''
 
 
+
+
+# schede con orari anomali
+"""
+select_schede_uo= '''SELECT ID_SCHEDA_EKOVISION FROM hist_servizi WHERE DURATA > 480
+AND ID_SCHEDA_EKOVISION IS NOT null'''
+"""
+
+
+""""
+# correzione di Vento domenico (caso di omonimia)
+select_schede_uo= '''SELECT ID_SCHEDA_EKOVISION FROM HIST_SERVIZI hs 
+WHERE hs.COD_DIPENDENTE IN ('08628_1', '08627_1')
+AND hs.ID_SCHEDA_EKOVISION IS NOT null'''
+
+# correzione di Ferrando Paolo (caso di omonimia)
+select_schede_uo= '''SELECT ID_SCHEDA_EKOVISION FROM HIST_SERVIZI hs 
+WHERE hs.COD_DIPENDENTE IN ('03660_1', '07477_1')
+AND hs.ID_SCHEDA_EKOVISION IS NOT null'''
+"""
 
 
 select_matricola = '''
 SELECT tape.COD_MATLIBROMAT AS MATRICOLA
 /*, pe.* */
 FROM PERSONALE_EKOVISION pe 
-LEFT JOIN T_ANAGR_PERS_EKOVISION tape ON trim(tape.NOMINATIVO) = trim(pe.COGNOME) || ' ' || trim (pe.NOME)
+LEFT JOIN T_ANAGR_PERS_EKOVISION tape 
+	ON (trim(tape.NOMINATIVO) = trim(pe.COGNOME) || ' ' || trim (pe.NOME) 
+ and to_date(pe.DT_NASCITA, 'YYYYMMDD') = tape.DATA_NASCITA)
+		OR tape.COD_MATLIBROMAT = pe.MATRICOLA
 WHERE  pe.ID_EKOVISION = :id_ekovision AND to_date(:data_inizio , 'YYYYMMDD') 
 BETWEEN tape.DTA_INIZIO AND tape.dta_fine
 '''
@@ -148,6 +171,28 @@ query_id_ser_per_uo='''SELECT ID_SER_PER_UO , ID_TURNO, ID_UO, ID_SERVIZIO
     FROM ANAGR_SER_PER_UO aspu WHERE ID_PERCORSO LIKE :c1
     AND to_date(:c2, 'YYYYMMDD') BETWEEN DTA_ATTIVAZIONE AND DTA_DISATTIVAZIONE '''
 
+
+
+
+query_delete='''DELETE FROM UNIOPE.HIST_SERVIZI 
+        WHERE DTA_SERVIZIO=to_date(:h1,'YYYYMMDD') AND 
+        ID_SER_PER_UO=:h2 and 
+        (ID_SCHEDA_EKOVISION=:h3 or ID_SCHEDA_EKOVISION is null)'''
+                                                
+query_insert_hs='''INSERT INTO UNIOPE.HIST_SERVIZI 
+        (DTA_SERVIZIO, ID_SER_PER_UO, COD_DIPENDENTE,
+        PROG_SERVIZIO, ID_UO_LAVORO, DURATA,
+        ID_TURNO, ID_SCHEDA_EKOVISION) 
+        VALUES(to_date(:h1,'YYYYMMDD'), :h2, :h3,
+        1 , :h4, :h5,
+        :h6, :h7)'''       
+        
+       
+select_sit = '''select cod_dipendente, durata
+from consunt.persone where id_scheda_ekovision = %s''' 
+        
+        
+                                                 
 def main():
     
     
@@ -240,9 +285,9 @@ def main():
     cur.execute("ALTER SESSION SET NLS_TERRITORY = 'ITALY'")
     
     
-    debug=0
+    debug=1
     
-    if debug ==0 :
+    if debug == 0:
 
         logger.info('Eseguo query per recuperare le schede con stesso codice percorso e stessa data pianificazione')
         
@@ -263,7 +308,7 @@ def main():
             
     else:
         # scheda usata per test 
-        schede = [(882179,)]
+        schede = [(923149,)]
     
     
     
@@ -272,6 +317,14 @@ def main():
     
         logger.info(f'Provo a leggere i dettagli della scheda {s[0]}')
     
+    
+        
+                                                
+                                                
+                                                
+        
+            
+        
     
         params2={'obj':'schede_lavoro',
                 'act' : 'r',
@@ -283,19 +336,77 @@ def main():
         #letture2 = response2.json()
         letture2 = response2.json()
 
+
+        
+        
+
+
         if letture2['status'] == 'error':
             logger.warning(letture2)
         else:
+            
+            # PROCEDO ALLA CANCELLAZIONE DEL PREGRESSO
+                
+            # RECUPERO DATA PERCORSO
+            data_percorso=letture2["schede_lavoro"][0]["data_inizio_lav"]
+            logger.debug(f'Data percorso: {data_percorso}')
+    
+    
+    
+            # devo trovare id_ser_per_uo       
+            cod_percorso=letture2["schede_lavoro"][0]["servizi"][0]['cod_modello']
+            logger.debug(f'Codice percorso: {cod_percorso}')                        
+                                    
+            try:
+                cur.execute(query_id_ser_per_uo, (cod_percorso, data_percorso,))
+                ii_ss=cur.fetchall()
+            except Exception as e:
+                logger.error(query_id_ser_per_uo)
+                logger.error(e)
+                check_lettura+=1                                            
+
+            id_rimessa=''
+            id_ut=''
+            for ispu in ii_ss:
+                id_ser_per_uo=ispu[0]
+                id_turno=ispu[1]
+                id_servizio=ispu[3]
+                if int(ispu[2])==16 or int(ispu[2])==17:
+                    id_rimessa=ispu[2]
+                else:
+                    id_ut=ispu[2]
+        
+            logger.debug(f'id_rimessa: {id_rimessa}')
+            logger.debug(f'id_ut: {id_ut}')
+            logger.debug(f'id_turno: {id_turno}')
+            logger.debug(f'id_servizio: {id_servizio}')
+            
+            
+            logger.info(f'Cancello eventuali pregressi in hist_servizi per la scheda {s[0]} e data percorso {data_percorso}')
+            try:
+                cur.execute(query_delete, (data_percorso, id_ser_per_uo, s[0]))
+            except Exception as e:
+                logger.error(query_delete)
+                logger.error('1:{}, 2:{}, 3:{}'.format(data_percorso,             
+                                                id_ser_per_uo, s[0]))
+                logger.error(e)
+            
+            
+            
+            # nel caso in cui la scheda sia stata effettuata cerco chi l'abbia eseguita
             if letture2["schede_lavoro"][0]["servizi"][0]['flg_segn_srv_non_effett']=="0":
         
+        
+                # checje se tramite WS riesco a recuperare le persone che hanno lavorato sulla scheda, se non riesco a recuperarle non faccio la correzione di hist_servizi per evitare di perdere dati corretti su persone che non riesco ad identificare, ma mando una mail di warning per segnalare il problema
+                check_persone_ws=0
+                
                 p = 0
                 
                 while p< len(letture2["schede_lavoro"][0]["risorse_umane"]):
                     logger.info(f'Provo a leggere i dettagli della risorsa umana {p} della scheda {s[0]}')
                     #logger.debug(letture2["schede_lavoro"][0]["risorse_umane"][p]) 
                     
-                    data_percorso=letture2["schede_lavoro"][0]["data_inizio_lav"]
-                    logger.debug(f'Data percorso: {data_percorso}')
+                   
                     
                     id_persona_ekovision = int(letture2["schede_lavoro"][0]["risorse_umane"][p]['id'])
                     if id_persona_ekovision  > 0:
@@ -305,110 +416,201 @@ def main():
                         do_ini_risorsa=datetime.strptime(f'{letture2["schede_lavoro"][0]["risorse_umane"][p]["data_inizio"]} {letture2["schede_lavoro"][0]["risorse_umane"][p]["ora_inizio"]}', 
                                                                         '%Y%m%d %H%M%S')
                         
+                        data_inizio=datetime.strptime(f'{letture2["schede_lavoro"][0]["risorse_umane"][p]["data_inizio"]}', '%Y%m%d')
+                        ora_inizio=letture2["schede_lavoro"][0]["risorse_umane"][p]["ora_inizio"]
+                        
+                        
+                                               
                         do_fine_risorsa=datetime.strptime(f'{letture2["schede_lavoro"][0]["risorse_umane"][p]["data_fine"]} {letture2["schede_lavoro"][0]["risorse_umane"][p]["ora_fine"]}', 
                                                                         '%Y%m%d %H%M%S')
+                        
+                        data_fine=datetime.strptime(f'{letture2["schede_lavoro"][0]["risorse_umane"][p]["data_fine"]}', '%Y%m%d')
+                        ora_fine=letture2["schede_lavoro"][0]["risorse_umane"][p]["ora_fine"]
                         
                         if do_fine_risorsa < do_ini_risorsa:
                             logger.warning(f'La data di fine risorsa è precedente alla data di inizio risorsa per la risorsa umana {p} della scheda {s[0]}. Probabilmente c\'è un errore nei dati di ekovision, controllo i valori:')
                             
                             do_fine_risorsa= do_fine_risorsa + timedelta(days=1)
-                            
+                        
+                        # correzione stronzate WS di Ekovision 
+                        logger.debug(str(do_ini_risorsa.hour).rjust(2,'0'))
+                        logger.debug(str(do_fine_risorsa.hour).rjust(2,'0'))
+                        if str(do_ini_risorsa.hour).rjust(2,'0')+str(do_ini_risorsa.minute).rjust(2,'0') < str(do_fine_risorsa.hour).rjust(2,'0')+str(do_fine_risorsa.minute).rjust(2,'0') and data_inizio < data_fine:
+                            logger.warning(f'''c'è qualche casino sulle date che correggo a mano''')
+                            do_fine_risorsa= do_fine_risorsa - timedelta(days=1)
+                        
                         # calcolo la durata in minuti della risorsa umana sulla scheda
+                        logger.debug(f'Data inizio risorsa: {do_ini_risorsa}')
+                        logger.debug(f'Data fine risorsa: {do_fine_risorsa}')
                         durata_risorsa=(do_fine_risorsa - do_ini_risorsa).total_seconds()/60
                         
                         
                         logger.debug(f'Durata risorsa umana con id {id_persona_ekovision} della scheda {s[0]} in minuti: {durata_risorsa}')
                         
                         # devo recuperare codice persona 
+                        check_persona=0
                         try:
                             cur.execute(select_matricola, (id_persona_ekovision, data_percorso,))
                             matricola = cur.fetchall()[0][0]
                         except Exception as e:
-                            logger.error('Persona Ekovision non trovata. Probabile persona che nel 2025 non lavorava più in azienda')
-                            logger.error(f'Id persona ekovision: {id_persona_ekovision}, data percorso: {data_percorso}')
+                            logger.warning(f'''Non riesco a trovare la persona con id {id_persona_ekovision} su UO per la scheda {s[0]} e data percorso {data_percorso}.''')
+                            error_message1 = f'''Per la scheda {s[0]} non trovata non trovata persona su Ekovision. Potrebbe essere persona che a fine 2025 non lavorava più in azienda 
+                                         oppure nome con caratteri speciali'''
+                            error_message2 = f'Id persona ekovision: {id_persona_ekovision}, data percorso: {data_percorso}'
+                            check_persona = 1
+                            check_persone_ws = 1
                             #logger.error(select_matricola)
                             #logger.error(e)
                         
-                        logger.debug(f'Matricola: {matricola}')   
-                        cod_dipendente = str(matricola).rjust(5, '0')+'_1'
-                        logger.debug(f'Codice dipendente: {cod_dipendente}')
+                        # se ho trovato la persona da WS proseguo
+                        if check_persona==0:
+                            logger.debug(f'Matricola: {matricola}')   
+                            cod_dipendente = str(matricola).rjust(5, '0')+'_1'
+                            logger.debug(f'Codice dipendente: {cod_dipendente}')
+                            
+                            
+                            
+                            
+                            if id_rimessa!='' and id_mansione==33:
+                                id_ut_ok=id_rimessa
+                            elif id_ut != '' and id_mansione!=33 :
+                                id_ut_ok=id_ut
+                            elif id_ut=='' and id_rimessa!='':
+                                id_ut_ok=id_rimessa
+                            elif id_ut!='' and id_rimessa=='':
+                                id_ut_ok=id_ut       
+                            
+                            logger.debug(f'id_ut_ok: {id_ut_ok}')
                         
-                        # devo trovare id_ser_per_uo
                         
-                                                
-                        cod_percorso=letture2["schede_lavoro"][0]["servizi"][0]['cod_modello']
-                        logger.debug(f'Codice percorso: {cod_percorso}')                        
-                                                
-                        try:
-                            cur.execute(query_id_ser_per_uo, (cod_percorso, data_percorso,))
-                            ii_ss=cur.fetchall()
-                        except Exception as e:
-                            logger.error(query_id_ser_per_uo)
-                            logger.error(e)
-                            check_lettura+=1                                            
+                        # se non avessi ancora trovato la persona la provo a cercare su SIT 
+                        
+                        
+                        
+                                        
+                     
+                        if check_persona==0:
 
-                        id_rimessa=''
-                        id_ut=''
-                        for ispu in ii_ss:
-                            id_ser_per_uo=ispu[0]
-                            id_turno=ispu[1]
-                            id_servizio=ispu[3]
-                            if int(ispu[2])==16 or int(ispu[2])==17:
-                                id_rimessa=ispu[2]
-                            else:
-                                id_ut=ispu[2]
+                            
+                            try:
+                                cur.execute(query_insert_hs, (data_percorso, 
+                                                    id_ser_per_uo, cod_dipendente,
+                                                    id_ut_ok, durata_risorsa, 
+                                                    id_turno, s[0]))
+
+                            except Exception as e:
+                                logger.error(query_insert_hs)
+                                logger.error(e)
+                                messaggio= f'''
+                                        Problema con INSERT INTO UNIOPE.HIST_SERVIZI 
+                                        Id scheda: {s[0]}, 
+                                        Data percorso: {data_percorso},
+                                        cod_servizio: {cod_percorso})'''
+                                try: 
+                                    id_ser_per_uo=int(id_ser_per_uo)
+                                except:
+                                    logger.error('id_ser_per_uo non è un intero: {}'.format(id_ser_per_uo)) 
+                                try: 
+                                    logger.error('cod_dipendente: {}'.format(cod_dipendente))
+                                except:
+                                    logger.error('Non riesco a scrivere cod_dipendente')
+                                try: 
+                                    logger.error('Durata: {}'.format(durata_risorsa))
+                                except:
+                                    logger.error('Non riesco a scrivere durata')
+                                try:                                                     
+                                    logger.error('id_ut_ok: {}'.format(id_ut_ok))
+                                except: 
+                                    logger.error('Non riesco a scrivere id_ut_ok')
+                                try: 
+                                    logger.error('id_turno: {}'.format(id_turno))
+                                except:
+                                    logger.error('Non riesco a scrivere id_turno')
+                                                                                
+
+                            
+                                logger.error(messaggio)
+                                # mando mail e mi fermo
+                                warning_message_mail(messaggio, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+
+
+                            
+                            query_insert_sit='''INSERT INTO consunt.persone
+                                (id_scheda_ekovision, cod_dipendente, durata, filename)
+                                VALUES(%s, %s, %s, 'From WS') 
+                                ON CONFLICT (id_scheda_ekovision, cod_dipendente) 
+                                DO UPDATE  SET durata=EXCLUDED.durata'''
+                            
+                            try:
+                                curr.execute(query_insert_sit, (s[0], cod_dipendente.rjust(7, '0'), durata_risorsa))
+                            except Exception as e:
+                                logger.error(query_insert_sit)
+                                logger.error('scheda:{}, persona:{}, durata:{}, filename:{}'.format(s[0], cod_dipendente, durata_risorsa))
+                                logger.error(e)
+                            # faccio commit su entrambi i db dopo ogni risorsa umana per evitare di perdere dati in caso di errori su risorse successive
+                            
+                        else:
+                            logger.warning(f'''Non correggo hist_servizi per la risorsa umana {p} della scheda {s[0]} 
+                                           perchè non riesco a trovare la persona sul db della UO ''')  
+
+                            # non faccio commit quindi nemmeno delete
+
+
+                    p+=1
                     
-                        logger.debug(f'id_rimessa: {id_rimessa}')
-                        logger.debug(f'id_ut: {id_ut}')
-                        logger.debug(f'i_turno: {id_turno}')
-                        logger.debug(f'id_servizio: {id_servizio}')
-                        
-                        
-                        if id_rimessa!='' and id_mansione==33:
-                            id_ut_ok=id_rimessa
-                        elif id_ut != '' and id_mansione!=33 :
-                            id_ut_ok=id_ut
-                        elif id_ut=='' and id_rimessa!='':
-                            id_ut_ok=id_rimessa
-                        elif id_ut!='' and id_rimessa=='':
-                            id_ut_ok=id_ut       
-                        
-                        logger.debug(f'id_ut_ok: {id_ut_ok}')
-                        
-                        
-                        
-                        query_delete='''DELETE FROM UNIOPE.HIST_SERVIZI 
-                                                WHERE DTA_SERVIZIO=to_date(:h1,'YYYYMMDD') AND 
-                                                ID_SER_PER_UO=:h2 and 
-                                                (ID_SCHEDA_EKOVISION=:h3 or ID_SCHEDA_EKOVISION is null)'''
-                                                
-                                                
-                                                
-                        try:
-                            cur.execute(query_delete, (data_percorso, id_ser_per_uo, s[0]))
-                        except Exception as e:
-                            logger.error(query_delete)
-                            logger.error('1:{}, 2:{}, 3:{}'.format(data_percorso,             
-                                                            id_ser_per_uo, s[0]))
-                            logger.error(e)
+                correzione_con_sit = 0
+                # se check_persone_ws non fosse 0 non faccio il commit
+                if check_persone_ws==0:
+                    conn.commit()
+                    con.commit() 
+                else : 
+                    logger.warning(f'''Non faccio commit su nessuno dei due db per la scheda {s[0]} 
+                                    perchè non riesco a recuperare le persone da WS, 
+                                    in questo modo evito di perdere dati corretti su persone che non riesco ad identificare''')
+                    logger.info('Faccio rollback su entrambi i db per la scheda {}'.format(s[0])
+                                )
+                    con.rollback()
+                    conn.rollback()
+                    
+                    
+                    
+                    
+                    logger.info(f'''Avendo fatto rollback provo di nuovo a cancellare 
+                                eventuali pregressi in hist_servizi per la scheda {s[0]} e data percorso {data_percorso}''')
+                    try:
+                        cur.execute(query_delete, (data_percorso, id_ser_per_uo, s[0]))
+                    except Exception as e:
+                        logger.error(query_delete)
+                        logger.error('1:{}, 2:{}, 3:{}'.format(data_percorso,             
+                                                        id_ser_per_uo, s[0]))
+                        logger.error(e)
 
-
-
-
-
-                        query_insert_hs='''INSERT INTO UNIOPE.HIST_SERVIZI 
-                                                        (DTA_SERVIZIO, ID_SER_PER_UO, COD_DIPENDENTE,
-                                                        PROG_SERVIZIO, ID_UO_LAVORO, DURATA,
-                                                        ID_TURNO, ID_SCHEDA_EKOVISION) 
-                                                        VALUES(to_date(:h1,'YYYYMMDD'), :h2, :h3,
-                                                        1 , :h4, :h5,
-                                                        :h6, :h7)'''
+                    # provo a cercare la persona su SIT
+                    logger.info(f'''Provo a cercare la persona su SIT per la scheda {s[0]}''')
+                    try:
+                        curr.execute(select_sit, (s[0],))
+                        persone_sit = curr.fetchall()
+                    except Exception as e:
+                        logger.error(select_sit)
+                        logger.error(e)
+                    
+                    
+                    logger.info(f'''Trovo {len(persone_sit)} persone su SIT per la scheda {s[0]}''')
+                    #exit()
+                    for ps in persone_sit:
+                        durata_risorsa= ps[1]
+                        cod_dipendente=ps[0]
+                        
+                        
                         try:
                             cur.execute(query_insert_hs, (data_percorso, 
                                                 id_ser_per_uo, cod_dipendente,
-                                                id_ut_ok, durata_risorsa, 
+                                                id_ut, durata_risorsa, 
                                                 id_turno, s[0]))
 
+                            con.commit()
+                            logger.info(f'''Correzione riuscita inserendo la persona trovata su SIT per la scheda {s[0]}''')
+                            correzione_con_sit = 1
                         except Exception as e:
                             logger.error(query_insert_hs)
                             logger.error(e)
@@ -430,46 +632,36 @@ def main():
                             except:
                                 logger.error('Non riesco a scrivere durata')
                             try:                                                     
-                                logger.error('id_ut_ok: {}'.format(id_ut_ok))
+                                logger.error('id_ut: {}'.format(id_ut))
                             except: 
-                                logger.error('Non riesco a scrivere id_ut_ok')
+                                logger.error('Non riesco a scrivere id_ut')
                             try: 
                                 logger.error('id_turno: {}'.format(id_turno))
                             except:
-                                logger.error('Non riesco a scrivere id_turno')
-                                                                            
+                                logger.error('Non riesco a scrivere id_turno')                                                
 
                         
                             logger.error(messaggio)
                             # mando mail e mi fermo
                             warning_message_mail(messaggio, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
-
-
-
-                        query_insert_sit='''INSERT INTO consunt.persone
-                            (id_scheda_ekovision, cod_dipendente, durata, filename)
-                            VALUES(%s, %s, %s, 'From WS') 
-                            ON CONFLICT (id_scheda_ekovision, cod_dipendente) 
-                            DO UPDATE  SET durata=EXCLUDED.durata'''
-                        try:
-                            curr.execute(query_insert_sit, (s[0], cod_dipendente, durata_risorsa))
-                        except Exception as e:
-                            logger.error(query_insert_sit)
-                            logger.error('scheda:{}, persona:{}, durata:{}, filename:{}'.format(s[0], cod_dipendente, durata_risorsa))
-                            logger.error(e)
-
-
-
-                    p+=1
+                        
+                        
+                
+                if check_persona==1 and correzione_con_sit==0:
+                    logger.error(error_message1)
+                    logger.error(error_message2)
+            
             
             elif letture2["schede_lavoro"][0]["servizi"][0]['flg_segn_srv_non_effett']=="1":
                 logger.info(f'La scheda {s[0]} è già stata segnata come non effettuata, quindi non correggo hist_servizi e consunt.persone')
-            
+
+                
+                
+                
             else:
                 logger.error(f'Valore non previsto per flg_segn_srv_non_effett: {letture2["schede_lavoro"][0]["servizi"][0]["flg_segn_srv_non_effett"]} per la scheda {s[0]}')
                 warning_message_mail(f'Valore non previsto per flg_segn_srv_non_effett: {letture2["schede_lavoro"][0]["servizi"][0]["flg_segn_srv_non_effett"]} per la scheda {s[0]}')
-            conn.commit()
-            con.commit()        
+                   
 
         #exit()
     

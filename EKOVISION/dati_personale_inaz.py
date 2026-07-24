@@ -128,6 +128,14 @@ def main():
     giorno=datetime.today().strftime('%A')
     giorno_file=datetime.today().strftime('%Y%m%d')
 
+    ###################### IN CASO DI RIPROCESSAMENTO #################################
+    # qualora lo script andasse in errore e fosse necessario riprocessare il file di una determinatra data, decomentare la riga sottostante
+    # rilanciato questo script ricordarsi di far girare nuovamente il job spoon del personale (EKOVISION/dati_personale) e il CONNECTOR EKOVISION (Flussi_IN/PERSONE)
+
+    #giorno_file='20260510' # data per riprocessare file in caso lo script vada in errore
+
+    ######################################################################################
+
     logger.debug('Il giorno della settimana è {} o meglio {}'.format(num_giorno, giorno))
 
     start_week = date.today() - timedelta(days=datetime.today().weekday())
@@ -167,7 +175,7 @@ def main():
     cur = con.cursor()
     
     
-    
+    file_presente=0
     try: 
         cnopts = pysftp.CnOpts()
         cnopts.hostkeys = None
@@ -175,7 +183,7 @@ def main():
     password=pwd_inaz_sftp, port= port_inaz_sftp,  cnopts=cnopts,
     log="/tmp/pysftp_inaz.log")
 
-        file_presente=0
+        
         with srv.cd(cartella_inaz_sftp): #chdir to public
             #print(srv.listdir('./'))
             for filename in srv.listdir('./'):
@@ -314,6 +322,8 @@ def main():
                                             logger.error(e)
                                 else:
                                     i+=1
+
+            
                                     
                                         
                     
@@ -328,6 +338,9 @@ def main():
         check_ekovision=103 # problema scarico SFTP  
     
     
+    
+    
+    
     if file_presente==0:
         messaggio = f'''Su spazio SFTP di <b>INAZ</b> non è presente file personale per Ekovision con la data di oggi. 
         <br> Il file {cartella_inaz_sftp}/ekovision1_{giorno_file}.csv che dovrebbe essere automaticamente creato alle 22 di oggi, alle {datetime.today()}
@@ -336,9 +349,6 @@ def main():
         <br> Grazie in anticipo'''
         logger.warning(messaggio)
         warning_message_mail(messaggio, 'calvello@amiu.genova.it, Arianna.Cerboncini@amiu.genova.it', os.path.basename(__file__), logger)
-    
-    
-    
     
     #exit()
     

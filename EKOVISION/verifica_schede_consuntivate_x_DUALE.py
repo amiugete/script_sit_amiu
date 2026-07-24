@@ -5,8 +5,8 @@
 # Roberto Marzocchi, Roberta Fagandini
 
 '''
-Lo script si occupa di verificare che le schede chiuse siano state effettivamente salvate 
-nella tabella treg_eko.consunt_ekovision 
+Lo script si occupa di verificare che le schede eseguite su Ekovision siano effettivamente arrivate 
+sul DB 
 '''
 
 #from msilib import type_short
@@ -64,34 +64,7 @@ errorfile='{0}/log/error_{1}.log'.format(path,nome)
 
 
 
-# Create a custom logger
-logging.basicConfig(
-    level=logging.DEBUG,
-    handlers=[
-    ]
-)
 
-logger = logging.getLogger()
-
-# Create handlers
-c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-#f_handler = logging.StreamHandler()
-f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
-
-
-c_handler.setLevel(logging.ERROR)
-f_handler.setLevel(logging.INFO)
-
-
-# Add handlers to the logger
-logger.addHandler(c_handler)
-logger.addHandler(f_handler)
-
-
-cc_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
-
-c_handler.setFormatter(cc_format)
-f_handler.setFormatter(cc_format)
 
 
 # libreria per invio mail
@@ -119,6 +92,34 @@ import uuid
 def main():
       
 
+    # Create a custom logger
+    logging.basicConfig(
+        level=logging.DEBUG,
+        handlers=[
+        ]
+    )
+
+    logger = logging.getLogger()
+
+    # Create handlers
+    c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
+    #f_handler = logging.StreamHandler()
+    f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+
+
+    c_handler.setLevel(logging.ERROR)
+    f_handler.setLevel(logging.DEBUG)
+
+
+    # Add handlers to the logger
+    logger.addHandler(c_handler)
+    logger.addHandler(f_handler)
+
+
+    cc_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
+
+    c_handler.setFormatter(cc_format)
+    f_handler.setFormatter(cc_format)
 
     logger.info('Il PID corrente è {0}'.format(os.getpid()))
 
@@ -131,7 +132,10 @@ def main():
     oggi=date(oggi.year, oggi.month, oggi.day)
     #logging.debug('Oggi {}'.format(oggi))
     
+    
+    
     mese_anno_oggi=oggi.strftime('%Y%m')
+    
     
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
 
@@ -154,9 +158,14 @@ and to_date(%s, 'YYYYMMDD') between data_inizio_validita and data_fine_validita 
     # dal 4/3/2026 non tocco più i dati del 2025 che vanno freezati
 
     
-    anno=2026
-    mese=1
-    mese_anno_eko = '202601'
+    current_month = datetime(oggi.year, oggi.month, 1)
+    previous_month = current_month - timedelta(days=1)
+    mese_anno_eko = previous_month.strftime('%Y%m')
+    anno=previous_month.year
+    mese=previous_month.month
+    
+    
+    
     data_eko=datetime.strptime(f'{anno}-{mese}-01', '%Y-%m-%d').date()
 
     
@@ -167,10 +176,9 @@ and to_date(%s, 'YYYYMMDD') between data_inizio_validita and data_fine_validita 
     logger.debug(f'data_eko = {data_eko}')
     logger.debug(f'Oggi-data_eko = {(oggi-data_eko).days}')
    
-    #exit()
 
     
-    id_scheda_chiuse_eko=[]
+    id_scheda_eseguite_eko=[]
     id_scheda_chiuse_db=[]
     
     
@@ -179,46 +187,24 @@ and to_date(%s, 'YYYYMMDD') between data_inizio_validita and data_fine_validita 
     # anno e mese sono quelli di ekovision
     start_date = date(anno, mese, 1)
 
+    
 
-    end_date_finale = date(oggi.year, oggi.month, 1)
     
 
     locale.setlocale(locale.LC_ALL, "") # prendo la lingua del server
 
+    end_date = oggi - timedelta(days=2)
     
-    
-    mese_mail=start_date.strftime('%B')
-    
-    logger.debug(mese_mail)
-    #exit()
-
-
-
-    if oggi.day<5:
-        # vado fino al primo del mese corrente
-        cinque_giorni_fa = oggi - timedelta(days=5)
-        end_date = date(cinque_giorni_fa.year, cinque_giorni_fa.month, 1) 
-    else:    
-        end_date = date(oggi.year, oggi.month, 1)    
-
-    ###################################
-    # modifica manuale da rimuovere
-    end_date = date(oggi.year, 6, 1)
-
-
-    end_date_mail= end_date - timedelta(days=1)
-    
-    end_mese_mail=end_date_mail.strftime('%B')
-    
-    end_anno_mail=end_date_mail.year
-    
-    logger.info(f'end_date = {end_date}')
-    logger.debug(f'end_mese_mail = {end_mese_mail}')
-    logger.debug(f'end_anno_mail = {end_anno_mail}')
+    logger.debug(f'start_date = {start_date}')
+    logger.debug(f'end_date = {end_date}')
+    logger.debug(f'type start_date = {type(start_date)}')
+    logger.debug(f'type end_date = {type(end_date)}')
     #exit()
     
     
     
+    
+    # TODO: spostare controllo su SIT
     # select delle schede presenti in treg_eko.consunt_ekovision
     nome_db=db
     logger.info('Connessione al db {}'.format(nome_db))
@@ -229,11 +215,10 @@ and to_date(%s, 'YYYYMMDD') between data_inizio_validita and data_fine_validita 
                         host=host)
     curr = conn.cursor()
 
-    
+    """
     query_schede_su_db='''select distinct id_scheda
 from treg_eko.consunt_ekovision 
-where data_pianif_iniziale > %s and data_pianif_iniziale < %s
-and solo_esec is null
+where data_pianif_iniziale > %s and data_pianif_iniziale <= %s
 order by id_scheda'''
     
     
@@ -245,6 +230,45 @@ order by id_scheda'''
         logger.error(query_schede_su_db)
         logger.error(e)
     
+    """
+    
+    # per ora in attesa di spostare la reportistica del duale faccio controllo su UO 
+    
+    # Mi connetto al DB oracle UO
+    cx_Oracle.init_oracle_client(percorso_oracle) # necessario configurare il client oracle correttamente
+    #cx_Oracle.init_oracle_client() # necessario configurare il client oracle correttamente
+    parametri_con='{}/{}@//{}:{}/{}'.format(user_uo,pwd_uo, host_uo,port_uo,service_uo)
+    logger.debug(parametri_con)
+    con = cx_Oracle.connect(parametri_con)
+    logger.info("Versione ORACLE: {}".format(con.version))
+    
+    cur = con.cursor()
+    
+    
+    # facendo join fra SCHEDE_ESEGUITE_EKOVISION e CONSUNT_EKOVISION_RACCOLTA + CONSUNT_EKOVISION_SPAZZAMENTO 
+    # prendo tutte le schede che sono su DB oracle, indipendentemente se sono raccolta o spazzamento, 
+    # in modo da fare un confronto più ampio con le schede eseguite su Ekovision. 
+    # In questo modo riesco a capire se le schede eseguite su Ekovision arrivano su DB oracle, 
+    query_schede_su_db_oracle='''SELECT DISTINCT see.id_scheda 
+FROM SCHEDE_ESEGUITE_EKOVISION see 
+JOIN 
+(SELECT cer.ID_SCHEDA , cer.CODICE_SERV_PRED 
+FROM CONSUNT_EKOVISION_RACCOLTA cer 
+UNION ALL
+SELECT cer.ID_SCHEDA , cer.CODICE_SERV_PRED 
+FROM CONSUNT_EKOVISION_SPAZZAMENTO cer
+) ce ON ce.ID_SCHEDA = see.ID_SCHEDA
+WHERE see.DATA_PIANIF_INIZIALE >= :d1
+AND see.DATA_PIANIF_INIZIALE <= :d2
+    '''
+    try:
+        cur.execute(query_schede_su_db_oracle, (mese_anno_eko, end_date.strftime('%Y%m%d'),))
+        schede_su_db=cur.fetchall()
+    except Exception as e:
+        logger.error(query_schede_su_db_oracle)
+        logger.error(e)
+    
+    
     for sd in schede_su_db:
         id_scheda_chiuse_db.append(sd[0])
     
@@ -252,21 +276,20 @@ order by id_scheda'''
 
     curr.close()
     
-    logger.info('Schede chiuse su DB: {}'.format(len(id_scheda_chiuse_db)))
+    logger.info('Schede presenti su DB: {}'.format(len(id_scheda_chiuse_db)))
     
     
     
     # delta time
     delta = timedelta(days=1)
 
-    # iterate over range of dates
-    data_mese=start_date
 
 
-    while data_mese < end_date:
-        data_ws=data_mese.strftime('%Y%m%d')
+
+    while start_date < end_date:
+        data_ws=start_date.strftime('%Y%m%d')
         logger.info(data_ws)
-        data_mese += delta
+        start_date += delta
     
     
     
@@ -306,11 +329,10 @@ order by id_scheda'''
                 #logger.debug(int(letture['schede_lavoro'][ss]['flg_chiuso']))
                 #logger.debug(int(letture['schede_lavoro'][ss]['flg_gest_trip_comp']))
                 #logger.debug(int(letture['schede_lavoro'][ss]['flg_gest_trip_tratti']))
-                #print(f"scheda {ss} letture = {letture}")
-                #exit()
-                if int(letture['schede_lavoro'][ss]['flg_chiuso'])==1 and (int(letture['schede_lavoro'][ss]['flg_gest_trip_comp'])==1 or int(letture['schede_lavoro'][ss]['flg_gest_trip_tratti'])==1):
+
+                if int(letture['schede_lavoro'][ss]['flg_eseguito'])==1 and (int(letture['schede_lavoro'][ss]['flg_gest_trip_comp'])==1 or int(letture['schede_lavoro'][ss]['flg_gest_trip_tratti'])==1):
                     #data_nc.append(data_ws)
-                    id_scheda_chiuse_eko.append(letture['schede_lavoro'][ss]['id_scheda_lav'])                  
+                    id_scheda_eseguite_eko.append(letture['schede_lavoro'][ss]['id_scheda_lav'])                  
                     #servizio_nc.append(letture['schede_lavoro'][ss]['descr_scheda_lav'])                  
                     #cod_servizio_nc.append(letture['schede_lavoro'][ss]['cod_serv_pred'])
                 
@@ -327,16 +349,14 @@ order by id_scheda'''
     
 
     
-    logger.info('Schede chiuse su Ekovision: {}'.format(len(id_scheda_chiuse_eko)))
+    logger.info('Schede Eseguite su Ekovision: {}'.format(len(id_scheda_eseguite_eko)))
     #logger.info('Schede chiuse su DB: {}'.format(len(id_scheda_chiuse_db)))
 
     
-    diff = list(set(id_scheda_chiuse_eko) - set(id_scheda_chiuse_db))
+    diff = list(set(id_scheda_eseguite_eko) - set(id_scheda_chiuse_db))
     
-    logger.info(f'Lunghezza delle differenze {len(diff)}')
-    
-    logger.info(f'Schede diff: {diff}')
-    #exit()
+    logger.debug(f'Lunghezza delle differenze {len(diff)}')
+
     
     """diff_a=[]
     for se in id_scheda_chiuse_eko:
@@ -347,10 +367,10 @@ order by id_scheda'''
     
     curr = conn.cursor()
     for dd in diff:
-        logger.info(f'Scheda {dd} chiusa in Ekovision ma non in DB: provo a leggere i dettagli')
+        logger.info(f'Scheda chiusa in Ekovision ma non in DB: {dd}')
         
         
-
+        logger.info('Provo a leggere i dettagli della scheda {}'.format(dd))
         
         
         params2={'obj':'schede_lavoro',
@@ -418,7 +438,7 @@ order by id_scheda'''
                             logger.error(result2)
                     except Exception as e:
                         logger.error(e)
-                        warning_message_mail('Problema nella chiamata al WS Ekovision per la scheda {}'.format(dd), 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                        warning_message_mail('Problema scheda {}'.format(dd), 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
 
                 else:
                     logger.info('La scheda {} è chiusa ma non ha waypoints'.format(dd))

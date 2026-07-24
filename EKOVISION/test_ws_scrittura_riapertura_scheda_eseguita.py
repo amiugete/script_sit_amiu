@@ -142,7 +142,7 @@ def main():
     
 
     
-    id_scheda =  720590   #423341 OK #   423319 da problemi
+    id_scheda =  499926   #423341 OK #   423319 da problemi
     
     
     
@@ -175,9 +175,12 @@ def main():
     del letture2['schede_lavoro'][0]['trips']  
     del letture2['schede_lavoro'][0]['risorse_tecniche']
     del letture2['schede_lavoro'][0]['risorse_umane']   
-    del letture2['schede_lavoro'][0]['filtri_rfid']        
-    logger.info(letture2)
-    exit()
+    del letture2['schede_lavoro'][0]['filtri_rfid']   
+    if letture2['schede_lavoro'][0]['servizi'][0]['id_caus_srv_non_eseg'] == 15 and letture2['schede_lavoro'][0]['servizi'][0]['txt_segn_srv_non_effett'] == '':
+        logger.debug('entro nell\'if')
+        letture2['schede_lavoro'][0]['servizi'][0]['txt_segn_srv_non_effett'] = '...'     
+    #logger.info(letture2)
+    #exit()
     #logger.info(json.dumps(letture2).encode("utf-8"))
     
     
@@ -186,9 +189,9 @@ def main():
     #letture2['schede_lavoro'][0]['servizi'][0]['flg_segn_srv_non_effett']="1"
     #letture2['schede_lavoro'][0]['servizi'][0]['txt_segn_srv_non_effett']="Quindicinale da piano annuale"
     #letture2['schede_lavoro'][0]['servizi'][0]['id_caus_srv_non_eseg']='15'
-    letture2['schede_lavoro'][0]['flg_eseguito']='0'
-    letture2['schede_lavoro'][0]['flg_imposta_eseguito']='0'
-    letture2['schede_lavoro'][0]['tracing_exec_date']='000000'
+    ##letture2['schede_lavoro'][0]['flg_eseguito']='0'
+    ##letture2['schede_lavoro'][0]['flg_imposta_eseguito']='0'
+    ##letture2['schede_lavoro'][0]['tracing_exec_date']='000000'
     #letture2['schede_lavoro'][0]['flg_imposta_chiuso']='1'
 
     #letture2['schede_lavoro'][0]['risorse_umane'][0]['id_giustificativo']='3'
@@ -202,7 +205,7 @@ def main():
     
     
     logger.info('Provo a salvare nuovamente la scheda')
-    logger.info(letture2)
+    #logger.info(letture2)
     
     guid = uuid.uuid4()
     params2={'obj':'schede_lavoro',

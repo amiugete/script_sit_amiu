@@ -225,7 +225,7 @@ def main():
     #exit()
     # riapro il cursore
     curr_c = conn_c.cursor()
-    upsert=''' INSERT INTO spazzamento.effettuati (
+    upsert_s=''' INSERT INTO spazzamento.effettuati (
                 id, tappa,
                 id_causale, datainsert,
                 datalav, codice,
@@ -247,15 +247,15 @@ def main():
         
     
         try:
-            curr_c.execute(upsert, row)
+            curr_c.execute(upsert_s, row)
         except Exception as e:
-            logger.error(upsert)
+            logger.error(upsert_s)
             logger.error(f"Errore su ID {row[0]}: {e}")
     
     
     # faccio commit
     conn_c.commit()
-    #logger.info("Dati copiati con successo ✅")
+    logger.info("Dati copiati con successo ✅")
 
     
     
@@ -311,7 +311,7 @@ def main():
     #exit()
     # riapro il cursore
     curr_c = conn_c.cursor()
-    upsert=''' INSERT INTO raccolta.effettuati_amiu (
+    upsert_r=''' INSERT INTO raccolta.effettuati_amiu (
         id_hub, 
         tappa, datainsert, 
         datalav, codice, 
@@ -334,9 +334,9 @@ def main():
         
     
         try:
-            curr_c.execute(upsert, row)
+            curr_c.execute(upsert_r, row)
         except Exception as e:
-            logger.error(upsert)
+            logger.error(upsert_r)
             logger.error(f"Errore su ID {row[0]}: {e}")
     
     

@@ -144,27 +144,13 @@ def main():
     
     
     
-    percorsi_da_controllare=['0101033603',
-'0101036303',
-'0101352703',
-'0103003704',
-'0104002302',
-'0104002402',
-'0104002502',
-'0104002601',
-'0104002701',
-'0104002801',
-'0104002901',
-'0203003501',
-'0310000101',
-'0507113602',
-'0507116202',
-'0603000502',
-'0612001501',
-'0612005702',
-'0998001001',
-'0999002901',
-'0999003001']
+    percorsi_da_controllare=['0507136501',
+'0507139401',
+'0508075902',
+'0508078402',
+'0201256301',
+'0201256601',
+'0201258702']
     
     
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
@@ -281,7 +267,7 @@ def main():
             # Create a multipart message and set headers
             message = MIMEMultipart()
             message["From"] = sender_email
-            message["To"] = debug_email
+            message["To"] = receiver_email
             message["Subject"] = subject
             #message["Bcc"] = debug_email  # Recommended for mass emails
             message.preamble = "Cambio frequenze"

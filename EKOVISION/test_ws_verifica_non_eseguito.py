@@ -137,8 +137,8 @@ def main():
     auth_data_eko={'user': eko_user, 'password': eko_pass, 'o2asp' :  eko_o2asp}
     
     
-    cod_percorso='0101365602'
-    data_text='20251023'
+    cod_percorso='0101383701'
+    data_text='20260401'
     
     
     # 0213236202 scheda aperta con 2 persone
@@ -217,14 +217,16 @@ def main():
             while ss < len(letture['schede_lavoro']):
                 id_scheda=letture['schede_lavoro'][ss]['id_scheda_lav']
                 logger.info(f'Provo a leggere i dettagli della scheda {id_scheda}')
-        
-        
+                eseguita=int(letture['schede_lavoro'][ss]['flg_eseguito'])
+                logger.info(f'flg_eseguito : {eseguita}')
+                if int(letture['schede_lavoro'][ss]['flg_eseguito'])==0:
+                    logger.info('Ok sono qua dentro')
                 params2={'obj':'schede_lavoro',
                         'act' : 'r',
                         'id': '{}'.format(id_scheda),
                         }
                 
-                response2 = requests.post(eko_url, params=params2, data=data, headers=headers)
+                response2 = requests.post(eko_url, params=params2, data=auth_data_eko, headers=headers)
                 #letture2 = response2.json()
                 letture2 = response2.json()
                 if int(letture2['schede_lavoro'][0]['servizi'][0]['flg_segn_srv_non_effett'])==1:

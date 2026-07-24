@@ -210,6 +210,40 @@ def main():
 
     # PULIZIA TABELLA anagrafe_percorsi.date_percorsi_sit_uo
     
+    # inserimento dati mancanti
+    
+    query_inserimento_mancanti='''insert into anagrafe_percorsi.date_percorsi_sit_uo
+(id_percorso_sit, cod_percorso,versioni_uo, data_inizio_validita, data_fine_validita)
+(
+	select id_percorso as id_percorso_sit,
+	cod_percorso,
+	1 as versioni_uo,
+	p.data_attivazione as data_inizio_validita, 
+	coalesce(p.data_dismissione, to_date('20991231', 'YYYYMMDD')) as data_fine_validita
+	from elem.percorsi p 
+	where /* percorsi in esercizio o stagionali */
+	p.id_categoria_uso in (3,6)
+	/* verifico che esista in date_percorsi_sit_uo*/
+	and not exists  
+	(select 1 from anagrafe_percorsi.date_percorsi_sit_uo ep 
+	where ep.cod_percorso = p.cod_percorso )
+	and p.data_attivazione <= now()::date
+	/* verifico che non sia un percorso fittizio (solo SIT)*/
+	and exists (
+	select 1 from anagrafe_percorsi.elenco_percorsi ep  
+	where ep.cod_percorso = p.cod_percorso )
+)'''
+    try:
+        curr.execute(query_inserimento_mancanti)
+    except Exception as e:
+        logger.error(query_inserimento_mancanti)
+        check_error=1
+        logger.error(e)
+    curr.close()
+    
+    curr = conn.cursor()
+
+    
     #STEP 0
     query_delete='''delete from anagrafe_percorsi.date_percorsi_sit_uo where data_inizio_validita = data_fine_validita'''
     try:

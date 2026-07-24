@@ -2,13 +2,17 @@
 # -*- coding: utf-8 -*-
 
 # AMIU copyleft 2023
-# Roberto Marzocchi
+# Roberto Marzocchi, Roberta Fagandini
 
 '''
-Controlla i servizi attivati nell'ultima settimana e crea le schede 
-
-
+version  : 1.0
+created  : 01/01/2025
+Last update: ${date}
+descrizione: Controlla i servizi attivati nell'ultima settimana e crea le schede di lavoro su Ekovision se non sono già presenti.
 '''
+
+
+
 
 #from msilib import type_short
 import os, sys, re  # ,shutil,glob
@@ -196,18 +200,17 @@ from (select cod_percorso, max(versione) as mv
 join anagrafe_percorsi.v_servizi_per_ekovision vspe on vspe.cod_percorso= a.cod_percorso and a.mv= vspe.versione
 join etl.frequenze_ok fo on fo.cod_frequenza = vspe.freq_testata 
 where data_fine_validita > now()::date 
-and data_inizio_validita >= (now()::date - interval '%s' day)
-and data_inizio_validita <  (now()::date + interval '%s' day)
-/*and (select distinct cod_percorso from anagrafe_percorsi.v_servizi_per_ekovision vspe2 
-		where vspe2.cod_percorso = a.cod_percorso 
-		and vspe2.data_fine_validita >= (now()::date - interval '%s' day )
-		and vspe2.data_fine_validita <  (now()::date + interval '%s' day) ) is null*/
+and (
+    (data_inizio_validita >= (now()::date - interval '%s' day)
+    and data_inizio_validita <  (now()::date + interval '%s' day)
+) OR 
+vspe.data_ultima_modifica::date = (now()::date - interval '1' day))
 order by data_inizio_validita"""
     testo_mail=''
     
     try:
         #cur.execute(query, (new_freq, id_servizio, new_freq))
-        curr.execute(query, (data_inizio,data_fine,data_inizio,data_fine))
+        curr.execute(query, (data_inizio,data_fine))
         lista_variazioni=curr.fetchall()
     except Exception as e:
         check_error=1

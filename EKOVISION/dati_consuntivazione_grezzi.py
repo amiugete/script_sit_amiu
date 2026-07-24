@@ -90,7 +90,7 @@ f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
 c_handler.setLevel(logging.WARNING)
-f_handler.setLevel(logging.INFO)
+f_handler.setLevel(logging.DEBUG)
 
 
 # Add handlers to the logger
@@ -338,7 +338,9 @@ group by ep.cod_percorso, ep.descrizione
         }
 
 
-
+    update_file_riprocessare='''UPDATE UNIOPE.EKOVISION_LETTURA_CONSUNT
+    SET error = 1
+    where filename = :s1'''
     
     # aggiorno la tabella UNIOPE.EKOVISION_LETTURA_CONSUNT con i file da processare
     query_insert_schede_leggere='''INSERT INTO UNIOPE.EKOVISION_LETTURA_CONSUNT
@@ -381,6 +383,8 @@ ORDER BY NOMEFILE '''
         select_file1 ='''SELECT * FROM (
             SELECT * FROM UNIOPE.EKOVISION_LETTURA_CONSUNT
             WHERE da_riprocessare IS NOT NULL
+            and error = 0
+            AND DATA_ORA_INSER < SYSDATE - 2/24
             ORDER BY FILENAME
         ) WHERE ROWNUM <= 7'''
         
@@ -403,6 +407,27 @@ ORDER BY NOMEFILE '''
             except Exception as e:
                 logger.error('Errore nel download del file {}'.format(cerco_file))
                 logger.error(e)
+                # nel dubbio che abbia scaricato qualcosa si corrotto provo a fare pulizia
+                if os.path.exists(path + "/eko_output2/" + cerco_file):
+                    os.remove(path + "/eko_output2/" + cerco_file)
+                    logger.error(f'''Il file {cerco_file} è sato scaricato con errori. 
+                                 E' stato rimosso dalla cartella eko_output2. Si tenterà di riprocessarlo fra 10 min.
+                                 ''')
+                else:
+                    logger.error(f'''Il file {cerco_file} non è stato scaricato. 
+                                Si tenterà di riprocessarlo fra 10 min.''')
+                logger.error(f'''Per sicurezza si consiglia di verificare se il file compare nella tabella UNIOPE.SCHEDE_ESEGUITE_EKOVISION
+                             con la seguente query: 
+                             SELECT * FROM SCHEDE_ESEGUITE_EKOVISION see WHERE see.NOMEFILE = '{cerco_file}' ''')
+                #error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                try:
+                    cur.execute(update_file_riprocessare, (cerco_file,))
+                except Exception as e2:
+                    logger.error(update_file_riprocessare)
+                    logger.error('1:{}'.format(cerco_file))
+                    logger.error(e2)
+                con.commit()
+                error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
                 exit()
             logger.info('Scaricato file {}'.format(cerco_file))
             #exit()
@@ -964,8 +989,10 @@ ORDER BY NOMEFILE '''
                             logger.info('Non processo la scheda perchè antecedente alla data di partenza di Ekovision {}'.format(data_start_ekovision))
                     except Exception as e:
                         check=1
+                        tb = sys.exc_info()[2]
                         logger.error('File:{}'.format(filename))
-                        logger.error('Non processo la riga {}'.format(i))
+                        logger.error('Non processo la scheda n. {} nel json {} con id {}'.format(i, filename, data[i]['id_scheda']))
+                        logger.error('Errore: {} alla riga {} dello script'.format(e, tb.tb_lineno))
                     i+=1
                     #exit()
                 #con.commit()
@@ -981,7 +1008,22 @@ ORDER BY NOMEFILE '''
                 logger.error(e)
                 logger.error('Problema processamemto file {}'.format(filename))
                 #logger.error('File spostato nella cartella json_error')
+                try:
+                    cur.execute(update_file_riprocessare, (filename,))
+                except Exception as e2:
+                    logger.error(update_file_riprocessare)
+                    logger.error('1:{}'.format(filename))
+                    logger.error(e2)
+                con.commit()
                 f.close()
+                os.remove(path + "/eko_output2/" + filename)
+                logger.error('''Il file {0} è stato rimosso dalla cartella eko_output2. Si tenterà di riprocessarlo fra 10 min. 
+                            Per sicurezza si consiglia di verificare se il file compare nella tabella UNIOPE.SCHEDE_ESEGUITE_EKOVISION
+                            con la seguente query: 
+                            SELECT * FROM SCHEDE_ESEGUITE_EKOVISION see WHERE see.NOMEFILE =  '{0}'
+                            '''.format(filename))
+                error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                exit()
                 #srv.rename("./"+ filename, "./json_error/" + filename)
                 #error_log_mail(errorfile, 'assterritorio@amiu.genova.it; andrea.volpi@ekovision.it; francesco.venturi@ekovision.it', os.path.basename(__file__), logger)
             
