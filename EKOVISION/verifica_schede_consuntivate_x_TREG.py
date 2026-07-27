@@ -203,7 +203,7 @@ and to_date(%s, 'YYYYMMDD') between data_inizio_validita and data_fine_validita 
 
     ###################################
     # modifica manuale da rimuovere
-    end_date = date(oggi.year, 6, 1)
+    #end_date = date(oggi.year, 6, 1)
 
 
     end_date_mail= end_date - timedelta(days=1)
@@ -230,12 +230,21 @@ and to_date(%s, 'YYYYMMDD') between data_inizio_validita and data_fine_validita 
     curr = conn.cursor()
 
     
+    """
+    I WS considerano la data di esecuzione non quella di pianificazione, per cui devo fare quel controllo lì
     query_schede_su_db='''select distinct id_scheda
 from treg_eko.consunt_ekovision 
 where data_pianif_iniziale > %s and data_pianif_iniziale < %s
 and solo_esec is null
 order by id_scheda'''
+    """
     
+    
+    query_schede_su_db='''select distinct id_scheda
+    from treg_eko.consunt_ekovision 
+    where data_esecuzione_prevista > %s and data_esecuzione_prevista < %s
+    and solo_esec is null
+    order by id_scheda'''
     
     
     try:
