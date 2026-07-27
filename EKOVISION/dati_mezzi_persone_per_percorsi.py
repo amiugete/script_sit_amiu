@@ -5,7 +5,7 @@
 # Roberta Fagandini
 
 '''
-Script creato il 23/04/2026 in sostituzione alla trasformazione dati_servizi_percorsi (job notturno di ekovision)
+Script creato il 23/04/2026 e richiamato dalla trasformazione dati_servizi_percorsi (job notturno di ekovision)
 
 '''
 
@@ -194,7 +194,7 @@ def main():
             logger.debug('il percorso {0} versione {1} ha {2} mezzi'.format(pm[0], pm[1], count_mezzi))
             
             if q < count_mezzi:
-                flg_autista = True if mezzi[q][2] is not None else False
+                flg_autista = True if mezzi[q][2] is not None or mezzi[q][2] != '9999' else False
                 if count_mezzi > 1:
                     cod_mezzo = mezzi[q][2] if mezzi[q][2] is not None else '9999'
                 else:
