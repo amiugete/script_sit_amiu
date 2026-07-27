@@ -110,7 +110,7 @@ import csv
 # per vedere se il percorso era previsto quel giorno
 from tappa_prevista import tappa_prevista
 
-    
+import uuid 
      
 
 def main():
@@ -284,10 +284,10 @@ order by 2"""
                             logger.info('Provo a salvare nuovamente la scheda')
                             logger.info(letture2)
                             
-                            
+                            guid = uuid.uuid4()
                             params2={'obj':'schede_lavoro',
                                     'act' : 'w',
-                                    'ruid': 'F{}'.format(id_scheda),
+                                    'ruid': ''.format(guid),
                                     'json': json.dumps(letture2, ensure_ascii=False).encode('utf-8')
                                         }   
                             

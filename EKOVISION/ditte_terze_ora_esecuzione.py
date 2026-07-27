@@ -119,6 +119,8 @@ import csv
 # per vedere se il percorso era previsto quel giorno
 from tappa_prevista import tappa_prevista
 
+
+import uuid
     
      
 
@@ -261,10 +263,10 @@ and id_squadra = 44"""
                         
                         
                         logger.info('Inserisco il giustificativo sulla scheda {}'.format(id_scheda))
-                        
+                        guid = uuid.uuid4()
                         params2={'obj':'schede_lavoro',
                                 'act' : 'w',
-                                'ruid': 'A{}'.format(id_scheda),
+                                'ruid': '{}'.format(guid),
                                 'json': json.dumps(letture2)
                                 }
                         
