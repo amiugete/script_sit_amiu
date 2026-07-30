@@ -37,7 +37,7 @@ import json
 
 #import pymssql
 
-from datetime import date, datetime, timedelta
+
 
 import locale
 
@@ -77,7 +77,9 @@ from crea_dizionario_da_query import *
 import uuid
 
 
-from datetime import date
+#import datetime 
+from datetime import date, datetime, timedelta
+
 import holidays
 
 
@@ -182,8 +184,8 @@ def main():
 
     # Create handlers
     c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-    f_handler = logging.StreamHandler()
-    #f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+    #f_handler = logging.StreamHandler()
+    f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
 
 
     c_handler.setLevel(logging.ERROR)
@@ -219,10 +221,10 @@ def main():
     ###################################################################
     # variabili per controllo
     anno_controllo=2026
-    mesi_controllo = [1,2,3,4]
+    mesi_controllo = [1,2,3,4,5,6]
     ###################################################################
     
-    messaggio=''
+    
     
     # TO DO 
     # aggiungere ciclo sui comuni
@@ -235,7 +237,7 @@ code_area, code_street, dt_prg_ini, dt_prg_fin,
 dt_exe_ini, dt_exe_fin,
 cause_int
 FROM twsTRG.ATRIF.anwstcol
-WHERE istat = '010025'
+WHERE istat = ?
 and dt_prg_ini between 
 convert(DATETIME,
 	?, 
@@ -243,14 +245,30 @@ convert(DATETIME,
 	and convert(DATETIME,
 	?, 
 	103) 
---and cause_int = 'CSG'
 order by dt_prg_ini'''
+    
+    
+    spazzamento_TREG='''SELECT code_rint, 
+code_area, code_street, dt_prg_ini, dt_prg_fin,
+dt_exe_ini, dt_exe_fin,
+cause_int
+FROM twsTRG.ATRIF.answeep
+WHERE istat = ?
+and dt_prg_ini between 
+convert(DATETIME,
+	?, 
+	103) 
+	and convert(DATETIME,
+	?, 
+	103) 
+order by dt_prg_ini '''
+    
+    
     
    
     # per passare la tupla devo usare execute_values, altrimenti mi da errore di sintassi
     from psycopg2.extras import execute_values
-    
-    insert_ev='''INSERT INTO treg_eko.anwstcol (
+    insert_ev_racc='''INSERT INTO treg_eko.anwstcol (
         code_rint, code_area, 
         code_street, dt_prg_ini, 
         dt_prg_fin, dt_exe_ini, 
@@ -258,9 +276,17 @@ order by dt_prg_ini'''
         VALUES %s;'''
     
     
+    insert_ev_spazz='''INSERT INTO treg_eko.answeep (
+            code_rint, code_area, 
+            code_street, dt_prg_ini, 
+            dt_prg_fin, dt_exe_ini, 
+            dt_exe_fin, cause_int) 
+            VALUES %s;'''
+    
     # tabella temporanea per confronti 
     drop_tmp_table_racc= ''' drop table treg_eko.tmp_raccolta'''
-    
+    # tabella temporanea per confronti 
+    drop_tmp_table_spazz= ''' drop table treg_eko.tmp_spazzamento'''
     
     create_tmp_table_racc='''create table treg_eko.tmp_raccolta as 
 select 
@@ -306,6 +332,53 @@ select
 	    	and to_date(%s, 'DD/MM/YYYY' )
 	    and c.id_comune = %s'''
     
+    
+    
+    create_tmp_table_spazz='''create table treg_eko.tmp_spazzamento as 
+    select distinct 
+c.descr_comune as comune,
+case 
+	    when ep.giorno_competenza = 0 then extract(year from data_programmata)
+	    when ep.giorno_competenza = -1 then extract(year from data_programmata-1)
+    end anno,
+    case 
+        when ep.giorno_competenza = 0 then extract(month from data_programmata)
+        when ep.giorno_competenza = -1 then extract(month from data_programmata-1)
+    end mese, 
+case 
+	when coalesce(rr.tempo_recupero, 0) > 24
+	then 1
+	else 0
+end interruzione,
+case 
+	when coalesce(tempo_ripresa,0) >= 24
+	then 1
+	else 0
+end disservizio,
+trac_code, 
+rr.lung_km as lung_km, 
+cd.codice, 
+cd.descrizione as causale,
+cd.id_causale_arera
+--min(cd.codice) as codice,
+--min(cd.descrizione) as causale,
+--max(cd.id_causale_arera) as id_causale_arera
+from consunt.report_spazz rr
+join topo.vie v on v.id_via = rr.id_via
+join topo.comuni c on c.id_comune= v.id_comune
+join anagrafe_percorsi.elenco_percorsi ep on ep.cod_percorso = rr.cod_percorso
+	and data_programmata between ep.data_inizio_validita and ep.data_fine_validita - 1
+join etl.cause_disserv cd on cd.codice = rr.id_causale
+--left join etl.causali_arera ca on cd.id_causale_arera = ca.id
+join anagrafe_percorsi.anagrafe_tipo at2 on at2.id = ep.id_tipo
+where rr.non_previsto is null
+and at2.gestione_arera = true 
+and rr.id_causale not in (101,102,999)
+    and data_programmata between to_date(%s, 'DD/MM/YYYY' )
+                and to_date(%s, 'DD/MM/YYYY' )
+            and c.id_comune = %s'''
+    
+    
     # differenze pianificati
     #sit non treg
     pian_r_sit_no_treg = '''select distinct(trac_code)
@@ -321,9 +394,35 @@ select
     where anno = %s and mese = %s )
     '''
     
+    
+    
+    pian_s_sit_no_treg = '''select distinct(trac_code)
+        from treg_eko.tmp_spazzamento
+        where anno = %s and mese = %s 
+        and trac_code not in (select code_rint FROM treg_eko.answeep)
+        '''
+    
+    pian_s_treg_no_sit = ''' 
+        SELECT distinct code_rint FROM treg_eko.answeep
+        where code_rint not in (select distinct(trac_code)
+        from treg_eko.tmp_spazzamento
+        where anno = %s and mese = %s )'''
+    
+    
+    
+    
+    
+    
+    
     select_tipi_causale='''select id, id_treg, descrizione from etl.causali_arera ca where id > 0'''
     
+    select_comune='''select id_comune, c.cod_istat, c.descr_comune 
+from topo.comuni c  where c.gestito_sit = 'S' '''
     
+    # serrve per provare a riprocessare in automatico i trac_code presenti da una parte e non dall'altra
+    update_lastupdate_trac_code='''update treg_eko.consunt_ekovision ce 
+    set data_last_update = now()
+    where codice = %s and data_pianif_iniziale= %s'''
     
     # connessione a SIT
     nome_db=db
@@ -354,227 +453,516 @@ select
     
     
     # faccio un ciclo sui mesi
-    
+    #excel_files_array =[]
+    excel_names_array =[]
     for mm in mesi_controllo:
+        logger.info(F'Sto facendo il controllo per il mese {mm} del {anno_controllo}')
+        messaggio=''
         data_inizio=datetime(anno_controllo, mm, 1).strftime("%d/%m/%Y")
         data_fine=datetime(anno_controllo, mm+1, 1).strftime("%d/%m/%Y")
+
     
-    
-    
-    
-
-
-        curr.execute("TRUNCATE TABLE treg_eko.anwstcol")
-
-
-        try: 
-            currt.execute(raccolta_TREG, (data_inizio, data_fine))
-        except Exception as e:
-            check_error=1
-            logger.error(raccolta_TREG)
-            logger.error(e)
-            # se va in errore esco
-            error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
-            exit()
-        
-        
-        # per evitare di intasare la RAM  faccio commit di 10'000 righe alla volta
-        batch_size =10000
-        contatore = 0
-        while True:
-            contatore += batch_size
-            logger.info(f'Copiate {contatore} righe nella tabella treg_eko.anwstcol') 
-            rows = currt.fetchmany(batch_size)
-
-            if not rows:
-                break
-
-            execute_values(
-                curr,insert_ev,
-                rows,
-                page_size=batch_size
-            )
-
-        conn.commit()
-
-        logger.info('cancello e ricreo la tabella su cui fare i confronti')
-        # creo la tabella temporanea sul SIT su cui fare i confronti
-        try: 
-           curr.execute(drop_tmp_table_racc)
-        except Exception as e:
-            check_error=1
-            logger.error(drop_tmp_table_racc)
-            logger.error(e)
-            # se va in errore esco
-            error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
-            exit()
-        
-        try: 
-           # per ora lo faccio su Genova poi sarebbe da fare su ogni comune
-           curr.execute(create_tmp_table_racc, (data_inizio, data_fine, 1)) 
-        except Exception as e:
-            check_error=1
-            logger.error(create_tmp_table_racc)
-            logger.error(e)
-            # se va in errore esco
-            error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
-            exit()
-        
-        
-        # controllo pianificati 
-        try:
-            curr.execute(pian_r_sit_no_treg, (anno_controllo, mm))
-            risultato=curr.fetchall()
-        except Exception as e:
-            check_error=1
-            logger.error(create_tmp_table_racc)
-            logger.error(e)
-            # se va in errore esco
-            error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
-            exit()
-
-        
-        
-        if len(risultato) > 0 :
-            messaggio = f'{messaggio}<br> ❌ ci sono dei servizi pianificati presenti su SIT e non su TREG'
-            
-            messaggio= f'{messaggio}<br>Trac codes: '
-            for rr in risultato: 
-                messaggio=f'{messaggio} {rr[0]}'
-            # bisogna fare elenco
-        else:
-            messaggio = f'{messaggio}<br> ✔ Tutti i pianificati presenti su SIT sono anche su TREG'
-        
-        
-        
-        try:
-            curr.execute(pian_r_treg_no_sit, (anno_controllo, mm))
-            risultato=curr.fetchall()
-        except Exception as e:
-            check_error=1
-            logger.error(create_tmp_table_racc)
-            logger.error(e)
-            # se va in errore esco
-            error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
-            exit()
-
-        
-        
-        if len(risultato) > 0 :
-            messaggio = f'{messaggio}<br> ❌ ci sono dei servizi pianificati presenti su TREG e non su SIT'
-            
-            messaggio= f'{messaggio}<br>Trac codes: '
-            for rr in risultato: 
-                messaggio=f'{messaggio} {rr[0]}'
-            # bisogna fare elenco
-        else:
-            messaggio = f'{messaggio}<br> ✔ Tutti i pianificati presenti su TREG sono anche su SIT'    
-        
-        
-        # ora faccio ciclo sulle causali
-        
-        try:
-            curr.execute(select_tipi_causale)
-            tipi_causale= curr.fetchall()
-        except Exception as e:
-            logger.error(select_tipi_causale)
-            logger.error(e)
-        
-        
-    
-        nome_file_excel=f'{path}/anomalie_{anno_controllo}{mm}.xlsx'
-        
+        # PREDISPONGO IL FILE EXCEL 
+        mese_file=str(mm).rjust(2,'0')
+        nome_excel=f'anomalie_{anno_controllo}{mese_file}.xlsx' 
+        excel_names_array.append(nome_excel)
+        nome_file_excel=f'{path}/{nome_excel}' 
         workbook = xlsxwriter.Workbook(nome_file_excel)
-        worksheet = workbook.add_worksheet('Anomalie')
-
+        
+        
+        worksheet = workbook.add_worksheet('Anomalie RACC')
+        worksheet2 = workbook.add_worksheet('Anomalie SPAZZ')
+        
+        
         header_format = workbook.add_format({
             'bold': True,
             'bg_color': '#D9EAD3'
         })
 
+        # fuori dal ciclo, una volta sola
+        date_format = workbook.add_format({'num_format': 'dd/mm/yyyy hh:mm:ss'})
+        
+        # per raccolta
         row_excel = 0
         s=0
-        for cc in tipi_causale:
-            logger.info(f'Cerco anomali mese {mm} anno {anno_controllo} causale TREG {cc[1]}')
-            select_anomalie='''
-                with anomalie as 
-                (
-                    SELECT 'TREG NO SIT' as tipo_anomalia,
-                    '{0}' as tipo_TREG,
-                    ca.id_TREG as tipo_SIT,
-                    rr.* 
-                    FROM treg_eko.anwstcol a
-                    left join consunt.report_raccolta rr on a.code_rint = rr.trac_code  
-                    left join etl.cause_disserv cd on cd.codice = rr.id_causale 
-                    left join etl.causali_arera ca on cd.id_causale_arera = ca.id 
-                    WHERE cause_int IN (%s)	
-                    and a.code_rint not in (
-                    select distinct trac_code 
-                    FROM treg_eko.tmp_raccolta
-                    where anno = %s and mese = %s and id_causale_arera = %s and interruzione = 1)
-                    union
-                    SELECT 
-                    'SIT NO TREG' as tipo_anomalia,
-                    a.cause_int as tipo_TREG,
-                    '{0}' as tipo_SIT,
-                    rr.* 
-                    FROM treg_eko.tmp_raccolta tr
-                    left join consunt.report_raccolta rr on tr.trac_code = rr.trac_code  
-                    left join treg_eko.anwstcol a on a.code_rint = tr.trac_code  
-                    where anno = %s and mese = %s and id_causale_arera = %s and interruzione = 1
-                    and  tr.trac_code not in (select code_rint 
-                    FROM treg_eko.anwstcol a
-                    WHERE cause_int IN (%s))
-                )
-                select * from anomalie 
-                order by data_programmata, cod_percorso'''.format(cc[1])
-            try:
-                curr.execute(select_anomalie, (cc[1], 
-                                                anno_controllo, 
-                                                mm, 
-                                                cc[0],
-                                                anno_controllo, 
-                                                mm, 
-                                                cc[0],
-                                                cc[1]
-                                                ))
-                anomalie=curr.fetchall()
+    
+        # per spazzamento
+        row_excel2 = 0
+        s2=0
+
+        try:
+            curr.execute(select_comune)
+            comuni = curr.fetchall()
+        except Exception as e:
+            check_error=1
+            logger.error(select_comune)
+            logger.error(e)
+            # se va in errore esco
+            error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+            exit()
+
+        for com in comuni:
+            logger.info(f'Controllo comune di {com[2]}')
+            
+            logger.info('Truncate copie TREG su SIT')            
+            # racc
+            curr.execute("TRUNCATE TABLE treg_eko.anwstcol")
+            #spazz
+            curr.execute("TRUNCATE TABLE treg_eko.answeep")
+
+
+            logger.info('Copio nuovamente i dati TREG su SIT')
+
+            ####################################################################
+            # RACC
+            try: 
+                currt.execute(raccolta_TREG, (com[1], data_inizio, data_fine))
             except Exception as e:
-                logger.error(select_anomalie)
+                check_error=1
+                logger.error(raccolta_TREG)
+                logger.error(e)
+                # se va in errore esco
+                error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                exit()
+            
+            
+            
+            # per evitare di intasare la RAM  faccio commit di 10'000 righe alla volta
+            batch_size =10000
+            contatore = 0
+            while True:
+                contatore += batch_size
+                #logger.info(f'Copiate {contatore} righe nella tabella treg_eko.anwstcol') 
+                rows = currt.fetchmany(batch_size)
+
+                if not rows:
+                    break
+
+                execute_values(
+                    curr,insert_ev_racc,
+                    rows,
+                    page_size=batch_size
+                )
+
+
+
+            ####################################################################
+            # SPAZZ
+
+            try: 
+                currt.execute(spazzamento_TREG, (com[1], data_inizio, data_fine))
+            except Exception as e:
+                check_error=1
+                logger.error(spazzamento_TREG)
+                logger.error(e)
+                # se va in errore esco
+                error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                exit()
+            
+            
+            
+            # per evitare di intasare la RAM  faccio commit di 10'000 righe alla volta
+            batch_size =10000
+            contatore = 0
+            while True:
+                contatore += batch_size
+                #logger.info(f'Copiate {contatore} righe nella tabella treg_eko.anwstcol') 
+                rows = currt.fetchmany(batch_size)
+
+                if not rows:
+                    break
+
+                execute_values(
+                    curr,insert_ev_spazz,
+                    rows,
+                    page_size=batch_size
+                )
+
+
+
+
+            conn.commit()
+
+
+
+
+            logger.info('cancello e ricreo la tabella su cui fare i confronti')
+            # creo la tabella temporanea sul SIT su cui fare i confronti
+            try: 
+                curr.execute(drop_tmp_table_racc)
+            except Exception as e:
+                check_error=1
+                logger.error(drop_tmp_table_racc)
+                logger.error(e)
+                # se va in errore esco
+                error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                exit()
+            
+            
+            try: 
+                curr.execute(drop_tmp_table_spazz)
+            except Exception as e:
+                check_error=1
+                logger.error(drop_tmp_table_spazz)
+                logger.error(e)
+                # se va in errore esco
+                error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                exit()
+            
+            
+            try: 
+                curr.execute(create_tmp_table_racc, (data_inizio, data_fine, com[0])) 
+            except Exception as e:
+                check_error=1
+                logger.error(create_tmp_table_racc)
+                logger.error(e)
+                # se va in errore esco
+                error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                exit()
+            
+            
+            try: 
+                curr.execute(create_tmp_table_spazz, (data_inizio, data_fine, com[0])) 
+            except Exception as e:
+                check_error=1
+                logger.error(create_tmp_table_spazz)
+                logger.error(e)
+                # se va in errore esco
+                error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                exit()
+            
+            conn.commit()
+            
+            logger.info('Controllo pianificati raccolta')
+             
+            # controllo pianificati 
+            try:
+                curr.execute(pian_r_sit_no_treg, (anno_controllo, mm))
+                risultato=curr.fetchall()
+            except Exception as e:
+                check_error=1
+                logger.error(pian_r_sit_no_treg)
+                logger.error(e)
+                # se va in errore esco
+                error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                exit()
+
+            
+            
+            if len(risultato) > 0 :
+                messaggio = f'{messaggio}\n ❌ per il comune {com[2]} ci sono dei servizi pianificati presenti su SIT e non su TREG'
+                
+                messaggio= f'{messaggio}\nTrac codes: '
+                for rr in risultato: 
+                    curr.execute(update_lastupdate_trac_code, (rr[0].split('_')[0],rr[0].split('_')[1],))
+                    messaggio=f'{messaggio} {rr[0]}'
+                conn.commit()
+                # bisogna fare elenco
+            else:
+                messaggio = f'{messaggio}\n ✔ Tutti i pianificati presenti su SIT sono anche su TREG (comune {com[2]})'
+            
+            
+            
+            
+            
+            
+            try:
+                curr.execute(pian_r_treg_no_sit, (anno_controllo, mm))
+                risultato=curr.fetchall()
+            except Exception as e:
+                check_error=1
+                logger.error(pian_r_treg_no_sit)
+                logger.error(e)
+                # se va in errore esco
+                error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                exit()
+
+            
+            
+            if len(risultato) > 0 :
+                messaggio = f'{messaggio}\n ❌ per il comune {com[2]} ci sono dei servizi pianificati presenti su TREG e non su SIT'
+                
+                messaggio= f'{messaggio}\nTrac codes: '
+                for rr in risultato: 
+                    curr.execute(update_lastupdate_trac_code, (rr[0].split('_')[0],rr[0].split('_')[1],))
+                    messaggio=f'{messaggio} {rr[0]}'
+                conn.commit()
+                # bisogna fare elenco
+            else:
+                messaggio = f'{messaggio}\n ✔ Tutti i pianificati presenti su TREG sono anche su SIT (comune {com[2]})'    
+            
+            
+            
+            
+            
+            
+            
+            logger.info('Controllo pianificati Spazzamento')          
+            
+            try:
+                curr.execute(pian_s_sit_no_treg, (anno_controllo, mm))
+                risultato=curr.fetchall()
+            except Exception as e:
+                check_error=1
+                logger.error(pian_s_sit_no_treg)
+                logger.error(e)
+                # se va in errore esco
+                error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                exit()
+
+            
+            
+            if len(risultato) > 0 :
+                messaggio = f'{messaggio}\n ❌ per il comune {com[2]} ci sono dei servizi pianificati presenti su SIT e non su TREG'
+                
+                messaggio= f'{messaggio}\nTrac codes: '
+                for rr in risultato: 
+                    curr.execute(update_lastupdate_trac_code, (rr[0].split('_')[0],rr[0].split('_')[1],))
+                    messaggio=f'{messaggio} {rr[0]}'
+                conn.commit()
+                # bisogna fare elenco
+            else:
+                messaggio = f'{messaggio}\n ✔ Tutti i pianificati presenti su SIT sono anche su TREG (comune {com[2]})'
+            
+            
+            
+            
+            
+            
+            try:
+                curr.execute(pian_s_treg_no_sit, (anno_controllo, mm))
+                risultato=curr.fetchall()
+            except Exception as e:
+                check_error=1
+                logger.error(pian_s_treg_no_sit)
+                logger.error(e)
+                # se va in errore esco
+                error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                exit()
+
+            
+            
+            if len(risultato) > 0 :
+                messaggio = f'{messaggio}\n ❌ per il comune {com[2]} ci sono dei servizi pianificati presenti su TREG e non su SIT'
+                
+                messaggio= f'{messaggio}\nTrac codes: '
+                for rr in risultato: 
+                    curr.execute(update_lastupdate_trac_code, (rr[0].split('_')[0],rr[0].split('_')[1],))
+                    messaggio=f'{messaggio} {rr[0]}'
+                conn.commit()
+                # bisogna fare elenco
+            else:
+                messaggio = f'{messaggio}\n ✔ Tutti i pianificati presenti su TREG sono anche su SIT (comune {com[2]})'    
+            
+
+            
+            
+            
+            
+            
+            # ora faccio ciclo sulle causali
+            
+            try:
+                curr.execute(select_tipi_causale)
+                tipi_causale= curr.fetchall()
+            except Exception as e:
+                logger.error(select_tipi_causale)
                 logger.error(e)
             
             
-            if len(anomalie) > 0 :
-                messaggio = f'{messaggio}<br> ❌ ci sono anomalie con causale {cc[2]}'
+        
+        
+            for cc in tipi_causale:
                 
-                messaggio= f'{messaggio}<br>Trac codes: '
-                for rr in risultato: 
-                    messaggio=f'{messaggio} {rr[0]}'
-                # bisogna fare elenco
-            else:
-                messaggio = f'{messaggio}<br> ✔ Con la causale {cc[1]} tutto torna!'
-            # step 0 devo scrivere intestazione, dopo solo append
-            # Scrittura intestazione una sola volta
-            if s == 0:
+                
+                
+                anomalie=[]
+                
+                logger.info(f'Cerco anomali raccolta mese {mm} anno {anno_controllo} causale TREG {cc[1]}')
+                select_anomalie='''
+                    with anomalie as 
+                    (
+                        SELECT  '{1}' as comune,
+                        'TREG NO SIT' as tipo_anomalia,
+                        '{0}' as tipo_TREG,
+                        ca.id_TREG as tipo_SIT,
+                        rr.* 
+                        FROM treg_eko.anwstcol a
+                        left join consunt.report_raccolta rr on a.code_rint = rr.trac_code  
+                        left join etl.cause_disserv cd on cd.codice = rr.id_causale 
+                        left join etl.causali_arera ca on cd.id_causale_arera = ca.id 
+                        WHERE cause_int IN (%s)	
+                        and a.code_rint not in (
+                        select distinct trac_code 
+                        FROM treg_eko.tmp_raccolta
+                        where anno = %s and mese = %s and id_causale_arera = %s and interruzione = 1)
+                        union
+                        SELECT  '{1}' as comune,
+                        'SIT NO TREG' as tipo_anomalia,
+                        a.cause_int as tipo_TREG,
+                        '{0}' as tipo_SIT,
+                        rr.* 
+                        FROM treg_eko.tmp_raccolta tr
+                        left join consunt.report_raccolta rr on tr.trac_code = rr.trac_code  
+                        left join treg_eko.anwstcol a on a.code_rint = tr.trac_code  
+                        where anno = %s and mese = %s and id_causale_arera = %s and interruzione = 1
+                        and  tr.trac_code not in (select code_rint 
+                        FROM treg_eko.anwstcol a
+                        WHERE cause_int IN (%s))
+                    )
+                    select * from anomalie 
+                    order by data_programmata, cod_percorso'''.format(cc[1],com[2])
+                try:
+                    curr.execute(select_anomalie, (cc[1], 
+                                                    anno_controllo, 
+                                                    mm, 
+                                                    cc[0],
+                                                    anno_controllo, 
+                                                    mm, 
+                                                    cc[0],
+                                                    cc[1]
+                                                    ))
+                    anomalie=curr.fetchall()
+                except Exception as e:
+                    logger.error(select_anomalie)
+                    logger.error(e)
+                
+                
+                if len(anomalie) > 0 :
+                    messaggio = f'{messaggio}\n ❌ ci sono anomalie con causale {cc[2]}'
+                    
+                    """messaggio= f'{messaggio}\nTrac codes: '
+                    for rr in risultato: 
+                        messaggio=f'{messaggio} {rr[0]}'
+                    # bisogna fare elenco
+                    """
+                else:
+                    messaggio = f'{messaggio}\n ✔ Con la causale {cc[1]} tutto torna!'
+                # step 0 devo scrivere intestazione, dopo solo append
+                # Scrittura intestazione una sola volta
+                if s == 0:
 
-                colonne = [desc[0] for desc in curr.description]
+                    colonne = [desc[0] for desc in curr.description]
 
-                for col_num, col_name in enumerate(colonne):
-                    worksheet.write(row_excel, col_num, col_name, header_format)
+                    for col_num, col_name in enumerate(colonne):
+                        worksheet.write(row_excel, col_num, col_name, header_format)
 
-                row_excel += 1
+                    row_excel += 1
 
-            # Scrittura dati
-            for record in anomalie:
+                # Scrittura dati
+                for record in anomalie:
 
-                for col_num, valore in enumerate(record):
-                    worksheet.write(row_excel, col_num, valore)
+                    for col_num, valore in enumerate(record):
+                        #worksheet.write(row_excel, col_num, valore)
+                        # prima di scrivere controllo se si tratta di una data. 
+                        # A quel punto imposto il formato corretto su excel
+                        if isinstance(valore, (datetime, date)):
+                            worksheet.write_datetime(row_excel, col_num, valore, date_format)
+                        else:
+                            worksheet.write(row_excel, col_num, valore)
+                        
 
-                row_excel += 1
+                    row_excel += 1
 
-            # incremento s
-            s+=1
+                # incremento s
+                s+=1
+
             
+            
+            
+            
+                logger.info(f'Cerco anomali Spazzamento mese {mm} anno {anno_controllo} causale TREG {cc[1]}')
+                select_anomalie='''
+                    with anomalie as 
+                    (
+                        SELECT '{1}' as comune, 
+                        'TREG NO SIT' as tipo_anomalia,
+                        '{0}' as tipo_TREG,
+                        ca.id_TREG as tipo_SIT,
+                        rr.* 
+                        FROM treg_eko.answeep a
+                        left join consunt.report_spazz rr on a.code_rint = rr.trac_code  
+                        left join etl.cause_disserv cd on cd.codice = rr.id_causale 
+                        left join etl.causali_arera ca on cd.id_causale_arera = ca.id 
+                        WHERE cause_int IN (%s)	
+                        and a.code_rint not in (
+                        select distinct trac_code 
+                        FROM treg_eko.tmp_spazzamento
+                        where anno = %s and mese = %s and id_causale_arera = %s and interruzione = 1)
+                        union
+                        SELECT  '{1}' as comune,
+                        'SIT NO TREG' as tipo_anomalia,
+                        a.cause_int as tipo_TREG,
+                        '{0}' as tipo_SIT,
+                        rr.* 
+                        FROM treg_eko.tmp_spazzamento tr
+                        left join consunt.report_spazz rr on tr.trac_code = rr.trac_code  
+                        left join treg_eko.answeep a on a.code_rint = tr.trac_code  
+                        where anno = %s and mese = %s and id_causale_arera = %s and interruzione = 1
+                        and  tr.trac_code not in (select code_rint 
+                        FROM treg_eko.answeep a
+                        WHERE cause_int IN (%s))
+                    )
+                    select * from anomalie 
+                    order by data_programmata, cod_percorso'''.format(cc[1], com[2])
+                try:
+                    curr.execute(select_anomalie, (cc[1], 
+                                                    anno_controllo, 
+                                                    mm, 
+                                                    cc[0],
+                                                    anno_controllo, 
+                                                    mm, 
+                                                    cc[0],
+                                                    cc[1]
+                                                    ))
+                    anomalie=curr.fetchall()
+                except Exception as e:
+                    logger.error(select_anomalie)
+                    logger.error(e)
+                
+                
+                if len(anomalie) > 0 :
+                    messaggio = f'{messaggio}\n ❌ ci sono anomalie con causale {cc[2]}'
+                    
+                    """messaggio= f'{messaggio}\nTrac codes: '
+                    for rr in risultato: 
+                        messaggio=f'{messaggio} {rr[0]}'
+                    # bisogna fare elenco
+                    """
+                else:
+                    messaggio = f'{messaggio}\n ✔ Con la causale {cc[1]} tutto torna!'
+                # step 0 devo scrivere intestazione, dopo solo append
+                # Scrittura intestazione una sola volta
+                if s2 == 0:
+
+                    colonne2 = [desc[0] for desc in curr.description]
+
+                    for col_num, col_name in enumerate(colonne2):
+                        worksheet2.write(row_excel2, col_num, col_name, header_format)
+
+                    row_excel2 += 1
+
+                # Scrittura dati
+                for record in anomalie:
+
+                    for col_num, valore in enumerate(record):
+                        #worksheet.write(row_excel, col_num, valore)
+                        # prima di scrivere controllo se si tratta di una data. 
+                        # A quel punto imposto il formato corretto su excel
+                        if isinstance(valore, (datetime, date)):
+                            worksheet2.write_datetime(row_excel2, col_num, valore, date_format)
+                        else:
+                            worksheet2.write(row_excel2, col_num, valore)
+                        
+
+                    row_excel2 += 1
+
+                # incremento s
+                s2+=1
+        
+        
+        
+        # fine ciclo sui comuni        
         # Autofilter
         if row_excel > 1:
             worksheet.autofilter(
@@ -587,6 +975,7 @@ select
         # Congela prima riga
         worksheet.freeze_panes(1, 0)
 
+
         # Autofit colonne
         for idx, nome_colonna in enumerate(colonne):
             max_len = len(str(nome_colonna))
@@ -595,15 +984,88 @@ select
             # Qui imposto una larghezza minima ragionevole.
             worksheet.set_column(idx, idx, max(max_len + 5, 15))
 
+
+
+
+
+
+        if row_excel2 > 1:
+            worksheet2.autofilter(
+                0,
+                0,
+                row_excel2 - 1,
+                len(colonne2) - 1
+            )
+                    
+        # Congela prima riga
+        worksheet2.freeze_panes(1, 0)
+
+        # Autofit colonne
+        for idx, nome_colonna in enumerate(colonne2):
+            max_len = len(str(nome_colonna))
+
+            # Se vuoi un autofit "vero" bisogna memorizzare le lunghezze durante la scrittura.
+            # Qui imposto una larghezza minima ragionevole.
+            worksheet2.set_column(idx, idx, max(max_len + 5, 15))
+
+        
+        # chiudo il file excel
         workbook.close()
         
         
         
         logger.info(messaggio)
-        exit()
+        #exit()
 
     
     
+    
+    
+    ################################
+    # predisposizione mail
+    ################################
+    # Create a secure SSL context
+    context = ssl.create_default_context()
+
+
+    subject = "Controllo settimanale anomalie TREG"
+    body = f'''
+Visualizza in allegato il controllo effettuato sui seguenti periodi: 
+<ul>
+<li>anno = {anno_controllo}</li>
+<li>mesi = {mesi_controllo}</li>
+</ul>
+<br><br>
+AMIU Assistenza Territorio
+'''
+    
+
+    # Create a multipart message and set headers
+    message = MIMEMultipart()
+    message["From"] = sender_email
+    message["To"] = 'assterritorio@amiu.genova.it'
+    #message["Cc"] = cc_mail
+    message["Subject"] = subject
+    #message["Bcc"] = debug_email  # Recommended for mass emails
+    message.preamble = "Controllo settimanale anomalie TREG"
+
+    
+                    
+    # Add body to email
+    message.attach(MIMEText(body, "html"))
+
+    for ff in excel_names_array:
+        # aggiunto allegato (usando la funzione importata)
+        allegato(message, f'{path}/{ff}', ff)
+    
+    allegato(message, logfile, 'anomalie_QT.log')
+    
+    #text = message.as_string()
+
+    # Now send or store the message
+    logging.info("Richiamo la funzione per inviare mail")
+    invio=invio_messaggio(message)
+    logging.info(invio) 
     
         
     # check se c_handller contiene almeno una riga 
