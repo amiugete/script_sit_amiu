@@ -997,9 +997,10 @@ SELECT codice_modello_servizio, ordine, objecy_type,
                 
                 if len(list_trac_del) > 0:
 
-                    logger.debug(list_trac_del)
+                    
                                 
                     logger.info('Inizio delete dati del percorso {} del {}'.format(c[0], datetime.strptime(t[1], '%Y%m%d').date()))
+                    logger.info('Trac_codes da eliminare: {0}'.format(list_trac_del))
                     api_url_delete='{}atrif/api/v1/tobin/b2b/process/rifqt-sweepings/delete/av1'.format(url_ws_treg)
                     # questa sarà da passare a TREG, le altre no
                     

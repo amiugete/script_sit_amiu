@@ -516,7 +516,8 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
         AND (data_ora_inizio + (ep.giorno_competenza || ' day')::interval  >= %s
         OR /* cerco anche il caso di anticipo*/
         data_pianif_iniziale = %s  and id_turno = %s)
-    group by ep.giorno_competenza ;
+    group by ep.giorno_competenza 
+    order by 2,1;
     '''
        
     query_insert='''INSERT INTO consunt.last_import_sit_racc_cons
