@@ -559,286 +559,288 @@ group by id_scheda '''
                                             logger.debug('Leggo consuntivazione tappa {} codice Ekovision {}'.format(t, codice_eko))
                                             # escludo i NON previsti e NON eseguiti - NON LO FACCIO PIù perchè li escludo all'invio su TREG, qui scrivo tutto consunt_ekovision
                                             # rimosso l'if anche perchè sui json di EKO il flag flg_non_previsto è sbagliato (es. scheda 787127)
-                                            if int(data[i]['cons_works'][t]['flg_exec'].strip())==1 or int(data[i]['cons_works'][t]['flg_non_previsto'].strip())==0 :
-                                                ################################################################
-                                                # Preparo i dati da inserire 
-                                                logger.debug('Cerco la causale e la qualità')
-                                                # causale
-                                                if int(data[i]['flg_segn_srv_non_effett'].strip())==1:
-                                                    causale=int(data[i]['cod_caus_srv_non_eseg_ext'].strip())
+                                            #if int(data[i]['cons_works'][t]['flg_exec'].strip())==1 or int(data[i]['cons_works'][t]['flg_non_previsto'].strip())==0 :
+                                            ################################################################
+                                            # Preparo i dati da inserire 
+                                            logger.debug('Cerco la causale e la qualità')
+                                            # causale
+                                            if int(data[i]['flg_segn_srv_non_effett'].strip())==1:
+                                                causale=int(data[i]['cod_caus_srv_non_eseg_ext'].strip())
+                                                if tipo_servizio=='S':
+                                                    qualita=0
+                                                else:
+                                                    qualita=None
+                                            elif int(data[i]['cons_works'][t]['flg_exec'].strip())==1:
+                                                if tipo_servizio=='R': #or tipo_servizio=='S':
+                                                    causale=100
+                                                    qualita=None
+                                                elif tipo_servizio=='RL':
+                                                    causale=110
+                                                    qualita=None
+                                                elif tipo_servizio=='S':
+                                                    causale=100
+                                                    qualita=int(data[i]['cons_works'][t]['cod_std_qualita'].strip())
+                                            #lo sposto prima perchè ci sono alcuni casi in cui int(data[i]['cons_works'][t]['flg_exec'].strip())==1 
+                                            # anche se il servizio non è stato effettuato
+                                            # elif int(data[i]['flg_segn_srv_non_effett'].strip())==1:
+                                            #    causale=int(data[i]['cod_caus_srv_non_eseg_ext'].strip())
+                                            #    qualita=0
+                                            # se il servizio non fosse stato completato
+                                            else :
+                                                try:
+                                                    causale=int(data[i]['cons_works'][t]['cod_giustificativo_ext'].strip())
                                                     if tipo_servizio=='S':
                                                         qualita=0
                                                     else:
                                                         qualita=None
-                                                elif int(data[i]['cons_works'][t]['flg_exec'].strip())==1:
-                                                    if tipo_servizio=='R': #or tipo_servizio=='S':
-                                                        causale=100
-                                                        qualita=None
-                                                    elif tipo_servizio=='RL':
-                                                        causale=110
-                                                        qualita=None
-                                                    elif tipo_servizio=='S':
-                                                        causale=100
-                                                        qualita=int(data[i]['cons_works'][t]['cod_std_qualita'].strip())
-                                                #lo sposto prima perchè ci sono alcuni casi in cui int(data[i]['cons_works'][t]['flg_exec'].strip())==1 
-                                                # anche se il servizio non è stato effettuato
-                                                # elif int(data[i]['flg_segn_srv_non_effett'].strip())==1:
-                                                #    causale=int(data[i]['cod_caus_srv_non_eseg_ext'].strip())
-                                                #    qualita=0
-                                                # se il servizio non fosse stato completato
-                                                else :
+                                                except Exception as e:
+                                                    check_cons=1
+                                                    logger.error(f'{jsonName}')
+                                                    logger.error('ID SCHEDA:{}'.format(data[i]['id_scheda']))
+                                                    logger.error('Causale servizio non effettuato:{}'.format(data[i]['cod_caus_srv_non_eseg_ext']))
+                                                    logger.error('FLG Eseguito:{}'.format(data[i]['cons_works'][t]['flg_exec']))
+                                                    logger.error('PROBLEMA CAUSALE')
+                                                    logger.error(e)
+                                                    causale=999
+                                                    #error_log_mail(logfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                                                    #exit()
+                                            # la causale 999, creata per le preconsuntivazione, in realtà non dovrebbe essere usata.. 
+                                            # se fosse arrivato qualcosa lo assimilo alla 102 (percorso non previsto)
+                                            previsto = 0
+                                            logger.debug('Causale trovata: {}'.format(causale))
+                                            logger.debug('Controllo se la causale è 999')
+                                            if causale == 999:
+                                                causale = 102
+                                                if '{}_{}'.format(data[i]['codice_serv_pred'],data[i]['data_esecuzione_prevista']) not in percorsi_tappe_anomale:
+                                                    
+                                                    
+                                                    # qua dovrei verificare se la componente o il tratto stradale è previsto o meno in quel giorno 
+                                                    
+                                                    
+                                                    query_verifica='''select distinct codice_modello_servizio as cod_percorso,
+                                                        fo.freq_binaria, 
+                                                        case
+                                                            when ep.id_elemento_privato is null then 'OTH'
+                                                            else 'DOM'
+                                                            /* in questo momento non c'è perimetrazione delle aree di pregio */
+                                                        end as collectionType, 
+                                                        codice as areaCode, /* non metto il ripasso volutamente*/
+                                                        ee.id_piazzola,
+                                                        aa.id_via as streetCode,
+                                                        v.nome as streetDescription, 
+                                                        tr.codice_cer as cerCode,
+                                                        tr.nome as wasteDescription,
+                                                        c.cod_istat as istatCode, 
+                                                        min(tab.data_inizio) as data_inizio,
+                                                        max(tab.data_fine) as data_fine, 
+                                                        ep2.giorno_competenza
+                                                        from 
+                                                        (
+                                                            SELECT codice_modello_servizio, ordine, objecy_type, 
+                                                        codice, quantita, lato_servizio, percent_trattamento,frequenza,
+                                                        ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
+                                                        codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine, 
+                                                        id_asta_percorso, id_elemento_asta_percorso
+                                                            FROM anagrafe_percorsi.v_percorsi_elementi_tratti where data_inizio < coalesce(data_fine, '20991231')
+                                                            union 
+                                                            SELECT codice_modello_servizio, ordine, objecy_type, 
+                                                        codice, quantita, lato_servizio, percent_trattamento,frequenza,
+                                                        ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
+                                                        codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine,
+                                                        id_asta_percorso, id_elemento_asta_percorso
+                                                            FROM anagrafe_percorsi.v_percorsi_elementi_tratti_ovs where data_inizio < coalesce(data_fine, '20991231')
+                                                            union 
+                                                            SELECT codice_modello_servizio, ordine, objecy_type, 
+                                                        codice, quantita, lato_servizio, percent_trattamento,frequenza,
+                                                        ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
+                                                        codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine, 
+                                                        id_asta_percorso, id_elemento_asta_percorso
+                                                            FROM anagrafe_percorsi.mv_percorsi_elementi_tratti_dismessi where data_inizio < coalesce(data_fine, '20991231')
+                                                        ) tab
+                                                        left join (select id_piazzola, id_elemento, tipo_elemento, id_asta from elem.elementi
+                                                        union 
+                                                        select id_piazzola, id_elemento, tipo_elemento, id_asta from history.elementi
+                                                        ) ee 
+                                                            on ee.id_elemento = tab.codice
+                                                        left join elem.piazzole p 
+                                                            on p.id_piazzola = ee.id_piazzola
+                                                        left join (select id_asta, id_via from elem.aste
+                                                        union 
+                                                        select id_asta, id_via from history.aste) aa
+                                                            on aa.id_asta = coalesce(p.id_asta, ee.id_asta)
+                                                        left join topo.vie v on v.id_via = aa.id_via 
+                                                        left join topo.comuni c on c.id_comune = v.id_comune 
+                                                        left join elem.tipi_elemento te on te.tipo_elemento = ee.tipo_elemento
+                                                        left join elem.tipi_rifiuto tr on tr.tipo_rifiuto = te.tipo_rifiuto
+                                                        left join elem.elementi_privati ep on ep.id_elemento = ee.id_elemento
+                                                        left join etl.frequenze_ok fo on fo.cod_frequenza = tab.frequenza
+                                                        left join anagrafe_percorsi.elenco_percorsi ep2 
+                                                        on ep2.cod_percorso = tab.codice_modello_servizio 
+                                                        and to_date(%s, 'YYYYMMDD') between ep2.data_inizio_validita and ep2.data_fine_validita
+                                                        where
+                                                        tab.data_fine > '20250101'
+                                                        and tab.codice = %s
+                                                        and codice_modello_servizio = %s
+                                                        and %s between tab.data_inizio and tab.data_fine
+                                                        group by codice_modello_servizio,
+                                                        fo.freq_binaria, 
+                                                        case
+                                                            when ep.id_elemento_privato is null then 'OTH'
+                                                            else 'DOM'
+                                                        end , 
+                                                        tab.codice,
+                                                        ee.id_piazzola,
+                                                        aa.id_via ,
+                                                        v.nome , 
+                                                        tr.codice_cer ,
+                                                        tr.nome,
+                                                        ep2.giorno_competenza,
+                                                        c.cod_istat'''
+                                                        
+                                                        
                                                     try:
-                                                        causale=int(data[i]['cons_works'][t]['cod_giustificativo_ext'].strip())
-                                                        if tipo_servizio=='S':
-                                                            qualita=0
-                                                        else:
-                                                            qualita=None
-                                                    except Exception as e:
-                                                        check_cons=1
-                                                        logger.error(f'{jsonName}')
-                                                        logger.error('ID SCHEDA:{}'.format(data[i]['id_scheda']))
-                                                        logger.error('Causale servizio non effettuato:{}'.format(data[i]['cod_caus_srv_non_eseg_ext']))
-                                                        logger.error('FLG Eseguito:{}'.format(data[i]['cons_works'][t]['flg_exec']))
-                                                        logger.error('PROBLEMA CAUSALE')
-                                                        logger.error(e)
-                                                        causale=-1
-                                                        #error_log_mail(logfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
-                                                        #exit()
-                                                # la causale 999, creata per le preconsuntivazione, in realtà non dovrebbe essere usata.. 
-                                                # se fosse arrivato qualcosa lo assimilo alla 102 (percorso non previsto)
-                                                previsto = 0
-                                                logger.debug('Causale trovata: {}'.format(causale))
-                                                logger.debug('Controllo se la causale è 999')
-                                                if causale == 999:
-                                                    causale = 102
-                                                    if '{}_{}'.format(data[i]['codice_serv_pred'],data[i]['data_esecuzione_prevista']) not in percorsi_tappe_anomale:
-                                                        
-                                                        
-                                                        # qua dovrei verificare se la componente o il tratto stradale è previsto o meno in quel giorno 
-                                                        
-                                                        
-                                                        query_verifica='''select distinct codice_modello_servizio as cod_percorso,
-                                                            fo.freq_binaria, 
-                                                            case
-                                                                when ep.id_elemento_privato is null then 'OTH'
-                                                                else 'DOM'
-                                                                /* in questo momento non c'è perimetrazione delle aree di pregio */
-                                                            end as collectionType, 
-                                                            codice as areaCode, /* non metto il ripasso volutamente*/
-                                                            ee.id_piazzola,
-                                                            aa.id_via as streetCode,
-                                                            v.nome as streetDescription, 
-                                                            tr.codice_cer as cerCode,
-                                                            tr.nome as wasteDescription,
-                                                            c.cod_istat as istatCode, 
-                                                            min(tab.data_inizio) as data_inizio,
-                                                            max(tab.data_fine) as data_fine, 
-                                                            ep2.giorno_competenza
-                                                            from 
-                                                            (
-                                                                SELECT codice_modello_servizio, ordine, objecy_type, 
-                                                            codice, quantita, lato_servizio, percent_trattamento,frequenza,
-                                                            ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
-                                                            codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine, 
-                                                            id_asta_percorso, id_elemento_asta_percorso
-                                                                FROM anagrafe_percorsi.v_percorsi_elementi_tratti where data_inizio < coalesce(data_fine, '20991231')
-                                                                union 
-                                                                SELECT codice_modello_servizio, ordine, objecy_type, 
-                                                            codice, quantita, lato_servizio, percent_trattamento,frequenza,
-                                                            ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
-                                                            codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine,
-                                                            id_asta_percorso, id_elemento_asta_percorso
-                                                                FROM anagrafe_percorsi.v_percorsi_elementi_tratti_ovs where data_inizio < coalesce(data_fine, '20991231')
-                                                                union 
-                                                                SELECT codice_modello_servizio, ordine, objecy_type, 
-                                                            codice, quantita, lato_servizio, percent_trattamento,frequenza,
-                                                            ripasso, numero_passaggi, replace(replace(coalesce(nota,''),'DA PIAZZOLA',''),';', ' - ') as nota,
-                                                            codice_qualita, codice_tipo_servizio, data_inizio, coalesce(data_fine, '20991231') as data_fine, 
-                                                            id_asta_percorso, id_elemento_asta_percorso
-                                                                FROM anagrafe_percorsi.mv_percorsi_elementi_tratti_dismessi where data_inizio < coalesce(data_fine, '20991231')
-                                                            ) tab
-                                                            left join (select id_piazzola, id_elemento, tipo_elemento, id_asta from elem.elementi
-                                                            union 
-                                                            select id_piazzola, id_elemento, tipo_elemento, id_asta from history.elementi
-                                                            ) ee 
-                                                                on ee.id_elemento = tab.codice
-                                                            left join elem.piazzole p 
-                                                                on p.id_piazzola = ee.id_piazzola
-                                                            left join (select id_asta, id_via from elem.aste
-                                                            union 
-                                                            select id_asta, id_via from history.aste) aa
-                                                                on aa.id_asta = coalesce(p.id_asta, ee.id_asta)
-                                                            left join topo.vie v on v.id_via = aa.id_via 
-                                                            left join topo.comuni c on c.id_comune = v.id_comune 
-                                                            left join elem.tipi_elemento te on te.tipo_elemento = ee.tipo_elemento
-                                                            left join elem.tipi_rifiuto tr on tr.tipo_rifiuto = te.tipo_rifiuto
-                                                            left join elem.elementi_privati ep on ep.id_elemento = ee.id_elemento
-                                                            left join etl.frequenze_ok fo on fo.cod_frequenza = tab.frequenza
-                                                            left join anagrafe_percorsi.elenco_percorsi ep2 
-                                                            on ep2.cod_percorso = tab.codice_modello_servizio 
-                                                            and to_date(%s, 'YYYYMMDD') between ep2.data_inizio_validita and ep2.data_fine_validita
-                                                            where
-                                                            tab.data_fine > '20250101'
-                                                            and tab.codice = %s
-                                                            and codice_modello_servizio = %s
-                                                            and %s between tab.data_inizio and tab.data_fine
-                                                            group by codice_modello_servizio,
-                                                            fo.freq_binaria, 
-                                                            case
-                                                                when ep.id_elemento_privato is null then 'OTH'
-                                                                else 'DOM'
-                                                            end , 
-                                                            tab.codice,
-                                                            ee.id_piazzola,
-                                                            aa.id_via ,
-                                                            v.nome , 
-                                                            tr.codice_cer ,
-                                                            tr.nome,
-                                                            ep2.giorno_competenza,
-                                                            c.cod_istat'''
-                                                            
-                                                            
-                                                        try:
-                                                            curr.execute(query_verifica, (data[i]['data_esecuzione_prevista'],
-                                                                                            codice_eko,
-                                                                                            data[i]['codice_serv_pred'], 
-                                                                                        data[i]['data_esecuzione_prevista']
-                                                                                        )
+                                                        curr.execute(query_verifica, (data[i]['data_esecuzione_prevista'],
+                                                                                        codice_eko,
+                                                                                        data[i]['codice_serv_pred'], 
+                                                                                    data[i]['data_esecuzione_prevista']
                                                                                     )
-                                                            check_componente_previsto=curr.fetchone()
-                                                            
-                                                        except Exception as e:
-                                                            logger.error(query_verifica)
-                                                            logger.error(e)
+                                                                                )
+                                                        check_componente_previsto=curr.fetchone()
                                                         
-                                                        
-                                                                
-                                                        
-                                                                
-                                                            
-                                                        
-                                                        if tappa_prevista(datetime.strptime(data[i]['data_esecuzione_prevista'], '%Y%m%d'),
-                                                                                            check_componente_previsto[1]) ==1 :
-                                                            # faccio append
-                                                            percorsi_tappe_anomale.append('{}_{}'.format(data[i]['codice_serv_pred'],data[i]['data_esecuzione_prevista']))
-                                                            # invio mail warning 
-                                                            messaggio = '''STO RIPROCESSANDO I DATI DELLE SCHEDE CHIUSE PER TREG <br><br> 
-                                                            Per il percorso {0} del {1} (id_scheda = {2})
-                                                            sono state consuntivate alcune tappe previste 
-                                                            con la causale "<i>Frequenza non prevista</i>" (999) 
-                                                            che non andrebbe usata se non per le tappe effettivamente non previste da SIT.<br>
-                                                            Si prega di controllare e correggere il dato su Ekovision inserendo una causale corretta.
-                                                            '''.format(data[i]['codice_serv_pred'], 
-                                                                    data[i]['data_esecuzione_prevista'],
-                                                                    data[i]['id_scheda'])
-                                                            
-                                                            
-                                                            
-                                                            warning_message_mail(messaggio, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
-                                                                
-                                                    #else:
-                                                        # non faccio nulla 
-                                                        
-                                                logger.debug('Controllo causale 999 terminato')
-                                                
-                                                logger.debug('Controllo se la consuntivazione arriva da totem')          
-                                                # vedo se consuntivazione arriva da totem o meno (per ora non lo salvo su SIT)
-                                                if int(data[i]['cons_works'][t]['ts_exec']) == 0:
-                                                    totem=0
-                                                else :
-                                                    totem=1
-                                                
-                                                logger.debug('Controllo totem terminato')
-                                                logger.debug('Controllo riprogrammazione')
-                                                # riprogrammato
-                                                try:
-                                                    if int(data[i]['cons_works'][t]['flg_riprogrammato']) == 0:
-                                                        riprogrammato=None
-                                                    elif int(data[i]['cons_works'][t]['flg_riprogrammato']) == 1 :
-                                                        riprogrammato=1
-                                                except Exception as e:
-                                                    riprogrammato=None
-                                                
-                                                
-                                                try:
-                                                    if int(data[i]['cons_works'][t]['flg_non_previsto']) == 0:
-                                                        non_previsto=None
-                                                    elif int(data[i]['cons_works'][t]['flg_non_previsto']) == 1 :
-                                                        non_previsto=1
-                                                except Exception as e:
-                                                    non_previsto=None
-                                                
-                                                if int(data[i]['cons_works'][t]['id_sch_riprogrammata'])==0:
-                                                    id_sch_riprogrammata=None
-                                                else:
-                                                    id_sch_riprogrammata=int(data[i]['cons_works'][t]['id_sch_riprogrammata'])
-                                                    
-                                                
-                                                        
-                                                        
-                                                logger.debug('Controllo riprogrammazione terminato')
-                                                logger.debug('Controllo note')
-                                                # note
-                                                if data[i]['cons_works'][t]['note'] =='':
-                                                    note=None
-                                                else :
-                                                    note=data[i]['cons_works'][t]['note']
-                                                
-                                                logger.debug('Controllo note terminato')            
-                                                    
-                                                # inserisco i dati nella tabella treg_eko.consunt_ekovision
-                                                logger.debug('Inserisco/aggiorno i dati della tappa consuntivata nella tabella treg_eko.consunt_ekovision')      
-                                                if tipo_servizio in ['S', 'R', 'RL']:
-                                                                
-                                                    try:
-                
-                                                        curr.execute(upsert_query_ok, 
-                                                                (data[i]['id_scheda'], data[i]['codice_serv_pred']
-                                                                ,data[i]['data_pianif_iniziale'], data[i]['data_esecuzione_prevista']
-                                                                ,min(data_ora_ini),max(data_ora_fine)
-                                                                ,riprogrammato,non_previsto
-                                                                ,qualita, id_sch_riprogrammata
-                                                                ,tipo_servizio, codice_eko
-                                                                ,data[i]['cons_works'][t]['pos'], causale
-                                                                ,db_jsonName
-                                                                ,solo_esec
-                                                                )
-                                                            )
                                                     except Exception as e:
+                                                        logger.error(query_verifica)
                                                         logger.error(e)
-                                                        logger.error(upsert_query_ok)
-                                                        logger.error('''id_scheda:{0}, cod_percorso:{1}, 
-                                                                        data_pian:{2}, data_eff:{3},
-                                                                        data_ora_ini:{4}, data_ora_fine:{5},
-                                                                        flg_riprogrammato:{6}, flg_non_previsto:{7},
-                                                                        qualita:{8}, id_scheda_ripr:{9},
-                                                                        tipo_servizio:{10}, codice_eko:{11},
-                                                                        posizione:{12}, causale:{13}, 
-                                                                        filename:{14},
-                                                                        solo_esec:{15}
-                                                                        '''
-                                                                .format(data[i]['id_scheda'], data[i]['codice_serv_pred']
-                                                                ,data[i]['data_pianif_iniziale'], data[i]['data_esecuzione_prevista']
-                                                                ,min(data_ora_ini),max(data_ora_fine)
-                                                                ,riprogrammato,non_previsto
-                                                                ,qualita, id_sch_riprogrammata
-                                                                ,tipo_servizio, codice_eko
-                                                                ,data[i]['cons_works'][t]['pos'], causale
-                                                                ,db_jsonName
-                                                                ,solo_esec))
-                                                        error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger) 
-                                                        exit()           
-                                                    #logger.debug('Sono arrivato qua senza errori')
-                                                    #exit()            
-                                                    conn.commit()
-                                                else:
-                                                    check=1
-                                                    logger.error('PROBLEMA CONSUNTIVAZIONE')
-                                                    logger.error('File:{}'.format(jsonName))
-                                                    logger.error('Mi sono fermato alla riga {}'.format(i))
-                                                    error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
-                                                    exit()
+                                                    
+                                                    
+                                                            
+                                                    
+                                                            
+                                                        
+                                                    
+                                                    if tappa_prevista(datetime.strptime(data[i]['data_esecuzione_prevista'], '%Y%m%d'),
+                                                                                        check_componente_previsto[1]) ==1 :
+                                                        # faccio append
+                                                        percorsi_tappe_anomale.append('{}_{}'.format(data[i]['codice_serv_pred'],data[i]['data_esecuzione_prevista']))
+                                                        # invio mail warning 
+                                                        messaggio = '''STO RIPROCESSANDO I DATI DELLE SCHEDE CHIUSE PER TREG <br><br> 
+                                                        Per il percorso {0} del {1} (id_scheda = {2})
+                                                        sono state consuntivate alcune tappe previste 
+                                                        con la causale "<i>Frequenza non prevista</i>" (999) 
+                                                        che non andrebbe usata se non per le tappe effettivamente non previste da SIT.<br>
+                                                        Si prega di controllare e correggere il dato su Ekovision inserendo una causale corretta.
+                                                        '''.format(data[i]['codice_serv_pred'], 
+                                                                data[i]['data_esecuzione_prevista'],
+                                                                data[i]['id_scheda'])
+                                                        
+                                                        
+                                                        
+                                                        warning_message_mail(messaggio, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                                                            
+                                                #else:
+                                                    # non faccio nulla 
+                                                    
+                                            logger.debug('Controllo causale 999 terminato')
                                             
+                                            logger.debug('Controllo se la consuntivazione arriva da totem')          
+                                            # vedo se consuntivazione arriva da totem o meno (per ora non lo salvo su SIT)
+                                            if int(data[i]['cons_works'][t]['ts_exec']) == 0:
+                                                totem=0
+                                            else :
+                                                totem=1
+                                            
+                                            logger.debug('Controllo totem terminato')
+                                            logger.debug('Controllo riprogrammazione')
+                                            # riprogrammato
+                                            try:
+                                                if int(data[i]['cons_works'][t]['flg_riprogrammato']) == 0:
+                                                    riprogrammato=None
+                                                elif int(data[i]['cons_works'][t]['flg_riprogrammato']) == 1 :
+                                                    riprogrammato=1
+                                            except Exception as e:
+                                                riprogrammato=None
+                                            
+                                            
+                                            try:
+                                                if int(data[i]['cons_works'][t]['flg_non_previsto']) == 0:
+                                                    non_previsto=None
+                                                elif int(data[i]['cons_works'][t]['flg_non_previsto']) == 1 :
+                                                    non_previsto=1
+                                            except Exception as e:
+                                                non_previsto=None
+                                            
+                                            if int(data[i]['cons_works'][t]['id_sch_riprogrammata'])==0:
+                                                id_sch_riprogrammata=None
+                                            else:
+                                                id_sch_riprogrammata=int(data[i]['cons_works'][t]['id_sch_riprogrammata'])
+                                                
+                                            
+                                                    
+                                                    
+                                            logger.debug('Controllo riprogrammazione terminato')
+                                            logger.debug('Controllo note')
+                                            # note
+                                            if data[i]['cons_works'][t]['note'] =='':
+                                                note=None
+                                            else :
+                                                note=data[i]['cons_works'][t]['note']
+                                            
+                                            logger.debug('Controllo note terminato')            
+                                                
+                                            # inserisco i dati nella tabella treg_eko.consunt_ekovision
+                                            logger.debug('Inserisco/aggiorno i dati della tappa consuntivata nella tabella treg_eko.consunt_ekovision')      
+                                            if tipo_servizio in ['S', 'R', 'RL']:
+                                                            
+                                                try:
+            
+                                                    curr.execute(upsert_query_ok, 
+                                                            (data[i]['id_scheda'], data[i]['codice_serv_pred']
+                                                            ,data[i]['data_pianif_iniziale'], data[i]['data_esecuzione_prevista']
+                                                            ,min(data_ora_ini),max(data_ora_fine)
+                                                            ,riprogrammato,non_previsto
+                                                            ,qualita, id_sch_riprogrammata
+                                                            ,tipo_servizio, codice_eko
+                                                            ,data[i]['cons_works'][t]['pos'], causale
+                                                            ,db_jsonName
+                                                            ,solo_esec
+                                                            )
+                                                        )
+                                                except Exception as e:
+                                                    logger.error(e)
+                                                    logger.error(upsert_query_ok)
+                                                    logger.error('''id_scheda:{0}, cod_percorso:{1}, 
+                                                                    data_pian:{2}, data_eff:{3},
+                                                                    data_ora_ini:{4}, data_ora_fine:{5},
+                                                                    flg_riprogrammato:{6}, flg_non_previsto:{7},
+                                                                    qualita:{8}, id_scheda_ripr:{9},
+                                                                    tipo_servizio:{10}, codice_eko:{11},
+                                                                    posizione:{12}, causale:{13}, 
+                                                                    filename:{14},
+                                                                    solo_esec:{15}
+                                                                    '''
+                                                            .format(data[i]['id_scheda'], data[i]['codice_serv_pred']
+                                                            ,data[i]['data_pianif_iniziale'], data[i]['data_esecuzione_prevista']
+                                                            ,min(data_ora_ini),max(data_ora_fine)
+                                                            ,riprogrammato,non_previsto
+                                                            ,qualita, id_sch_riprogrammata
+                                                            ,tipo_servizio, codice_eko
+                                                            ,data[i]['cons_works'][t]['pos'], causale
+                                                            ,db_jsonName
+                                                            ,solo_esec))
+                                                    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger) 
+                                                    exit()           
+                                                #logger.debug('Sono arrivato qua senza errori')
+                                                #exit()            
+                                                conn.commit()
+                                            else:
+                                                check=1
+                                                logger.error('PROBLEMA CONSUNTIVAZIONE')
+                                                logger.error('File:{}'.format(jsonName))
+                                                logger.error('Mi sono fermato alla riga {}'.format(i))
+                                                error_log_mail(errorfile, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+                                                exit()
+                                        
+                                            # NON LO FACCIO PIU'
+                                            """
                                             else:
                                                 logger.debug('Tappa non prevista e non effettuata faccio delete se esiste già una riga')
                                                 # bisogna fare delete usando id_scheda, codice, pos
@@ -852,7 +854,7 @@ group by id_scheda '''
                                                     logger.error(delete_query)
                                                     logger.error('''id_scheda:{0}, codice_eko:{1}, posizione:{2}'''
                                                                 .format(data[i]['id_scheda'], codice_eko, data[i]['cons_works'][t]['pos']))
-                                            
+                                            """
                                             t+=1
                                             conn.commit()
                                         
