@@ -231,6 +231,12 @@ order by data_inizio_validita"""
         #exit()
         gg=-gg_indietro.days
         
+        logger.info(f'Per il percorso {vv[0]} - {vv[1]} dovrei andare indietro di {gg} giorni') 
+        # nei casi di modifica di qualche valore (es. nome rischierei di andare troppo indietro) correggo
+        if gg < -13:
+            logger.warning('Troppi giorni, mi fermo a 13 giorni fa')
+            gg = -13
+        
         while gg <= data_fine: #6-datetime.today().weekday():
             day_check=oggi + timedelta(gg)
             day= day_check.strftime('%Y%m%d')
