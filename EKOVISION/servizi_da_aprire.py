@@ -438,7 +438,7 @@ order by data_inizio_validita"""
             message.preamble = "Creazione schede di lavoro"
 
 
-            body='''I seguenti percorsi sono stati attivati recentemente e sono privi di schede di lavoro in queste settimane.<br>
+            body='''I seguenti percorsi sono stati attivati o modificati recentemente e sono privi di schede di lavoro in queste settimane.<br>
             {0}
             <br><br>
             Sono state create <b>automaticamente</b> le schede di lavoro su Ekovision. 
