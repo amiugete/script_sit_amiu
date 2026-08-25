@@ -25,6 +25,8 @@ import json
 
 from datetime import date, datetime, timedelta
 
+import time
+
 import locale
 
 import xlsxwriter
@@ -189,13 +191,41 @@ def main():
      # check_anno_comune = 1 cancello i dati di un anno dato comune per comune (va fatto per raccolta e spazzamento)
     
     check_anno_comune = 1
-    tipo_dati = 'wastecollections' #'sweepings' #'wastecollections'  # 'overfilledbins'
+    tipo_dati =  'sweepings' # 'wastecollections' #'sweepings' #'wastecollections'  # 'overfilledbins'
     anno_input=2026
+    asincrono=1 # se 0 uso metodo sincrono
     ##################################################################################################################################################################
 
     # costruisco l'url per la cancellazione dei dati con tipo_dati definito sopra
-    api_url_reset='{}atrif/api/v1/tobin/b2b/process/rifqt-{}/reset-data/av1'.format(URL, tipo_dati)
+    # reset-data metodo standard
+    # reset-data-batch metodo asincronono, subito restituisce pending, poi bisogna interregare altro url per vedere lo stato
+    # il metodo asincrono c'è solo per raccolta / spazzameno
+    
+    """
+    METODO DI VERIFICA STATO: /rifqt-wastecollections/reset-data-status/av1
+        Request:
+        {
+        "requestId": "d19d70f5-7420-4540-97c6-706483cbd4a4"
+        }
 
+        Response:
+        {
+        "status": "Completed",
+        "deletedCount": 10,
+        "errorMessage": "",
+        "requestedAt": "2026-06-22T09:58:31.037Z",
+        "completedAt": "2026-06-22T09:58:31.037Z"
+        }
+    
+    I possibili stati della richiesta di cancellazione sono: “Pending", "Processing", "Completed", "Failed".
+    """
+    
+    if asincrono == 1:
+        api_url_reset='{}atrif/api/v1/tobin/b2b/process/rifqt-{}/reset-data-batch/av1'.format(URL, tipo_dati)
+        api_url_reset_status='{}atrif/api/v1/tobin/b2b/process/rifqt-{}/reset-data-status/av1'.format(URL, tipo_dati)
+    else:
+        api_url_reset='{}atrif/api/v1/tobin/b2b/process/rifqt-{}/reset-data/av1'.format(URL, tipo_dati)
+    
     ######################################################
     # Eliminazione dati caricati su TREG per anno e comune
     ######################################################
@@ -246,8 +276,52 @@ def main():
                                                                                     'mde': '{}'.format('PROD' if test==0 else 'TEST'),
                                                                                     'Authorization': 'EIP {}'.format(token),
                                                                                     'Content-Type': 'application/json'})
+            
+            
             logger.debug(response_reset.status_code)
-
+            requestId=response_reset.json()['batchRequestId']
+            logger.info(f'Interrogo lo stato della richiesta {requestId}') #exit()
+            if asincrono==1: 
+                compl=0
+                sec=0
+                while compl<1:
+                    if sec ==0:
+                        secondi = 15  
+                    else: 
+                        secondi = 30
+                    sec+=1
+                    logger.info(f"Attendo {secondi} s")
+                    time.sleep(secondi)
+                
+                    body_upload_status={
+                        'requestId': str(requestId)
+                    }
+                    response_reset_status= requests.post(api_url_reset_status, json=body_upload_status, verify=True, headers={'accept':'*/*', 
+                                                                                                    'mde': '{}'.format('PROD' if test==0 else 'TEST'),
+                                                                                                    'Authorization': 'EIP {}'.format(token),
+                                                                                                    'Content-Type': 'application/json'})
+                    logger.debug(response_reset_status.status_code)
+                    logger.debug(response_reset_status.text)
+                    if response_reset_status.json()['status'] == 'Completed':
+                        logger.info(f'''Record cancellati:{response_reset_status.json()['deletedCount']}
+                                    Richiesta partita il {response_reset_status.json()['requestedAt']}
+                                    terminata il {response_reset_status.json()['completedAt']}
+                                    ''')
+                        try:
+                            if int(response_reset_status.json()['deletedCount'])>0:
+                                logger.debug('sono qua')
+                                if response_reset_status.json()['errorMessage'] !='':
+                                    logger.error('Sono presenti messaggi di errore')
+                                    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)           
+                                    exit()
+                        except Exception as e:
+                            logger.warning('Ci sono deletedCount ma non trovo messaggi di errore')
+                        compl = 1            
+                    elif response_reset_status.json()['status'] == 'NotFound':
+                        logger.error('Cosa vuol dire NotFound???')
+                        #error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)           
+                        exit()            
+            #exit()    
         logger.info("chiudo le connessioni in maniera definitiva")
         curr.close()
         conn.close()
@@ -264,8 +338,18 @@ def main():
         logger.debug(response_reset.status_code)
 
 
- 
+
+
+
+    # check se c_handller contiene almeno una riga 
+    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
     #response = requests.get(url_bucher, params={'starttime':starttime, 'endtime': endtime}, headers={'Authorization: EIP {}'.format(token)})
+
+
+
+    logger.info("chiudo le connessioni in maniera definitiva")
+    curr.close()
+    conn.close()
 
 if __name__ == "__main__":
     main()      
