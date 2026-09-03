@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# AMIU copyleft 2025
+# AMIU copyleft 2026
 # Roberto Marzocchi Roberta Fagandini
 
 '''
@@ -25,8 +25,8 @@ In questo modo il percorso stagionale è già presente sul DB e posso fare event
 mezzi, turni e frequenze prima che parta
 
 
-2 SETTIMANE PRIMA MANDARE NOTIFICA AL TERRITORIO: 
-(TODO)
+12 GIORNI PRIMA MANDA NOTIFICA AL TERRITORIO: 
+
 
 
 IL GIORNO PRIMA DOVREI CAMBIARE ID_CATEGORIA_USO sul SIT 
@@ -206,6 +206,42 @@ def main():
     order by p.data_attivazione '''
     
     
+    select_stagionali_mail = '''select 
+    p.cod_percorso, 
+    p.descrizione, 
+    p.stagionalita,
+    p.ddmm_switch_on,
+    p.ddmm_switch_off,
+    u.descrizione as ut, 
+    s.descrizione as servizio, 
+    to_char(data_attivazione, 'DD/MM/YYYY') as data_attivazione, 
+    case 
+    when data_dismissione is null then '01/12/2099'
+    else to_char(data_dismissione, 'DD/MM/YYYY')
+    end data_dismissione, 
+    ep.cod_percorso, 
+    u.mail as mail_ut, 
+    za.mail as mail_zona, 
+    case 
+    	when data_attivazione  = current_date + interval '{0}' day 
+    	then 'attivazione'
+    	when data_dismissione  = current_date + interval '{0}' day 
+    	then 'disattivazione'
+    end tipo_notifica
+    from elem.percorsi p
+    left join elem.percorsi_ut pu on pu.cod_percorso = p.cod_percorso 
+    left join topo.ut u on u.id_ut = pu.id_ut and pu.responsabile  = 'S'
+    left join topo.zone_amiu za on za.id_zona = u.id_zona 
+    left join anagrafe_percorsi.elenco_percorsi ep on ep.cod_percorso = p.cod_percorso and ep.data_inizio_validita = p.data_attivazione
+    join elem.servizi s on s.id_servizio= p.id_servizio
+    where p.stagionalita is not null and 
+    (data_attivazione  = current_date + interval '{0}' day 
+    or 
+    data_dismissione  = current_date + interval '{0}' day)
+    and id_categoria_uso in (3,6)
+    order by p.data_attivazione'''.format(12)
+    
+    
  
     try:
         curr.execute(select_stagionali)
@@ -262,6 +298,42 @@ def main():
     insert_percorso4 = '''INSERT INTO anagrafe_percorsi.date_percorsi_sit_uo 
         (id_percorso_sit, cod_percorso, data_inizio_validita, data_fine_validita)
         VALUES(%s, %s, to_date(%s,'DD/MM/YYYY'), to_date(%s,'DD/MM/YYYY'))'''
+        
+        
+    # modifiche 2026 insert anche in anagrafe_percorsi.percorsi_mezzi, angrafe_percorsi.percorsi_comuni, anagrafe_percorsi.percorsi_destinazione
+    
+    insert_percorso5 = '''INSERT INTO anagrafe_percorsi.percorsi_mezzi
+        (cod_percorso, versione, id_mezzo) 
+        values 
+        (%s, (select max(versione)+1 from anagrafe_percorsi.percorsi_mezzi pm where pm.cod_percorso = %s),
+        (select id_mezzo from anagrafe_percorsi.percorsi_mezzi pm 
+            where pm.cod_percorso = %s 
+                and pm.versione = (select max(versione) from anagrafe_percorsi.percorsi_mezzi pm1 where pm1.cod_percorso = pm.cod_percorso)
+        )'''
+    
+    insert_percorso6 = '''INSERT INTO anagrafe_percorsi.percorsi_comuni
+            (cod_percorso, versione, id_comune, competenza) 
+            values 
+            (%s, (select max(versione)+1 from anagrafe_percorsi.percorsi_mezzi pm where pm.cod_percorso = %s),
+            (select id_comune from anagrafe_percorsi.percorsi_mezzi pm 
+                where pm.cod_percorso = %s 
+                    and pm.versione = (select max(versione) from anagrafe_percorsi.percorsi_mezzi pm1 where pm1.cod_percorso = pm.cod_percorso)
+            )%s, (select max(versione)+1 from anagrafe_percorsi.percorsi_mezzi pm where pm.cod_percorso = %s),
+            (select competenza from anagrafe_percorsi.percorsi_mezzi pm 
+                where pm.cod_percorso = %s 
+                    and pm.versione = (select max(versione) from anagrafe_percorsi.percorsi_mezzi pm1 where pm1.cod_percorso = pm.cod_percorso)
+            ), 
+            '''
+    insert_percorso7 = '''INSERT INTO anagrafe_percorsi.percorsi_destinazione
+            (cod_percorso, versione, id_destinazione) 
+            values 
+            (%s, (select max(versione)+1 from anagrafe_percorsi.percorsi_mezzi pm where pm.cod_percorso = %s),
+            (select id_destinazione from anagrafe_percorsi.percorsi_mezzi pm 
+                where pm.cod_percorso = %s 
+                    and pm.versione = (select max(versione) from anagrafe_percorsi.percorsi_mezzi pm1 where pm1.cod_percorso = pm.cod_percorso)
+            )'''
+    
+    
     
     for ls in lista_stagionali:
         # id_percorso  ls[0]
@@ -313,12 +385,32 @@ def main():
         try:
             curr1.execute(insert_percorso4, (ls[0], ls[1], ls[8], ls[9]))
         except Exception as e:
-            logger.error(insert_percorso2)
+            logger.error(insert_percorso4)
             logger.error(e)
         
         curr1.close()
         
+        curr1 = conn.cursor()
+        try:
+            curr1.execute(insert_percorso5, (ls[1], ls[1], ls[1]))
+        except Exception as e:
+            logger.error(insert_percorso5)
+            logger.error(e)
         
+        try:
+            curr1.execute(insert_percorso6, (ls[1], ls[1], ls[1], ls[1], ls[1], ls[1]))
+        except Exception as e:
+            logger.error(insert_percorso6)
+            logger.error(e)
+        
+        try:
+            curr1.execute(insert_percorso7, (ls[1], ls[1], ls[1]))
+        except Exception as e:
+            logger.error(insert_percorso7)
+            logger.error(e)
+        
+        
+        curr1.close() 
         
         conn.commit()
         
@@ -339,6 +431,94 @@ def main():
         con.commit()
         #exit()
         
+        
+    # invio mail al territorio per avvisare che il percorso stagionale sarà attivo tra 12 giorni
+    logger.info('Invio mail al territorio per avvisare che il percorso stagionale sarà attivo tra 12 giorni')
+    try:
+        curr.execute(select_stagionali_mail)
+        lista_stagionali_mail=curr.fetchall()
+    except Exception as e:
+        logger.error(select_stagionali_mail)
+        logger.error(e)     
+        
+    for lsm in lista_stagionali_mail:
+        logger.debug(lsm)
+        if lsm[2] == 'I':
+            stag='<font color=blue> INVERNALE </font>'
+        elif lsm[2] == 'E':
+            stag='<font color=orange> ESTIVO </font>'
+        else:
+            stag='<font color=red>STAGIONALE</font>'
+        if lsm[12] == 'attivazione':
+            testo='<font color="green">attivazione</font>'
+            testo2=f'<br><br>Il percorso sarà nuovamente attivo dal <strong>{lsm[7]}</strong> al <strong>{lsm[8]}</strong>.<br><br>'
+        elif lsm[12] == 'disattivazione':
+            testo='<font color="red">disattivazione</font>'
+            testo2=f'''<br><br>Il percorso sarà disattivato dal <strong>{lsm[8]}</strong>. 
+            <br>Le date configurate su SIT per attivazione disattivazione sono:
+            <ul>
+            <li>attivazione: <strong>{lsm[3][:2]}/{lsm[3][2:4]}</strong></li>
+            <li>disattivazione: <strong>{lsm[4][:2]}/{lsm[4][2:4]}</strong></li>
+            </ul>'''
+        else:
+            testo='attivazione/disattivazione'
+        mail_ut=lsm[10]
+        mail_zona=lsm[11]
+       
+        
+        
+        ##sender_email = user_mail
+        receiver_email='assterritorio@amiu.genova.it'
+        debug_email='roberto.marzocchi@amiu.genova.it'
+        oggetto='ATTENZIONE - Notifica {} percorso stagionale {} - {} dal {} '.format(lsm[12], lsm[0], lsm[1],  lsm[7], lsm[8])
+        
+        testo_mail=f'''Gentile {lsm[5]}, <br>
+        questa mail è una notifica di {testo} del il percorso {stag} <b>{lsm[0]} - {lsm[1]} </b> 
+        {testo2}
+        E' possibile visualizzare/modificare sul SIT i dettagli di tutti i <a href="{new_sit_url}/percorsi.php">percorsi</a>.<br><br>
+        In caso di problemi con le date di attivazione / disattivazione  o altro contattare i propri referenti 
+        e, per supporto informatico assistenza Territorio <href="mailto:{receiver_email}">{receiver_email}</a>'''
+        
+        
+        
+        
+    
+        # Create a multipart message and set headers
+        message = MIMEMultipart()
+        message["From"] = 'noreply@amiu.genova.it'
+        message["To"] =  mail_ut
+        message["CC"] = '{}'.format(mail_zona)
+        message["Bcc"] = '{}'.format(receiver_email)
+        #message["CCn"] = debug_email
+        message["Subject"] = oggetto
+        #message["Bcc"] = debug_email  # Recommended for mass emails
+        message.preamble = "Chiusura schede di lavoro"
+    
+    
+        body='''{0}
+        <br><br>
+        <hr>
+        <img src="cid:image1" alt="Logo" width=197>
+        <br>Questa mail è stata creata in automatico su vostra richiesta, non rispondere a questa mail ma non ignorarla.'''.format(testo_mail, )
+                            
+        # Add body to email
+        message.attach(MIMEText(body, "html"))
+    
+    
+        #aggiungo logo 
+        logoname='{}/img/logo_amiu.jpg'.format(path1)
+        immagine(message,logoname)
+        
+        
+    
+        
+        
+        text = message.as_string()
+    
+        logger.info("Richiamo la funzione per inviare mail")
+        invio=invio_messaggio(message)
+        logger.info(invio)
+        #invio_mail(mail_to, oggetto, testo, logger)
         
     # check se c_handller contiene almeno una riga 
     error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
