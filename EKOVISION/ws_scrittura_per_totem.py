@@ -38,6 +38,9 @@ sys.path.append(parentdir)
 from credenziali import *
 
 
+# Funzione per recuperare la descrizione del percorso (usata per l'invio mail in caso di creazione scheda di lavoro)
+from descrizione_percorso import *
+
 
 # per mandare file a EKOVISION
 import pysftp
@@ -190,10 +193,11 @@ mmq.id_mansione,
 nullif(trim(r.sportello),'') as sportello, 
 trim(replace(mi.targa, ' ', '')) as targa,
 me.id_ekovision as id_rt_eko,
-r.datainsert
+r.datainsert,
+concat('TOTEM Badge ', r.codice, ' - Matr. ', vpes.matricola::text, ' - ', vpes.cognome, ' ', vpes.nome) as sorgente_dati
 from servizi.registrazioni r 
 left join totem.mapping_mansioni_qualifiche mmq on mmq.id_qualifica=r.id_qualifica 
-left join v_personale_ekovision_step1 vpes on r.codice::numeric = vpes.codice_badge
+left join v_personale_ekovision_step1 vpes on r.codice::numeric = vpes.matricola::numeric
 left join totem.mezzi_infopm mi on trim(mi.sportello) = trim(lpad(r.sportello,5,'0')) 
 left join totem.mezzi_ekovision me on trim(replace(mi.targa, ' ',''))=trim(replace(me.targa, ' ','')) 
 left join personale_ekovision pe 
@@ -205,7 +209,8 @@ and errori is null'''
 
 
     query_percorsi = f''' with registrazioni_agg as ({query_registrazioni})
-    select id_percorso, data_percorso, min(datainsert) as data_insert
+    select id_percorso, data_percorso, min(datainsert) as data_insert, 
+    min(sorgente_dati) as sorgente_dati
 from registrazioni_agg 
 group by id_percorso, data_percorso
 order by 3
@@ -250,10 +255,10 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
 
     
     if test == 1 :
-        eko_url=eko_url_test
+        eko_URL=eko_url_test
         logger.debug('Uso ambiente di TEST')
     else:
-        eko_url=eko_url
+        eko_URL=eko_url
     
     #exit()
 
@@ -283,6 +288,7 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
         for percorso in percorsi:
             cod_percorso=percorso[0]
             datalav=percorso[1]
+            sorgente_dati = percorso[3]
             logger.info('Elaboro percorso {0} del {1}'.format(cod_percorso, datalav))
             # cerco id della scheda da modificare
     
@@ -295,7 +301,7 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
                 }
             
             
-            response = requests.post(eko_url, params=params, data=auth_data_eko, headers=headers)
+            response = requests.post(eko_URL, params=params, data=auth_data_eko, headers=headers)
             #response.json()
             logger.debug(response.status_code)
             try:      
@@ -324,8 +330,140 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
                     ##########################################
                     #va creata la scheda di lavoro
                     logger.info('Andrebbe creata la scheda di lavoro')
+                    
+                    
+                    # in questo caso mi connetto a SIT (PostgreSQL) per poi recuperare le mail e il turno
+                    nome_db=db
+                    logger.info('Connessione al db {}'.format(nome_db))
+                    conn = psycopg2.connect(dbname=nome_db,
+                                        port=port,
+                                        user=user,
+                                        password=pwd,
+                                        host=host)
+                    
+                    curr = conn.cursor()
+                    
+                    # cerco turno e mail
+                    
+                    query_turno_mail ='''  select pu.id_turno, t.cod_turno as descr_turno,
+                        string_agg(u.mail, ', ') 
+                        from anagrafe_percorsi.elenco_percorsi ep 
+                        left join anagrafe_percorsi.percorsi_ut pu 
+                            on pu.cod_percorso = ep.cod_percorso and pu.data_disattivazione = ep.data_fine_validita
+                        left join anagrafe_percorsi.cons_mapping_uo cmu on cmu.id_uo = pu.id_ut
+                        left join topo.ut u on u.id_ut = cmu.id_uo_sit
+                        left join elem.turni t on t.id_turno = pu.id_turno
+                        where ep.cod_percorso = %s
+                        and to_date(%s, 'YYYYMMDD') between ep.data_inizio_validita and ep.data_fine_validita 
+                        group by pu.id_turno, t.cod_turno'''
+                    
+                    try:
+                        curr.execute(query_turno_mail, (cod_percorso, datalav, ))
+                        riga1=curr.fetchone()
+                    except Exception as e:
+                        logger.error(query_percorsi)
+                        logger.error(e) 
+                    
+                    id_turno_sit = riga1[0]
+                    mails_sent = riga1[2]
+                    cod_turno_sit = riga1[1]
+                        
+                    
+                    ruid = uuid.uuid4()
+                    logger.info('ID richiesta Ekovision (ruid):{}'.format(ruid))
+
+
+
+                    giason={
+                                "crea_schede_lavoro": [
+                                {
+                                    "data_srv": datalav,
+                                    "cod_modello_srv": cod_percorso,
+                                    "cod_turno_ext": int(id_turno_sit)
+                                }
+                                ]
+                                } 
+                    params2={'obj':'crea_schede_lavoro',
+                            'act' : 'w',
+                            'ruid': ruid,
+                            'json': json.dumps(giason)
+                            }
+                    
+                    try:
+                        response2 = requests.post(eko_URL, params=params2, data=auth_data_eko, headers=headers)
+                        letture2 = response2.json()
+                        logger.info(letture2)
+                        check_creazione_scheda=0
+                        id_scheda=letture2['crea_schede_lavoro'][0]['id']
+                        check_creazione_scheda=1
+                    except Exception as e:
+                        query_insert='''INSERT INTO anagrafe_percorsi.creazione_schede_lavoro
+                                (id, cod_percorso, "data", id_scheda_ekovision, "check")
+                                VALUES(%s, %s, %s, NULL, %s);'''
+                        if test==0:
+                            try:        
+                                curr.execute(query_insert, (str(ruid),cod_percorso, datalav, check_creazione_scheda))
+                            except Exception as e1:
+                                logger.error(query_insert)
+                                logger.error(e1)        
+                        logger.error(e)
+                        logger.error(' - id: {}'.format(ruid))
+                        logger.error(' - Cod_percorso: {}'.format(cod_percorso))
+                        logger.error(' - Data: {}'.format(datalav))
+                        #logger.error('Id Scheda: {}'.format(id_scheda[k]))
+                        # check se c_handller contiene almeno una riga 
+                        error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                        logger.info("chiudo le connessioni in maniera definitiva")
+                        curr_c.close()
+                        #currc1.close()
+                        conn_c.close()
+                        exit()
+                        
+                    
+                    # Cerco la descrizione del percorso
+                        
+                            
+                    if check_creazione_scheda==1:
+                        query_insert='''INSERT INTO anagrafe_percorsi.creazione_schede_lavoro
+                                (id, cod_percorso, "data", id_scheda_ekovision, "check")
+                                VALUES(%s, %s, %s, %s, %s);'''
+                    else: 
+                        query_insert='''INSERT INTO anagrafe_percorsi.creazione_schede_lavoro
+                                (id, cod_percorso, "data", id_scheda_ekovision, "check")
+                                VALUES(%s, %s, %s, NULL, %s);'''
+                    try:
+                        if check_creazione_scheda ==1:
+                            
+                            body_mail='''E' arrivata una consuntivazione da totem per il percorso {} - {} in data {}.
+                            <br>Origine del dato:{}
+                            <br>Non esistendo la scheda per il giorno in questione è stata creata in automatico.
+                            La nuova scheda ha ID {}'''.format(cod_percorso,
+                                                                descrizione_percorso(cod_percorso,  datalav, curr, logger),
+                                                                datalav, sorgente_dati, id_scheda)           
+                            if test ==1: 
+                                body_mail = f'''<font color=red>Ambiente di TEST</font><hr> Destinatari produzione : 
+                                {mails_sent}<br>{body_mail}'''
+                                creazione_scheda_mail(body_mail, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+                            else:
+                                # insert solo in PRODUZIONE
+                                curr.execute(query_insert, (str(ruid),cod_percorso, datalav, id_scheda, check_creazione_scheda))
+                                creazione_scheda_mail(body_mail, mails_sent, os.path.basename(__file__), logger)
+                                conn.commit()
+                        else:
+                            curr.execute(query_insert, (str(ruid),cod_percorso, datalav, check_creazione_scheda))
+                            conn.commit()
+                    except Exception as e:
+                        logger.error(query_insert)
+                        logger.error(e)
+                    
+                    
+                    
+                    
+                    
+                    
+                    
                     exit()
-                    response2 = requests.post(eko_url, params=params2, data=auth_data_eko, headers=headers)
+                    response2 = requests.post(eko_URL, params=params2, data=auth_data_eko, headers=headers)
                     letture2 = response2.json()
                     logger.info(letture2)
                     try: 
@@ -338,8 +476,8 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
                     in_lavorazione= letture['schede_lavoro'][0]['flg_in_lavorazione']
                     eseguita=int(letture['schede_lavoro'][0]['flg_eseguito'])
                     chiusa= letture['schede_lavoro'][0]['flg_chiuso'] 
-                    logger.info(id_scheda)
-                    logger.info(turno)
+                    logger.info(f'id scheda: {id_scheda}')
+                    logger.info(f'Cod Turno: {turno}')
             
 
             
