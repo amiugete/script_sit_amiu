@@ -239,6 +239,7 @@ def main():
     or 
     data_dismissione  = current_date + interval '{0}' day)
     and id_categoria_uso in (3,6)
+    and  u.descrizione is not null  
     order by p.data_attivazione'''.format(12)
     
     
