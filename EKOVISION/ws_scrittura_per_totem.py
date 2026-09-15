@@ -548,6 +548,7 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
                     progr_rt.append(letture2['schede_lavoro'][0]['risorse_tecniche'][rt]['id_progressivo'])
                     if int(letture2['schede_lavoro'][0]['risorse_tecniche'][rt]['id']) == 0: 
                         tipo_inserimento_rt.append(0)
+                        
                     elif int(letture2['schede_lavoro'][0]['risorse_tecniche'][rt]['id']) > 0 \
                         and letture2['schede_lavoro'][0]['risorse_tecniche'][rt]['ora_inizio'] == '000000' \
                         and letture2['schede_lavoro'][0]['risorse_tecniche'][rt]['ora_fine'] == '000000':
@@ -572,10 +573,15 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
                     # controlllo il tipo inserimento presente
                     if int(letture2['schede_lavoro'][0]['risorse_umane'][ru]['id']) == 0: 
                         tipo_inserimento_ru.append(0)
+                        # di default se non c'è nessuna risorsa umana, metto flg_autista a 0
+                        letture2['schede_lavoro'][0]['risorse_umane'][ru]['flg_autista'] = 0
                     elif int(letture2['schede_lavoro'][0]['risorse_umane'][ru]['id']) > 0 and letture2['schede_lavoro'][0]['risorse_umane'][ru]['ora_inizio'] == '000000' and letture2['schede_lavoro'][0]['risorse_umane'][ru]['ora_fine'] == '000000':
                         tipo_inserimento_ru.append(1)
+                        # di default se non c'è nessuna risorsa umana, metto flg_autista a 0
+                        letture2['schede_lavoro'][0]['risorse_umane'][ru]['flg_autista'] = 0
                     else:
                         tipo_inserimento_ru.append(2)
+                        # in questo caso non cambio il flg_autista, perché è già stato impostato da Ekovision
                     
                     ru=ru+1
                 
@@ -637,14 +643,15 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
                             # non c'è la risorsa tecnica da inserire, devo inserirla io
                             # caso 1 solo mezzo
                             if len(letture2['schede_lavoro'][0]['risorse_tecniche'])==1:
+                                id_progressivo_tmp=letture2['schede_lavoro'][0]['risorse_tecniche'][0]['id_progressivo']
                                 logger.info('La scheda ha una sola risorsa tecnica, va modificata')
                                 # se id = 0 signigica che è una risorsa tecnica non è statadefinita  va modificata la prima risorsa tecnica
                                 insert_update_rt = 0
-                                if letture2['schede_lavoro'][0]['risorse_tecniche'][0]['id'] == 0 :
-                                    logger.error('La scheda non ha nessuna risorsa tecnica, la aggiorno'.format(id_rt_eko))
+                                if int(letture2['schede_lavoro'][0]['risorse_tecniche'][0]['id']) == 0 :
+                                    logger.warning('La scheda non ha nessuna risorsa tecnica, la aggiorno'.format(id_rt_eko))
                                     insert_update_rt = 1    
-                                elif letture2['schede_lavoro'][0]['risorse_tecniche'][0]['id'] > 0 and tipo_inserimento_rt[0] == 1:
-                                    logger.error('La scheda ha una risorsa tecnica predefinita, la aggiorno con id {0} da totem'.format(id_rt_eko))
+                                elif int(letture2['schede_lavoro'][0]['risorse_tecniche'][0]['id']) > 0 and tipo_inserimento_rt[0] == 1:
+                                    logger.warning('La scheda ha una risorsa tecnica predefinita, la aggiorno con id {0} da totem'.format(id_rt_eko))
                                     #letture2['schede_lavoro'][0]['risorse_tecniche'][0]['id']=id_rt_eko 
                                     insert_update_rt = 1     
                                 else:
@@ -658,6 +665,7 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
                                     # cambio tipo inserimento rt
                                     tipo_inserimento_rt[0] = 2   
                                     letture2['schede_lavoro'][0]['risorse_tecniche'][0]['id']=id_rt_eko
+                                    letture2['schede_lavoro'][0]['risorse_tecniche'][0]['targa']=targa
                                     letture2['schede_lavoro'][0]['risorse_tecniche'][0]['data_inizio']=letture2['schede_lavoro'][0]['servizi'][0]['data_inizio']
                                     letture2['schede_lavoro'][0]['risorse_tecniche'][0]['ora_inizio']=letture2['schede_lavoro'][0]['servizi'][0]['ora_inizio']
                                     letture2['schede_lavoro'][0]['risorse_tecniche'][0]['data_fine']=letture2['schede_lavoro'][0]['servizi'][0]['data_fine']
@@ -680,10 +688,12 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
                                     # se ho spazio o meno per inserire questo sportello
                                     if letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['id'] == 0:
                                         update_rt=1
+                                        id_progresssivo_tmp=letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['id_progressivo']
                                         
                                     elif letture2['schede_lavoro'][0]['risorse_tecniche'][0]['id'] > 0 and tipo_inserimento_rt[rt] == 1:
                                         logger.error('La scheda ha una risorsa tecnica predefinita, la aggiorno con id {0} da totem'.format(id_rt_eko))
                                         update_rt=1
+                                        id_progresssivo_tmp=letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['id_progressivo']
                                         
                                     else:    
                                         testo_mail= f'''{incipit_mail_test}
@@ -705,10 +715,10 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
                     if id_ekovision in id_ru:
                         logger.info('La scheda ha già la risorsa umana con id {0} con indice {1}'.format(id_ekovision, id_ru.index(id_ekovision)))
                         # se su Ekovision fosse definito come autista, ma su totem no tolgo il flag autista
-                        if flg_auti[id_ru.index(id_ekovision)] == 1 and sportello is None:
+                        if int(flg_auti[id_ru.index(id_ekovision)]) == 1 and sportello is None:
                             logger.info('La risorsa umana id {0} è autista su Ekovision ma va tolto'.format(id_ekovision))
                             letture2['schede_lavoro'][0]['risorse_umane'][id_ru.index(id_ekovision)]['flg_autista']=0
-                        elif flg_auti[id_ru.index(id_ekovision)] == 0 and sportello is not None:
+                        elif int(flg_auti[id_ru.index(id_ekovision)]) == 0 and sportello is not None:
                             logger.info('La risorsa umana con id {0} non è autista su Ekovision, ma lo è dalle info del totem --> correggo'.format(id_ekovision))
                             letture2['schede_lavoro'][0]['risorse_umane'][id_ru.index(id_ekovision)]['flg_autista']=1
                     
@@ -731,7 +741,8 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
                                     tipo_inserimento_ru[ru]=2
                                     check_inserimento=1
                                     logger.info('Ho trovato una risorsa umana con mansione {0} e tipo inserimento 0, quindi posso inserirla'.format(id_mansione))
-                                    letture2['schede_lavoro'][0]['risorse_umane'][ru]['id']=id_ekovision  
+                                    letture2['schede_lavoro'][0]['risorse_umane'][ru]['id']=id_ekovision 
+                                    letture2['schede_lavoro'][0]['risorse_umane'][ru]['id_progr_ristec']=id_progressivo_tmp 
                                     letture2['schede_lavoro'][0]['risorse_umane'][ru]['cognome']=cognome_ru # non funziona ma forse non serve
                                     letture2['schede_lavoro'][0]['risorse_umane'][ru]['nome']=nome_ru # non funziona ma forse non serve
                                     letture2['schede_lavoro'][0]['risorse_umane'][ru]['data_inizio']=letture2['schede_lavoro'][0]['servizi'][0]['data_inizio']
@@ -744,6 +755,8 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
                                         logger.info(''' C'è una risorsa tecnica sportello {0} da totem, 
                                                     quindi la risorsa umana con id {1} è autista --> metto flag autista'''.format(sportello, id_ekovision))
                                         letture2['schede_lavoro'][0]['risorse_umane'][ru]['flg_autista']=1
+                                    else: 
+                                        letture2['schede_lavoro'][0]['risorse_umane'][ru]['flg_autista']=0
                                     logger.debug(letture2['schede_lavoro'][0]['risorse_umane'][ru])
                                     break
                                 ru=ru+1
@@ -764,6 +777,8 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
                                         if sportello is not None:
                                             logger.info('C\'è una risorsa tecnica con id {0} da totem, quindi la risorsa umana con id {1} è autista --> metto flag autista'.format(sportello, id_ekovision))
                                             letture2['schede_lavoro'][0]['risorse_umane'][ru]['flg_autista']=1
+                                        else: 
+                                            letture2['schede_lavoro'][0]['risorse_umane'][ru]['flg_autista']=0
                                         logger.debug(letture2['schede_lavoro'][0]['risorse_umane'][ru])
                                         break
                                     ru=ru+1
@@ -776,7 +791,7 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
                                     id_scheda, incipit_mail_test)
                                 warning_message_mail(warning_msg, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger, 'Scheda di lavoro con risorsa tecnica da modificare')
 
-                
+
                 
                 #exit()
                 logger.info('Provo a salvare la scheda')
