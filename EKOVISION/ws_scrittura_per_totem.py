@@ -200,7 +200,10 @@ left join totem.mapping_mansioni_qualifiche mmq on mmq.id_qualifica=r.id_qualifi
 left join v_personale_ekovision_step1 vpes on r.codice::numeric = vpes.matricola::numeric
 left join totem.mezzi_infopm mi on trim(mi.sportello) = trim(lpad(r.sportello,5,'0')) 
 left join totem.mezzi_ekovision me on trim(replace(mi.targa, ' ',''))=trim(replace(me.targa, ' ','')) 
-left join personale_ekovision pe 
+left join (SELECT 
+	nome, cognome, dt_nascita, max(pe.id_ekovision) as id_ekovision
+	FROM totem.personale_ekovision AS pe
+	group by nome, cognome, dt_nascita) pe 
 	on trim(pe.cognome)  = trim(vpes.cognome)
 	and trim(pe.nome) = trim(vpes.nome)
 	and pe.dt_nascita = vpes.data_nascita 
