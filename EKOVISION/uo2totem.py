@@ -368,13 +368,19 @@ def main():
 	       /* Modifica 11/06/2024 per gestione stagionali prima di data di attivazione */
 		   CASE 
 	       	WHEN aps.cod_percorso IS NOT NULL 
-	       	AND (SELECT max(dta_attivazione) FROM ANAGR_SER_PER_UO aspu WHERE id_percorso = aps.cod_percorso) > sysdate
+	       	AND (SELECT max(dta_attivazione) FROM ANAGR_SER_PER_UO aspu 
+	       		WHERE id_percorso = aps.cod_percorso
+	       		AND aspu.DTA_ATTIVAZIONE < sysdate) > sysdate
 	       	THEN aspu.dta_attivazione
 	       	ELSE 
 	       	cpvt.data_prevista 
 	       END AS data_inizio, 
 	       /* cpvt.data_prevista data_inizio,*/
-	       vp.data_fine_validita data_fine
+	       CASE
+		       WHEN aps.cod_percorso IS NOT NULL
+	       	THEN aspu.dta_disattivazione
+	       	ELSE vp.data_fine_validita 
+	       END data_fine
 	from pr_validita_percorsi vp
 	inner join cons_percorsi_vie_tappe cpvt
 	on VP.ID_PERCORSO = cpvt.id_percorso
@@ -383,7 +389,10 @@ def main():
 	on CMT.ID_MACRO_TAPPA = cpvt.id_tappa
 	inner join anagr_ser_per_uo aspu
 	on aspu.id_percorso = cpvt.id_percorso
-	and vp.data_fine_validita between aspu.dta_attivazione+1 and aspu.dta_disattivazione
+	--and vp.data_fine_validita between aspu.dta_attivazione+1 and aspu.dta_disattivazione
+	AND (SELECT max(dta_attivazione) FROM ANAGR_SER_PER_UO aspu 
+	       		WHERE id_percorso = cpvt.id_percorso
+	       		AND aspu.DTA_ATTIVAZIONE < sysdate) = aspu.dta_attivazione
 	inner join anagr_servizi ase
 	on ase.id_servizio = aspu.id_servizio
 	inner join anagr_uo uo
@@ -398,7 +407,9 @@ def main():
 	LEFT JOIN ANAGR_PERCORSI_STAGIONALI aps 
 	ON aps.cod_percorso = aspu.id_percorso
 	where ase.gestito_app_spazzamento = 'S'
-	and aspu.dta_disattivazione > sysdate-365
+	and aspu.dta_disattivazione > (sysdate-365)
+	--AND aspu.DTA_ATTIVAZIONE < sysdate
+	AND aspu.id_percorso = '0207004501'
 	--and CMT.FREQUENZA not like 'S%'
 	--and aspu.id_percorso IN ('0203009701', '0201238701')
 	)
@@ -409,7 +420,6 @@ def main():
 	       PR_GET_DESC_FREQ(frequenza), 
 	       cod_frequenza_percorso, 
 	       cod_frequenza_tratto, FREQ_SETTIMANE
-	--order by id_percorso, frequenza_desc, nome_via_ordinato
  '''
  
  
