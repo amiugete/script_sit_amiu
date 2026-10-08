@@ -265,7 +265,7 @@ def main():
             and to_date(ce.data_pianif_iniziale, 'YYYYMMDD') between data_inizio_validita and (data_fine_validita - interval '1' day) 
         join anagrafe_percorsi.anagrafe_tipo at2 on at2.id = ep.id_tipo
         join etl.frequenze_ok fo on fo.cod_frequenza = ep.freq_testata 
-        where ce.data_last_update > %s
+        where ce.data_last_update >= %s
         and gestione_arera = 't'
         and at2.id_famiglia not in (2,3)
         and ce.solo_esec is NULL
@@ -528,12 +528,14 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
         and to_date(ce.data_pianif_iniziale, 'YYYYMMDD') 
         between data_inizio_validita and (data_fine_validita - interval '1' day) 
         join etl.cause_disserv cd on cd.codice = ce.causale::int
+        join anagrafe_percorsi.anagrafe_tipo t on t.id  = ep.id_tipo
         where 
         ce.codice = %s
         and ce.data_pianif_iniziale = %s
         and ep.id_turno = %s
         and ce.causale::int not in (101, 102, 999, 100, 110) 
         and cd.id_causale_arera = 3
+        and t.gestione_arera = 't'
         /*order by id_causale_arera desc limit 1*/'''       
     
     
@@ -791,6 +793,7 @@ SELECT codice_modello_servizio, ordine, objecy_type,
                     # lo calcolo una volta poi lo riuso
                     prog_dates = programming_start_ending_date(curr1, datetime.strptime(t[1], '%Y%m%d').date(), t[0], eep[6], logger)
                     
+                    
                     if eep[5] is None:
                         interruptionType = None
                         interruptionCause = None
@@ -798,7 +801,7 @@ SELECT codice_modello_servizio, ordine, objecy_type,
                         resumptionDate = None
                         executionStartDate = eep[2].astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
                         executionEndingDate = eep[3].astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
-                    elif int(eep[5]) in (100,110,102,101,999): # 100 - compleatato 110 - completato con lavaggio
+                    elif int(eep[5]) in (100,110,102,101,999) or eep[13]==0: # 100 - compleatato 110 - completato con lavaggio # eep[12]==0 significa che non è previsto svuotamento, quindi non è disservizio
                         interruptionType = None
                         interruptionCause = None
                         interruptionDate = None
