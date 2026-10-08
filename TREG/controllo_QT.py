@@ -221,7 +221,7 @@ def main():
     ###################################################################
     # variabili per controllo
     anno_controllo=2026
-    mesi_controllo = [1,2,3,4,5,6]
+    mesi_controllo = [1,2,3,4,5,6,7,8]
     ###################################################################
     
     
@@ -387,6 +387,9 @@ and rr.id_causale not in (101,102,999)
     and trac_code not in (select code_rint FROM treg_eko.anwstcol)
     '''
 
+    
+
+
     pian_r_treg_no_sit = ''' 
     SELECT distinct code_rint FROM treg_eko.anwstcol
     where code_rint not in (select distinct(trac_code)
@@ -410,6 +413,26 @@ and rr.id_causale not in (101,102,999)
     
     
     
+    # per poi correggere 
+    sit_no_treg_racc = '''with a as (
+select distinct cod_percorso, to_char(rr.data_programmata, 'YYYYMMDD') as data_pianif 
+from consunt.report_raccolta rr
+where rr.trac_code = any (%s)
+)
+select distinct a.cod_percorso, a.data_pianif, ce.id_scheda 
+from a
+left join treg_eko.consunt_ekovision ce 
+	on ce.codice_servizio_pred  = a.cod_percorso and a.data_pianif = ce.data_pianif_iniziale'''
+    
+    sit_no_treg_spazz = '''with a as (
+select distinct cod_percorso, to_char(rr.data_programmata, 'YYYYMMDD') as data_pianif 
+from consunt.report_spazz rr
+where rr.trac_code = any (%s)
+)
+select distinct a.cod_percorso, a.data_pianif, ce.id_scheda 
+from a
+left join treg_eko.consunt_ekovision ce 
+	on ce.codice_servizio_pred  = a.cod_percorso and a.data_pianif = ce.data_pianif_iniziale'''
     
     
     
@@ -450,7 +473,7 @@ from topo.comuni c  where c.gestito_sit = 'S' '''
     # da qualche parte salveremo i file excel processati in modo da non processarli più di una volta
     currt = connt.cursor()
     
-    
+    schede_correggere = []
     
     # faccio un ciclo sui mesi
     #excel_files_array =[]
@@ -658,6 +681,18 @@ from topo.comuni c  where c.gestito_sit = 'S' '''
                     messaggio=f'{messaggio} {rr[0]}'
                 conn.commit()
                 # bisogna fare elenco
+                # cerco gli id_scheda da correggere
+                try: 
+                    trac_codes = [r[0] for r in risultato]
+                    curr.execute(sit_no_treg_racc, (trac_codes,))
+                    cerco_schede_correggere=curr.fetchall()
+                    for ss in cerco_schede_correggere:
+                        schede_correggere.append(ss[2])
+                except Exception as e:
+                    check_error=1
+                    logger.error(sit_no_treg_racc)
+                    logger.error(e)
+                        
             else:
                 messaggio = f'{messaggio}\n ✔ Tutti i pianificati presenti su SIT sono anche su TREG (comune {com[2]})'
             
@@ -721,6 +756,19 @@ from topo.comuni c  where c.gestito_sit = 'S' '''
                     messaggio=f'{messaggio} {rr[0]}'
                 conn.commit()
                 # bisogna fare elenco
+                try: 
+                    trac_codes = [r[0] for r in risultato]
+                    curr.execute(sit_no_treg_spazz, (trac_codes,))
+                    cerco_schede_correggere=curr.fetchall()
+                    for ss in cerco_schede_correggere:
+                        schede_correggere.append(ss[2])
+                except Exception as e:
+                    check_error=1
+                    logger.error(risultato)
+                    logger.error(trac_codes)
+                    logger.error(sit_no_treg_spazz)
+                    logger.error(e)
+                
             else:
                 messaggio = f'{messaggio}\n ✔ Tutti i pianificati presenti su SIT sono anche su TREG (comune {com[2]})'
             
@@ -1019,6 +1067,76 @@ from topo.comuni c  where c.gestito_sit = 'S' '''
 
     
     
+    # forzo riprocessamento schede Ekovision da correggere 
+    
+    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+    
+    auth_data_eko={'user': eko_user, 'password': eko_pass, 'o2asp' :  eko_o2asp}
+    
+    for dd  in schede_correggere:
+        logger.info(f'Scheda {dd} chiusa in Ekovision ma non in DB: provo a leggere i dettagli')
+                
+                         
+        params2={'obj':'schede_lavoro',
+                'act' : 'r',
+                'id': '{}'.format(dd),
+                'flg_esponi_consunt' : 1
+                }
+        
+        response2 = requests.post(eko_url, params=params2, data=auth_data_eko, headers=headers)
+        
+        letture2 = response2.json()
+
+
+        # verifico se la scheda era prevista o meno 
+        
+        cod_percorso = letture2['schede_lavoro'][0]['servizi'][0]['cod_modello']
+        data_percorso = letture2['schede_lavoro'][0]['servizi'][0]['data_inizio']
+        non_effettuato = letture2['schede_lavoro'][0]['servizi'][0]['flg_segn_srv_non_effett']
+        id_non_effettuato = letture2['schede_lavoro'][0]['servizi'][0]['id_caus_srv_non_eseg']
+             
+        
+        # verifico che ci siano componenti o tratti
+        if len(letture2['schede_lavoro'][0]['trips']) > 0:
+            if len(letture2['schede_lavoro'][0]['trips'][0]['waypoints']) > 0:
+
+                del letture2["status"]  
+                del letture2['schede_lavoro'][0]['trips']  
+                del letture2['schede_lavoro'][0]['risorse_tecniche']
+                del letture2['schede_lavoro'][0]['risorse_umane']
+                del letture2['schede_lavoro'][0]['serv_conferimenti']
+                del letture2['schede_lavoro'][0]['filtri_rfid']        
+                
+                
+                if letture2['schede_lavoro'][0]['servizi'][0]['id_caus_srv_non_eseg'] == 15 and letture2['schede_lavoro'][0]['servizi'][0]['txt_segn_srv_non_effett'] == '':
+                    letture2['schede_lavoro'][0]['servizi'][0]['txt_segn_srv_non_effett'] = '...'
+                
+                logger.info('Provo a salvare nuovamente la scheda {}'.format(dd))
+                
+                
+                guid = uuid.uuid4()
+                params2={'obj':'schede_lavoro',
+                        'act' : 'w',
+                        'ruid': '{}'.format(str(guid)),
+                        'json': json.dumps(letture2, ensure_ascii=False).encode('utf-8')
+                        }
+                #exit()
+                response2 = requests.post(eko_url, params=params2, data=auth_data_eko, headers=headers)
+                try:
+                    result2 = response2.json()
+                    if result2['status']=='error':
+                        logger.error('Id_scheda = {}'.format(dd))
+                        logger.error(result2)
+                except Exception as e:
+                    logger.error(e)
+                    warning_message_mail('Problema nella chiamata al WS Ekovision per la scheda {}'.format(dd), 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger)
+
+            else:
+                logger.info('La scheda {} è chiusa ma non ha waypoints'.format(dd))
+        else:
+            logger.info('La scheda {} è chiusa ma non ha trips'.format(dd))
+     
+
     
     
     ################################
