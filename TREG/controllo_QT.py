@@ -289,7 +289,8 @@ order by dt_prg_ini '''
     drop_tmp_table_spazz= ''' drop table treg_eko.tmp_spazzamento'''
     
     create_tmp_table_racc='''create table treg_eko.tmp_raccolta as 
-select 
+    with diss_s0 as (
+    select 
 	    distinct
 	    c.descr_comune as comune,
 	    case 
@@ -330,11 +331,23 @@ select
 	    and rr.id_causale not in (101,102, 999)
 	    and data_programmata between to_date(%s, 'DD/MM/YYYY' )
 	    	and to_date(%s, 'DD/MM/YYYY' )
-	    and c.id_comune = %s'''
+	    and c.id_comune = %s
+     ),
+        diss_s1 as (
+            select trac_code, comune, anno, mese,  min(interruzione) as interruzione,
+            case 
+                when min(interruzione) = 0 then null
+                else max(id_causale_arera)
+            end id_causale_arera 
+            from  diss_s0 
+            group by comune, anno, mese, interruzione, trac_code
+        ) select * from diss_s1
+     '''
     
     
     
     create_tmp_table_spazz='''create table treg_eko.tmp_spazzamento as 
+    with diss_s0 as (
     select distinct 
 c.descr_comune as comune,
 case 
@@ -376,7 +389,19 @@ and at2.gestione_arera = true
 and rr.id_causale not in (101,102,999)
     and data_programmata between to_date(%s, 'DD/MM/YYYY' )
                 and to_date(%s, 'DD/MM/YYYY' )
-            and c.id_comune = %s'''
+            and c.id_comune = %s
+),diss_s1 as (
+	select trac_code, comune, anno, mese,  min(interruzione) as interruzione,
+	case 
+		when min(interruzione) = 0 then 0
+		else max(id_causale_arera)
+	end id_causale_arera,
+    lung_km as lung_km
+	from  diss_s0 
+	/*where anno = 2025 and mese = 12*/
+    group by comune, anno, mese, lung_km, trac_code
+) select * from diss_s1
+'''
     
     
     # differenze pianificati
@@ -899,7 +924,11 @@ from topo.comuni c  where c.gestito_sit = 'S' '''
 
                 # Scrittura dati
                 for record in anomalie:
-
+                    
+                    # trac_code è record[4] e faccio update automatico 
+                    curr.execute(update_lastupdate_trac_code, (record[4].split('_')[0],record[4].split('_')[1],))
+                    
+                    
                     for col_num, valore in enumerate(record):
                         #worksheet.write(row_excel, col_num, valore)
                         # prima di scrivere controllo se si tratta di una data. 

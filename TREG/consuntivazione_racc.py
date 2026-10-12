@@ -507,7 +507,7 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
     
     # verifica se ci sono altri elementi con stesso trac code
     check_del= '''select  
-            ce.id_scheda, ce.codice_servizio_pred, ce.codice, ce.causale  
+            ce.id_scheda, ce.codice_servizio_pred, ce.codice, ce.causale 
             from treg_eko.consunt_ekovision ce 
             join anagrafe_percorsi.elenco_percorsi ep 
             on ep.cod_percorso = ce.codice_servizio_pred 
@@ -521,7 +521,7 @@ min(ce.data_ora_fine ) + (ep.giorno_competenza || ' day')::interval
             
     # verifica se ci sono altri elementi con stesso trac_code e causale con disservizio
     query_check_diss= '''select  
-        ce.id_scheda, ce.codice_servizio_pred, ce.codice, ce.causale, cd.id_causale_arera
+        ce.id_scheda, ce.codice_servizio_pred, ce.codice, ce.causale, cd.id_causale_arera, ep.freq_settimane
         from treg_eko.consunt_ekovision ce 
         join anagrafe_percorsi.elenco_percorsi ep 
         on ep.cod_percorso = ce.codice_servizio_pred 
