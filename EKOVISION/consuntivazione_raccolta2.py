@@ -129,7 +129,7 @@ def main(SFTP_USER, SFTP_PWD,  datalav_debug=None, cod_percorso_debug=None):
 
     elif debug == 1:
         logger.info("Debug singolo percorso")
-        logger.info(cod_percorso_debug, datalav_debug)
+        logger.info(f'cod_percorso={cod_percorso_debug}, data={datalav_debug}')
 
     elif debug == 2:
         logger.info("Debug intervallo date")
@@ -240,7 +240,7 @@ and ve.id_causale::int <> %s'''
             
     
     # query (da lanciare su SIT) che verifica eventuali non previsti
-    query_racc_np='''select p.cod_percorso, 
+    query_racc_np='''select distinct p.cod_percorso, 
     p.id_turno, 
     eap.id_elemento, 
     fo.freq_binaria as freq_elemento, 
@@ -312,7 +312,8 @@ and ve.id_causale::int <> %s'''
             e.datainsert as data_insert, 
             t.id_tappa as tappa, 
             e.nota as note_totem /* è il campo con le note*/,
-            string_agg(mu.mail, ', ') as mail
+            string_agg(mu.mail, ', ') as mail, 
+            t.tipo_elemento
             from raccolta.cons_percorsi_raccolta_amiu t
             join raccolta.effettuati_amiu e on e.tappa::bigint =  t.id_tappa::bigint
             /* controllo la validità dei percorsi */
@@ -341,7 +342,8 @@ and ve.id_causale::int <> %s'''
             concat('TOTEM Badge ', e.codice, ' - Matr. ', vpes.matricola::text, ' - ', vpes.cognome, ' ', vpes.nome) , 
             e.datainsert , 
             t.id_tappa, 
-            e.nota
+            e.nota,
+            t.tipo_elemento
             order by 1'''
     elif debug ==1: 
         query_effettuati_totem='''select distinct 
@@ -358,7 +360,8 @@ and ve.id_causale::int <> %s'''
             e.datainsert as data_insert, 
             t.id_tappa as tappa, 
             e.nota as note_totem /* è il campo con le note*/,
-            string_agg(mu.mail, ', ') as mail
+            string_agg(mu.mail, ', ') as mail,
+            t.tipo_elemento
             from raccolta.cons_percorsi_raccolta_amiu t
             join raccolta.effettuati_amiu e on e.tappa::bigint =  t.id_tappa::bigint
             /* controllo la validità dei percorsi */
@@ -388,7 +391,8 @@ and ve.id_causale::int <> %s'''
             concat('TOTEM Badge ', e.codice, ' - Matr. ', vpes.matricola::text, ' - ', vpes.cognome, ' ', vpes.nome) , 
             e.datainsert , 
             t.id_tappa, 
-            e.nota
+            e.nota, 
+            t.tipo_elemento
             order by 1'''
     elif debug ==2: 
             query_effettuati_totem='''
@@ -406,7 +410,8 @@ and ve.id_causale::int <> %s'''
             e.datainsert as data_insert, 
             t.id_tappa as tappa, 
             e.nota as note_totem /* è il campo con le note*/,
-            string_agg(mu.mail, ', ') as mail
+            string_agg(mu.mail, ', ') as mail, 
+            t.tipo_elemento
             from raccolta.cons_percorsi_raccolta_amiu t
             join raccolta.effettuati_amiu e on e.tappa::bigint =  t.id_tappa::bigint
             /* controllo la validità dei percorsi */
@@ -434,7 +439,8 @@ and ve.id_causale::int <> %s'''
             concat('TOTEM Badge ', e.codice, ' - Matr. ', vpes.matricola::text, ' - ', vpes.cognome, ' ', vpes.nome) , 
             e.datainsert , 
             t.id_tappa, 
-            e.nota
+            e.nota, 
+            t.tipo_elemento
             order by e.datainsert
             '''
             
@@ -570,7 +576,7 @@ and ve.id_causale::int <> %s'''
             
             
             # per quella id_percorso / via / nota / data cerco le correspondenti aste su SIT
-            query_elementi='''select  eap1.id_elemento, ee.id_piazzola, 
+            query_elementi='''select distinct eap1.id_elemento, ee.id_piazzola, 
             eap1.ripasso, eap1.data_inserimento, eap1.data_eliminazione, 
                 concat(eap1.id_asta_percorso, '_', ee.id_piazzola) as id_asta_percorso,
                 eap1.id_elemento_asta_percorso 
@@ -601,17 +607,18 @@ and ve.id_causale::int <> %s'''
                                     where /*tipo= 'servizio' and*/ id_percorso =%s) 
                                 ) eap1
                                 join 
-                                (select id_elemento, id_piazzola  from elem.elementi e 
+                                (select id_elemento, id_piazzola, e.tipo_elemento from elem.elementi e 
                                 union 
-                                select id_elemento, id_piazzola  from history.elementi e
+                                select id_elemento, id_piazzola, e.tipo_elemento  from history.elementi e
                                 ) ee on ee.id_elemento = eap1.id_elemento     
-                                where id_piazzola= %s 
+                                where ee.id_piazzola= %s and ee.tipo_elemento = %s
                                 and coalesce(data_eliminazione, '2099-12-31')::date >= %s 
                                 and data_inserimento::date < %s
                                 '''
             
             try:
-                curr.execute(query_elementi, (id_percorso_sit, id_percorso_sit,id_percorso_sit,id_percorso_sit,vv[3], vv[2], vv[2]))
+                curr.execute(query_elementi, (id_percorso_sit, id_percorso_sit,id_percorso_sit,id_percorso_sit,
+                                              vv[3], vv[14], vv[2], vv[2]))
                 lista_elementi=curr.fetchall()
             except Exception as e:
                 logger.error('NON TROVO GLI ELEMENTI  SUL SIT')
@@ -620,6 +627,7 @@ and ve.id_causale::int <> %s'''
                 logger.error('Data rif = {}'.format(vv[2]))
                 logger.error('Id percorso SIT = {}'.format(id_percorso_sit))
                 logger.error('id_piazzola = {}'.format(vv[3]))
+                logger.error('tipo_elemento = {}'.format(vv[14]))
                 logger.error(e)
                 error_log_mail(errorfile, 'assterritorio@amiu.genova.it, pianar@amiu.genova.it', os.path.basename(__file__), logger)
                 exit()
@@ -1209,7 +1217,7 @@ and ve.id_causale::int <> %s'''
 # debug = 1 processo 1 percorso e lo mando via mai
 # debug = 2  
 
-debug=2
+debug=1
 
 SFTP_USER = user_ev_sftp_test
 SFTP_PWD = pwd_ev_sftp_test
@@ -1227,8 +1235,8 @@ if __name__ == "__main__":
         main(
             SFTP_USER,
             SFTP_PWD,
-            cod_percorso_debug='0507129803',
-            datalav_debug='20260930'
+            cod_percorso_debug='0101004101',
+            datalav_debug='20260101'
         )
         error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
 
