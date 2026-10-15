@@ -5,8 +5,7 @@
 # Roberto Marzocchi
 
 '''
-Lo script si occupa della consuntivazione spazzamento:
-
+Lo script si occupa della consuntivazione raccolta
 
 
 '''

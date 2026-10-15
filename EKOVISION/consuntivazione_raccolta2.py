@@ -110,10 +110,34 @@ import csv
 
 from descrizione_percorso import *  
 
-    
+
+
      
 
-def main():
+
+
+def main(SFTP_USER, SFTP_PWD,  datalav_debug=None, cod_percorso_debug=None):
+
+    # controllo se logfile esiste 
+    if os.path.exists(errorfile):
+        logger.debug(f'{errorfile} esiste')
+    else:
+        logger.warning(f'{errorfile} NON esiste')
+
+    if debug == 0:
+        logger.info("Modalità normale")
+
+    elif debug == 1:
+        logger.info("Debug singolo percorso")
+        logger.info(cod_percorso_debug, datalav_debug)
+
+    elif debug == 2:
+        logger.info("Debug intervallo date")
+        logger.info(datalav_debug)
+
+    # resto del codice
+    
+    
     
     logger.info('Il PID corrente è {0}'.format(os.getpid()))
   
@@ -138,6 +162,7 @@ def main():
     mail_arr=[]
     id_asta_percorso = []
     id_elemento_asta_percorso = []
+    chiave_cons=[]
     
     
     # Get today's date
@@ -197,11 +222,7 @@ def main():
     curr1 = conn.cursor()
     currc = connc.cursor()
     
-    #***************************************************
-    debug=1
-    cod_percorso_debug = '0500114601'
-    datalav_debug = '20260924'         
-    #***************************************************
+
             
             
             
@@ -217,79 +238,62 @@ and ve.datalav between cpra.data_inizio and cpra.data_fine
 where ve.idpercorso =%s  and ve.datalav = to_date(%s, 'YYYYMMDD') 
 and ve.id_causale::int <> %s'''        
             
+    
+    # query (da lanciare su SIT) che verifica eventuali non previsti
+    query_racc_np='''select p.cod_percorso, 
+    p.id_turno, 
+    eap.id_elemento, 
+    fo.freq_binaria as freq_elemento, 
+    fo2.freq_binaria  as freq_percorso, 
+    fo3.freq_binaria  as differenza,
+    eap.ripasso, 
+    greatest(ap.data_inserimento, eap.data_inserimento)::date+1 as data_inserimento,
+    coalesce(eap.data_eliminazione, dpsu.data_fine_validita)::date+1 as data_eliminazione,
+    dpsu.data_inizio_validita::date, 
+    dpsu.data_fine_validita::date,
+    concat(ap.id_asta_percorso,'_',ee.id_piazzola) as id_asta_percorso,
+    eap.id_elemento_asta_percorso 
+    from (select id_asta_percorso, id_percorso,data_inserimento, frequenza from elem.aste_percorso ap 
+    union 
+    select id_asta_percorso, id_percorso,data_inserimento, frequenza  from history.aste_percorso ap)
+    ap 
+    join elem.percorsi p on p.id_percorso = ap.id_percorso 
+    join anagrafe_percorsi.date_percorsi_sit_uo dpsu on p.id_percorso = dpsu.id_percorso_sit 
+    join (select id_asta_percorso, 
+    id_elemento, frequenza, ripasso, data_inserimento, null as data_eliminazione,
+    id_elemento_asta_percorso
+    from elem.elementi_aste_percorso  
+    union 
+    select id_asta_percorso, 
+    id_elemento, frequenza, ripasso, data_inserimento, data_eliminazione,
+    id_elemento_asta_percorso
+    from history.elementi_aste_percorso ) eap on ap.id_asta_percorso = eap.id_asta_percorso 
+    join 
+	(select id_elemento, id_piazzola  from elem.elementi e 
+	union 
+	select id_elemento, id_piazzola  from history.elementi e
+	) ee on ee.id_elemento = eap.id_elemento
+    join etl.frequenze_ok fo on fo.cod_frequenza = eap.frequenza::int
+    join etl.frequenze_ok fo2 on fo2.cod_frequenza = p.frequenza
+    join elem.servizi s on s.id_servizio = p.id_servizio 
+    join anagrafe_percorsi.elenco_percorsi ep on ep.cod_percorso = p.cod_percorso 
+    	and to_date(%s, 'YYYYMMDD') >= ep.data_inizio_validita 
+    	and to_date(%s, 'YYYYMMDD') < ep.data_fine_ekovision 
+    left join etl.frequenze_ok fo3 on fo3.cod_frequenza = (p.frequenza-eap.frequenza::int)
+    where p.cod_percorso = %s
+    and to_date(%s, 'YYYYMMDD') /*between dpsu.data_inizio_validita and dpsu.data_fine_validita*/
+    between greatest(ap.data_inserimento, eap.data_inserimento)::date+1 
+    and coalesce(eap.data_eliminazione, dpsu.data_fine_validita)::date+1
+    and treg_eko.verify_daily_frequency(eap.frequenza::int, to_date(%s, 'YYYYMMDD'), ep.freq_settimane )=0
+    /*and ap.frequenza is not null*/
+    /*and eap.frequenza::int <> p.frequenza*/ 
+    and s.riempimento > 0 '''
+    
+    
+    
             
     # ciclo su elenco vie / note consuntivate
     
-    # questa sarebbe la query corretta ma Tocchi capisce poco quindi ne scriviamo un'altra che corregga i suoi casini
-    query_effettuati_totem='''select distinct 
-	e.id, 
-	e.id_percorso,
-	coalesce(ecd.datalav_ok, e.datalav)::date as datalav,
-	t.id_piazzola, 
-	t.num_elementi, 
-    t.cronologia,
-	e.fatto,
-	/*trim(replace(e.causale, ' - (no in questa giornata)', '')) as descr_causale,
-	ct.id as causale,*/
-    case 
-		when (e.fatto=e.num_elementi and trim(replace(e.causale, ' - (no in questa giornata)', '')) = '') then 'COMPLETATO'
-		else trim(replace(e.causale, ' - (no in questa giornata)', '')) 
-	end as descr_causale
-	,
-	case 
-		when (e.fatto=e.num_elementi and trim(replace(e.causale, ' - (no in questa giornata)', '')) = '') then '100'
-		else ct.id 
-	end as causale,
-	concat('TOTEM Badge ', e.codice, ' - Matr. ', vpes.matricola::text, ' - ', vpes.cognome, ' ', vpes.nome) as sorgente_dati, 
-	e.inser as data_insert, 
-    e.id_tappa as tappa, 
-    e.nota_via as note_totem /* è il campo con le note*/,
-    mu.mail
-	from raccolta.cons_percorsi_raccolta_amiu t
-	join raccolta.effettuati_amiu e on e.id_tappa::bigint =  t.id_tappa::bigint
- 	left join raccolta.effettuati_correzione_date ecd on e.id_percorso=ecd.id_percorso and e.datalav= ecd.datalav_errata 
-  	left join totem.v_personale_ekovision_step1 vpes on vpes.codice_badge::text = e.codice 
-	left join raccolta.causali_testi ct on trim(replace(e.causale, ' - (no in questa giornata)', '')) ilike trim(ct.descrizione)
-    left join servizi.mail_ut mu on mu.id_uo::int  = t.id_uo::int
-	where 
-	(trim(replace(e.causale, ' - (no in questa giornata)', '')) != '' or e.fatto >0) 
-	and datalav >= '2024-01-29'
-    and codice not in ('1111', '2222', '3333', '4444', '8888', '9998', '9999')
-    and e.id > (select coalesce(max(max_id),0) from raccolta.invio_consuntivazioni_ekovision ice)
-	order by 1'''
-    
-    # query che corregge le cavolate di Tocchi.. non guardo la colonna fatto ma solo la causale
-    query_effettuati_totem='''select distinct 
-	e.id, 
-	e.id_percorso,
-	coalesce(ecd.datalav_ok, e.datalav)::date as datalav,
-	t.id_piazzola, 
-	t.num_elementi, 
-    t.cronologia,
-    /*e.fatto,*/
-	case  
-		when trim(replace(e.causale, ' - (no in questa giornata)', '')) = '' then 0
-		else e.fatto 
-	end fatto, 
-	trim(replace(e.causale, ' - (no in questa giornata)', '')) as descr_causale,
-	ct.id as causale,
-	concat('TOTEM Badge ', e.codice, ' - Matr. ', vpes.matricola::text, ' - ', vpes.cognome, ' ', vpes.nome) as sorgente_dati, 
-	e.inser as data_insert, 
-    e.id_tappa as tappa, 
-    e.nota_via as note_totem /* è il campo con le note*/,
-    mu.mail
-	from raccolta.cons_percorsi_raccolta_amiu t
-	join raccolta.effettuati_amiu e on e.id_tappa::bigint =  t.id_tappa::bigint
- 	left join raccolta.effettuati_correzione_date ecd on e.id_percorso=ecd.id_percorso and e.datalav= ecd.datalav_errata 
-  	left join totem.v_personale_ekovision_step1 vpes on vpes.codice_badge::text = e.codice 
-	left join raccolta.causali_testi ct on trim(replace(e.causale, ' - (no in questa giornata)', '')) ilike trim(ct.descrizione)
-    left join servizi.mail_ut mu on mu.id_uo::int  = t.id_uo::int
-	where 
-	(trim(replace(e.causale, ' - (no in questa giornata)', '')) != '' /*or e.fatto >0*/) 
-	and datalav >= '2024-01-29'
-    and codice not in ('1111', '2222', '3333', '4444', '8888', '9998', '9999')
-    and e.id > (select coalesce(max(max_id),0) from raccolta.invio_consuntivazioni_ekovision ice)
-	order by 1'''
  
     
     # query che parte dal DB totem a partire da 27/11/2025
@@ -386,6 +390,54 @@ and ve.id_causale::int <> %s'''
             t.id_tappa, 
             e.nota
             order by 1'''
+    elif debug ==2: 
+            query_effettuati_totem='''
+            select distinct 
+            e.id, 
+            t.id_percorso,
+            e.datalav::date as datalav,
+            t.id_piazzola, 
+            t.num_elementi, 
+            t.cronologia,
+            e.fatto,
+            string_agg(vc.descrizione, ', ') as descr_causale,
+            e.id_causale as causale,
+            concat('TOTEM Badge ', e.codice, ' - Matr. ', vpes.matricola::text, ' - ', vpes.cognome, ' ', vpes.nome) as sorgente_dati, 
+            e.datainsert as data_insert, 
+            t.id_tappa as tappa, 
+            e.nota as note_totem /* è il campo con le note*/,
+            string_agg(mu.mail, ', ') as mail
+            from raccolta.cons_percorsi_raccolta_amiu t
+            join raccolta.effettuati_amiu e on e.tappa::bigint =  t.id_tappa::bigint
+            /* controllo la validità dei percorsi */
+            join servizi.servizi_per_ekovision spe 
+                on spe.id_percorso = t.id_percorso and e.datalav between spe.data_inizio_validita and spe.data_fine_validita
+            join totem.v_causali vc on vc.id = e.id_causale 
+            --left join raccolta.effettuati_correzione_date ecd on e.id_percorso=ecd.id_percorso and e.datalav= ecd.datalav_errata 
+            left join totem.v_personale_ekovision_step1 vpes on vpes.codice_badge::text = e.codice 
+            --left join raccolta.causali_testi ct on trim(replace(e.causale, ' - (no in questa giornata)', '')) ilike trim(ct.descrizione)
+            left join servizi.mail_ut mu on mu.id_uo::int  = t.id_uo::int
+            where 
+            /*(trim(replace(e.causale, ' - (no in questa giornata)', '')) != '' /*or e.fatto >0*/) 
+            and*/ datalav = to_date(%s, 'YYYYMMDD')
+            and codice not in ('1111', '2222', '3333', '4444', '8888', '9998', '9999')
+            group by 
+            e.id, 
+            t.id_percorso,
+            e.datalav::date ,
+            t.id_piazzola, 
+            t.num_elementi, 
+            t.cronologia,
+            e.fatto,
+            --vc.descrizione as descr_causale,
+            e.id_causale ,
+            concat('TOTEM Badge ', e.codice, ' - Matr. ', vpes.matricola::text, ' - ', vpes.cognome, ' ', vpes.nome) , 
+            e.datainsert , 
+            t.id_tappa, 
+            e.nota
+            order by e.datainsert
+            '''
+            
     else: 
         logger.error('Il valore della variabile debug non è riconosciuto')
     
@@ -400,9 +452,10 @@ and ve.id_causale::int <> %s'''
     try:
         if debug ==0:
             currc.execute(query_check)
-        else:
+        elif debug ==1:
             currc.execute(query_check, (datalav_debug, cod_percorso_debug,))
-        
+        elif debug ==2:
+            currc.execute(query_check, (datalav_debug,))
         lista_causali=currc.fetchall()
     except Exception as e:
         logger.error(query_check)
@@ -423,8 +476,10 @@ and ve.id_causale::int <> %s'''
     try:
         if debug ==0:
             currc.execute(query_effettuati_totem)
-        else:
+        elif debug ==1:
             currc.execute(query_effettuati_totem, (datalav_debug, cod_percorso_debug,))
+        elif debug ==2:
+            currc.execute(query_effettuati_totem, (datalav_debug,))
         lista_x_piazzola=currc.fetchall()
     except Exception as e:
         logger.error(query_effettuati_totem)
@@ -635,7 +690,10 @@ and ve.id_causale::int <> %s'''
                     qual.append(None) 
                     mail_arr.append(vv[13]) 
                     id_asta_percorso.append(aa[5])
-                    id_elemento_asta_percorso.append(aa[6])                               
+                    id_elemento_asta_percorso.append(aa[6])
+                    chiave_cons.append('{}_{}'.format(vv[2].strftime("%Y%m%d"), aa[6]))                               
+            
+                 
 
         elif len(lista_percorsi_non_eko)>0: 
             for f in lista_percorsi_non_eko:
@@ -645,8 +703,13 @@ and ve.id_causale::int <> %s'''
             logger.info('Invio messaggio di Warning anche via mail')
             warning_message_mail(messaggio_w1, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger, 'WARNING consuntivazione totem')
 
+
         # mi salvo sempre il max_id    
         max_id=vv[0]
+
+        
+
+        
         
     
     
@@ -684,9 +747,54 @@ and ve.id_causale::int <> %s'''
         k+=1
         
     
-    logger.info('Controllo se le schede di lavoro esistono')
+    logger.info('Gestisco i non previsti e controllo se le schede di lavoro esistono')
     k=0
     while k< len(cod_percorsi_distinct):
+        
+        
+        # a questo punto cerco i non previsti e li aggiungo
+        day_p=datetime.strptime(date_distinct[k], '%Y%m%d').date()           
+        try:
+            curr.execute(query_racc_np, (date_distinct[k],
+                                        date_distinct[k],
+                                        cod_percorsi_distinct[k],
+                                        date_distinct[k],
+                                        date_distinct[k],))
+            lista_elementi_np=curr.fetchall() # questi sono solo elemeni non previsti
+        except Exception as e:
+            check_error=1
+            logger.error(e)
+
+        
+
+        for lenp in lista_elementi_np:
+            if (
+                lenp[7] <= day_p # data attivazione
+                and (lenp[8] is None or lenp[8] > day_p)# data dismissione
+                and '{}_{}'.format(day_p.strftime("%Y%m%d"),lenp[12]) 
+                not in chiave_cons # tappa non consuntivata
+            ):
+                cod_percorso.append(lenp[0])
+                data_percorso.append(day_p.strftime("%Y%m%d"))
+                id_turno.append(lenp[1])
+                id_componente.append(lenp[2])
+                id_tratto.append(None)
+                flag_esecuzione.append(2)
+                causale.append(999)
+                nota_causale.append('Come da progettazione su SIT')
+                sorgente_dati.append('Come da progettazione su SIT')
+                data_ora.append(day_p.strftime("%Y%m%d%H%M"))
+                lat.append(None)
+                long.append(None)
+                ripasso.append(lenp[6]) 
+                qual.append(None) 
+                mail_arr.append(None)
+                id_asta_percorso.append(lenp[11])
+                id_elemento_asta_percorso.append(lenp[12]) 
+                chiave_cons.append('{}_{}'.format(day_p.strftime("%Y%m%d"),lenp[12])) 
+        
+        
+        
         # qua provo il WS
         params={'obj':'schede_lavoro',
             'act' : 'r',
@@ -712,11 +820,11 @@ and ve.id_causale::int <> %s'''
             logger.error(f'Other error occurred: {err}')
             logger.error(response.json())
             check=1
-        if check<1:
+        if check<1 : 
             letture = response.json()
             #logger.info(letture)
             logger.debug(len(letture['schede_lavoro']))
-            if len(letture['schede_lavoro']) == 0:
+            if len(letture['schede_lavoro']) == 0 and debug < 2: # se debug = 2 non creo nessuna sched
                 #va creata la scheda di lavoro
                 logger.info('Va creata la scheda di lavoro')
                 """
@@ -821,9 +929,11 @@ and ve.id_causale::int <> %s'''
                 except Exception as e:
                     logger.error(query_insert)
                     logger.error(e)
-                    
+            elif  len(letture['schede_lavoro']) == 0 and debug == 2: 
+                logger.error(f'''Non c'è scheda per il percorso {cod_percorsi_distinct[k]}
+                                         con data {date_distinct[k]}. Da verificare come mai.''')          
             # in questo caso le schede esistono     
-            elif len(letture['schede_lavoro']) > 0 : 
+            elif len(letture['schede_lavoro']) > 0 and debug < 2: # se debug == 2 controllo inutile 
                 
                 
                 ss=0
@@ -901,8 +1011,7 @@ and ve.id_causale::int <> %s'''
 
                     # VADO ALLA SCHEDA SEGUENTE (stesso codice percorso)
                     ss+=1
-                    
-                    
+
                     
                     
                         
@@ -1030,8 +1139,8 @@ and ve.id_causale::int <> %s'''
         try: 
             cnopts = pysftp.CnOpts()
             cnopts.hostkeys = None
-            srv = pysftp.Connection(host=url_ev_sftp, username=user_ev_sftp,
-        password=pwd_ev_sftp, port= port_ev_sftp,  cnopts=cnopts,
+            srv = pysftp.Connection(host=url_ev_sftp, username=SFTP_USER,
+        password=SFTP_PWD, port= port_ev_sftp,  cnopts=cnopts,
         log="/tmp/pysftp.log")
 
             with srv.cd('sch_lav_cons/in/'): #chdir to public
@@ -1083,7 +1192,7 @@ and ve.id_causale::int <> %s'''
            
 
     # check se c_handller contiene almeno una riga 
-    error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+    #error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
     logger.info("chiudo le connessioni in maniera definitiva")
     
     currc.close()
@@ -1094,7 +1203,52 @@ and ve.id_causale::int <> %s'''
     conn.close()
 
 
+#***************************************************
 
+# debug = 0 comportamento standard 
+# debug = 1 processo 1 percorso e lo mando via mai
+# debug = 2  
+
+debug=2
+
+SFTP_USER = user_ev_sftp_test
+SFTP_PWD = pwd_ev_sftp_test
+       
+#***************************************************    
 
 if __name__ == "__main__":
-    main()      
+
+    if debug == 0:
+        main(SFTP_USER,
+             SFTP_PWD)
+        error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+
+    elif debug == 1:
+        main(
+            SFTP_USER,
+            SFTP_PWD,
+            cod_percorso_debug='0507129803',
+            datalav_debug='20260930'
+        )
+        error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)
+
+    elif debug == 2:
+
+        data_start = datetime.strptime("20260331", "%Y%m%d").date()
+        data_end = datetime.strptime("20260901", "%Y%m%d").date()
+
+        data = data_start
+        logger.info(f'SFTP = {SFTP_USER}')
+
+        while data <= data_end:
+            logger.info(f'data = {data}')
+            
+            main(
+                SFTP_USER,
+                SFTP_PWD,
+                datalav_debug=data.strftime("%Y%m%d")
+            )
+
+            data += timedelta(days=1)  
+        # alla fine di tutto
+        error_log_mail(errorfile, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger)

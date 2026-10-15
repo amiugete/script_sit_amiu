@@ -52,48 +52,7 @@ import pysftp
 import logging
 import uuid
 
-path=os.path.dirname(sys.argv[0]) 
-nome=os.path.basename(__file__).replace('.py','')
-#tmpfolder=tempfile.gettempdir() # get the current temporary directory
-logfile='{0}/log/{1}.log'.format(path,nome)
-errorfile='{0}/log/error_{1}.log'.format(path,nome)
-#if os.path.exists(logfile):
-#    os.remove(logfile)
 
-
-
-
-
-
-
-# Create a custom logger
-logging.basicConfig(
-    level=logging.DEBUG,
-    handlers=[
-    ]
-)
-
-logger = logging.getLogger()
-
-# Create handlers
-c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-#f_handler = logging.StreamHandler()
-f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
-
-
-c_handler.setLevel(logging.ERROR)
-f_handler.setLevel(logging.INFO)
-
-
-# Add handlers to the logger
-logger.addHandler(c_handler)
-logger.addHandler(f_handler)
-
-
-cc_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
-
-c_handler.setFormatter(cc_format)
-f_handler.setFormatter(cc_format)
 
 
 # libreria per invio mail
@@ -123,11 +82,55 @@ import consuntivazione_spazzamento_dati_persi
 
 def main():
     
+    
+    path=os.path.dirname(sys.argv[0]) 
+    nome=os.path.basename(__file__).replace('.py','')
+    #tmpfolder=tempfile.gettempdir() # get the current temporary directory
+    logfile='{0}/log/{1}.log'.format(path,nome)
+    errorfile='{0}/log/error_{1}.log'.format(path,nome)
+    #if os.path.exists(logfile):
+    #    os.remove(logfile)
+
+
+
+
+
+
+
+    # Create a custom logger
+    logging.basicConfig(
+        level=logging.DEBUG,
+        handlers=[
+        ]
+    )
+
+    logger = logging.getLogger()
+
+    # Create handlers
+    c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
+    #f_handler = logging.StreamHandler()
+    f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+
+
+    c_handler.setLevel(logging.ERROR)
+    f_handler.setLevel(logging.INFO)
+
+
+    # Add handlers to the logger
+    logger.addHandler(c_handler)
+    logger.addHandler(f_handler)
+
+
+    cc_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
+
+    c_handler.setFormatter(cc_format)
+    f_handler.setFormatter(cc_format)
+    
     logger.info('Il PID corrente è {0}'.format(os.getpid()))
     
     # pulisco cartella dati persi
     
-    subfolder_amiu='dati_persi'
+    
     
     
     # se non esiste la cartella la creo
@@ -137,9 +140,17 @@ def main():
     #exit()
     
     
-    subfolder_ekovision=''
-    cartella_dati_persi = f'{path}/consuntivazioni/{subfolder_amiu}/'
+    #############################################################################################
+    subfolder_amiu='dati_persi' #la cartella dove salvo i dati sul server dove gira lo script
+    subfolder_ekovision='' #la cartella dove invio i dati via SFTP
+    #per debug posso mettere 0 come invio_sftp e a quel punto non invierei i dati a SFTP EKOVISION
+    invio_sftp= 1
+    ##############################################################################################    
     
+    
+    cartella_dati_persi = f'{path}/consuntivazioni/{subfolder_amiu}/' # cartella del server 
+    
+        
     if subfolder_ekovision=='':
         cartella_eko='sch_lav_cons/in'
     else:
@@ -170,6 +181,8 @@ def main():
     
     
     
+    
+    
     lista_percorsi=[
         (854145,'0101361401', '20260315', 'RACC'),
         (841993,'0201015403', '20260301', 'SPAZZ'),
@@ -194,8 +207,7 @@ def main():
             consuntivazione_raccolta_dati_persi.main(id_scheda, cod_percorso, data_cons, subfolder_amiu)    
         
     
-    #per debug senza invio a sftp
-    invio_sftp= 0
+    
     if invio_sftp > 0:
         logger.info('Invio file con la consuntivazione raccolta via SFTP')
             

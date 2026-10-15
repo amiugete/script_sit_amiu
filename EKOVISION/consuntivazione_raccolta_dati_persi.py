@@ -52,48 +52,6 @@ import pysftp
 import logging
 import uuid
 
-path=os.path.dirname(sys.argv[0]) 
-nome=os.path.basename(__file__).replace('.py','')
-#tmpfolder=tempfile.gettempdir() # get the current temporary directory
-logfile='{0}/log/{1}.log'.format(path,nome)
-errorfile='{0}/log/error_{1}.log'.format(path,nome)
-#if os.path.exists(logfile):
-#    os.remove(logfile)
-
-
-
-
-
-
-
-# Create a custom logger
-logging.basicConfig(
-    level=logging.DEBUG,
-    handlers=[
-    ]
-)
-
-logger = logging.getLogger()
-
-# Create handlers
-c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
-#f_handler = logging.StreamHandler()
-f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
-
-
-c_handler.setLevel(logging.ERROR)
-f_handler.setLevel(logging.INFO)
-
-
-# Add handlers to the logger
-logger.addHandler(c_handler)
-logger.addHandler(f_handler)
-
-
-cc_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
-
-c_handler.setFormatter(cc_format)
-f_handler.setFormatter(cc_format)
 
 
 # libreria per invio mail
@@ -121,6 +79,50 @@ from tappa_prevista import tappa_prevista
      
 
 def main(id_scheda_input, codice_percorso_input, data_percorso_input, folder_output):
+    
+    path=os.path.dirname(sys.argv[0]) 
+    nome=os.path.basename(__file__).replace('.py','')
+    #tmpfolder=tempfile.gettempdir() # get the current temporary directory
+    logfile='{0}/log/{1}.log'.format(path,nome)
+    errorfile='{0}/log/error_{1}.log'.format(path,nome)
+    #if os.path.exists(logfile):
+    #    os.remove(logfile)
+
+
+
+
+
+
+
+    # Create a custom logger
+    logging.basicConfig(
+        level=logging.DEBUG,
+        handlers=[
+        ]
+    )
+
+    logger = logging.getLogger()
+
+    # Create handlers
+    c_handler = logging.FileHandler(filename=errorfile, encoding='utf-8', mode='w')
+    #f_handler = logging.StreamHandler()
+    f_handler = logging.FileHandler(filename=logfile, encoding='utf-8', mode='w')
+
+
+    c_handler.setLevel(logging.ERROR)
+    f_handler.setLevel(logging.INFO)
+
+
+    # Add handlers to the logger
+    logger.addHandler(c_handler)
+    logger.addHandler(f_handler)
+
+
+    cc_format = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
+
+    c_handler.setFormatter(cc_format)
+    f_handler.setFormatter(cc_format)
+
     
     logger.info('Il PID corrente è {0}'.format(os.getpid()))
   
