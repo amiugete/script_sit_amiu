@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# AMIU copyleft 2023
-# Roberto Marzocchi
+# AMIU copyleft 2026
+# Roberto Marzocchi, Roberta Fagandini
 
 '''
 Lo script si occupa della consuntivazione raccolta
@@ -10,42 +10,43 @@ Lo script si occupa della consuntivazione raccolta
 
 '''
 
+import json
 #from msilib import type_short
-import os, sys, re  # ,shutil,glob
+import os  # ,shutil,glob
+import re
+import sys
+from datetime import date, datetime, timedelta
+
+import cx_Oracle
+import psycopg2
+import requests
+import xlsxwriter
+from requests.exceptions import HTTPError
 
 #import getopt  # per gestire gli input
 
 #import pymssql
 
-from datetime import date, datetime, timedelta
-
-import requests
-from requests.exceptions import HTTPError
-
-import json
 
 
-import xlsxwriter
 
-import psycopg2
 
-import cx_Oracle
+
+
 
 currentdir = os.path.dirname(os.path.realpath(__file__))
 parentdir = os.path.dirname(currentdir)
 sys.path.append(parentdir)
-from credenziali import *
-
-
+import logging
+import uuid
 
 # per mandare file a EKOVISION
 import pysftp
 
+from credenziali import *
 
 #import requests
 
-import logging
-import uuid
 
 path=os.path.dirname(sys.argv[0]) 
 nome=os.path.basename(__file__).replace('.py','')
@@ -91,27 +92,25 @@ c_handler.setFormatter(cc_format)
 f_handler.setFormatter(cc_format)
 
 
+# libreria per scrivere file csv
+import csv
 # libreria per invio mail
-import email, smtplib, ssl
+import email
 import mimetypes
-from email.mime.multipart import MIMEMultipart
+import smtplib
+import ssl
 from email import encoders
 from email.message import Message
 from email.mime.audio import MIMEAudio
 from email.mime.base import MIMEBase
 from email.mime.image import MIMEImage
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+
+from descrizione_percorso import *
+
 from invio_messaggio import *
 
-# libreria per scrivere file csv
-import csv
-
-
-
-from descrizione_percorso import *  
-
-    
-     
 
 def main():
     
@@ -792,12 +791,16 @@ and ve.id_causale::int <> %s'''
                         try:
                             curr2.execute(query_causale, (int(id_causale_eko),))
                             row_result=curr2.fetchone()
-                            id_amiu= row_result[0]
-                            descrizione_causale=row_result[1]
+                            if row_result is not None:
+                                id_amiu = row_result[0]
+                                descrizione_causale = row_result[1]
+                            else: 
+                                descrizione_causale='CAUSALE EKOVISION NON TROVATA CONTROLLARE LE TABELLE SU HUB'
+                                id_amiu=0
+                            #id_amiu= row_result[0]
+                            #descrizione_causale=row_result[1]
                         except Exception as e:
                             logger.error(e)
-                            descrizione_causale_eko='CAUSALE EKOVISION NON TROVATA CONTROLLARE LE TABELLE SU HUB'
-                            id_amiu=0
                         curr2.close()
                         # verifico se ci sono causali diverse
                         curr2 = connc.cursor()
@@ -893,15 +896,15 @@ and ve.id_causale::int <> %s'''
             logger.error(e)
             check_ekovision=102 # problema file variazioni
 
-
-        
+        ########################################
+        ####  Qua sarebbe da migrare a PARAMIKO
+        ########################################
         logger.info('Invio file con la consuntivazione raccolta via SFTP')
         try: 
             cnopts = pysftp.CnOpts()
             cnopts.hostkeys = None
             srv = pysftp.Connection(host=url_ev_sftp, username=user_ev_sftp,
-        password=pwd_ev_sftp, port= port_ev_sftp,  cnopts=cnopts,
-        log="/tmp/pysftp.log")
+        password=pwd_ev_sftp, port= port_ev_sftp,  cnopts=cnopts)
 
             with srv.cd('sch_lav_cons/in/'): #chdir to public
                 srv.put(file_preconsuntivazioni_ekovision) #upload file to nodejs/

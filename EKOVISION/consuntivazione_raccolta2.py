@@ -10,42 +10,43 @@ con il nuovo tracciato con chiavi primarie:
 
 '''
 
+import json
 #from msilib import type_short
-import os, sys, re  # ,shutil,glob
+import os  # ,shutil,glob
+import re
+import sys
+from datetime import date, datetime, timedelta
+
+import cx_Oracle
+import psycopg2
+import requests
+import xlsxwriter
+from requests.exceptions import HTTPError
 
 #import getopt  # per gestire gli input
 
 #import pymssql
 
-from datetime import date, datetime, timedelta
-
-import requests
-from requests.exceptions import HTTPError
-
-import json
 
 
-import xlsxwriter
 
-import psycopg2
 
-import cx_Oracle
+
+
 
 currentdir = os.path.dirname(os.path.realpath(__file__))
 parentdir = os.path.dirname(currentdir)
 sys.path.append(parentdir)
-from credenziali import *
-
-
+import logging
+import uuid
 
 # per mandare file a EKOVISION
 import pysftp
 
+from credenziali import *
 
 #import requests
 
-import logging
-import uuid
 
 path=os.path.dirname(sys.argv[0]) 
 nome=os.path.basename(__file__).replace('.py','')
@@ -91,29 +92,24 @@ c_handler.setFormatter(cc_format)
 f_handler.setFormatter(cc_format)
 
 
+# libreria per scrivere file csv
+import csv
 # libreria per invio mail
-import email, smtplib, ssl
+import email
 import mimetypes
-from email.mime.multipart import MIMEMultipart
+import smtplib
+import ssl
 from email import encoders
 from email.message import Message
 from email.mime.audio import MIMEAudio
 from email.mime.base import MIMEBase
 from email.mime.image import MIMEImage
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+
+from descrizione_percorso import *
+
 from invio_messaggio import *
-
-# libreria per scrivere file csv
-import csv
-
-
-
-from descrizione_percorso import *  
-
-
-
-     
-
 
 
 def main(SFTP_USER, SFTP_PWD,  datalav_debug=None, cod_percorso_debug=None):
@@ -983,12 +979,14 @@ and ve.id_causale::int <> %s'''
                         try:
                             curr2.execute(query_causale, (int(id_causale_eko),))
                             row_result=curr2.fetchone()
-                            id_amiu= row_result[0]
-                            descrizione_causale=row_result[1]
+                            if row_result is not None:
+                                id_amiu = row_result[0]
+                                descrizione_causale = row_result[1]
+                            else: 
+                                descrizione_causale='CAUSALE EKOVISION NON TROVATA CONTROLLARE LE TABELLE SU HUB'
+                                id_amiu=0
                         except Exception as e:
                             logger.error(e)
-                            descrizione_causale_eko='CAUSALE EKOVISION NON TROVATA CONTROLLARE LE TABELLE SU HUB'
-                            id_amiu=0
                         curr2.close()
                         # verifico se ci sono causali diverse
                         curr2 = connc.cursor()
@@ -1142,14 +1140,15 @@ and ve.id_causale::int <> %s'''
             conn.close()
             exit()
         
-        
+        ########################################
+        ####  Qua sarebbe da migrare a PARAMIKO
+        ########################################
         logger.info('Invio file con la consuntivazione raccolta via SFTP')
         try: 
             cnopts = pysftp.CnOpts()
             cnopts.hostkeys = None
             srv = pysftp.Connection(host=url_ev_sftp, username=SFTP_USER,
-        password=SFTP_PWD, port= port_ev_sftp,  cnopts=cnopts,
-        log="/tmp/pysftp.log")
+        password=SFTP_PWD, port= port_ev_sftp,  cnopts=cnopts)
 
             with srv.cd('sch_lav_cons/in/'): #chdir to public
                 srv.put(file_preconsuntivazioni_ekovision) #upload file to nodejs/
@@ -1217,7 +1216,7 @@ and ve.id_causale::int <> %s'''
 # debug = 1 processo 1 percorso e lo mando via mai
 # debug = 2  
 
-debug=1
+debug=2
 
 SFTP_USER = user_ev_sftp_test
 SFTP_PWD = pwd_ev_sftp_test
@@ -1242,7 +1241,7 @@ if __name__ == "__main__":
 
     elif debug == 2:
 
-        data_start = datetime.strptime("20260331", "%Y%m%d").date()
+        data_start = datetime.strptime("20260101", "%Y%m%d").date()
         data_end = datetime.strptime("20260901", "%Y%m%d").date()
 
         data = data_start
