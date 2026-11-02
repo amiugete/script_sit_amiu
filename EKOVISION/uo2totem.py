@@ -10,51 +10,47 @@ a quello del totem
 
 '''
 
-#from msilib import type_short
-import os, sys, re  # ,shutil,glob
 import inspect
-
-import requests
-from requests.exceptions import HTTPError
-
 import json
+import locale
+#from msilib import type_short
+import os  # ,shutil,glob
+import re
+import sys
+from collections import defaultdict
+from datetime import date, datetime, timedelta
 
+import cx_Oracle
+import psycopg2
+import requests
+import xlsxwriter
+from requests.exceptions import HTTPError
 
 #import getopt  # per gestire gli input
 
 #import pymssql
 
-from datetime import date, datetime, timedelta
 
-from collections import defaultdict
 
-import locale
 
-import xlsxwriter
 
-import psycopg2
 
-import cx_Oracle
 
 currentdir = os.path.dirname(os.path.realpath(__file__))
 parentdir = os.path.dirname(currentdir)
 sys.path.append(parentdir)
-from credenziali import *
-
-
+import logging
 
 # per mandare file a EKOVISION
 import pysftp
 
+from credenziali import *
 
 #import requests
 
-import logging
 
 
-filename = inspect.getframeinfo(inspect.currentframe()).filename
 path=os.path.dirname(sys.argv[0]) 
-path1 = os.path.dirname(os.path.dirname(os.path.abspath(filename)))
 nome=os.path.basename(__file__).replace('.py','')
 #tmpfolder=tempfile.gettempdir() # get the current temporary directory
 logfile='{0}/log/{1}.log'.format(path,nome)
@@ -70,25 +66,23 @@ errorfile='{0}/log/error_{1}.log'.format(path,nome)
 
 
 
+# libreria per scrivere file csv
+import csv
 # libreria per invio mail
-import email, smtplib, ssl
+import email
 import mimetypes
-from email.mime.multipart import MIMEMultipart
+import smtplib
+import ssl
 from email import encoders
 from email.message import Message
 from email.mime.audio import MIMEAudio
 from email.mime.base import MIMEBase
 from email.mime.image import MIMEImage
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+
 from invio_messaggio import *
 
-# libreria per scrivere file csv
-import csv
-
-
-
-    
-     
 
 def main():
       
@@ -178,9 +172,9 @@ def main():
         
     # Mi connetto al nuovo DB consuntivazione  
     if test ==1:
-        nome_db= db_totem_test
+        nome_db = db_totem_test
     elif test==0:
-        nome_db=db_totem
+        nome_db = db_totem
     else:
         logger.error(f'La variabilie test vale {test}. Si tratta di un valore anomalo. Mi fermo qua')
         exit()
@@ -208,8 +202,7 @@ def main():
     # per ottimizzare l'inserimento batch
     
     from psycopg2.extras import execute_batch
-    
-    
+
     ########################################
     # RACCOLTA
     query_uo_racc = '''
@@ -351,7 +344,7 @@ def main():
 	       data_inizio, data_fine,
 	       PR_GET_DESC_FREQ(frequenza) giorni, 
 	       cod_frequenza_percorso, 
-	       FREQ_SETTIMANE, cod_frequenza_tratto 
+	       FREQ_SETTIMANE, cod_frequenza_tratto,  min(id_squadra) AS id_squadra
 	from (                                 
 	select cpvt.id_percorso, ASPU.DESCRIZIONE desc_percorso, aspu.id_servizio, ase.desc_servizio, aspu.id_turno, aspu.id_uo, UO.DESC_UO, 
 	       cpvt.id_via, s.nome2 nome_via, s.nome1 nome_via_ordinato,CMT.NOTA_VIA, cmt.id_macro_tappa,  cmt.frequenza,
@@ -364,7 +357,7 @@ def main():
 	       pr_check_frequenza_giorno(cmt.frequenza, 7) dom,
 	       fds.COD_FREQUENZa AS cod_frequenza_percorso, 
 	       aspu.FREQ_SETTIMANE, fds1.COD_FREQUENZA AS cod_frequenza_tratto,
-	       cpvt.cronologia, 
+	       cpvt.cronologia, aspu.id_squadra,
 	       /* Modifica 11/06/2024 per gestione stagionali prima di data di attivazione */
 		   CASE 
 	       	WHEN aps.cod_percorso IS NOT NULL 
@@ -409,7 +402,7 @@ def main():
 	where ase.gestito_app_spazzamento = 'S'
 	and aspu.dta_disattivazione > (sysdate-365)
 	--AND aspu.DTA_ATTIVAZIONE < sysdate
-	AND aspu.id_percorso = '0207004501'
+	--AND aspu.id_percorso = '0207004501'
 	--and CMT.FREQUENZA not like 'S%'
 	--and aspu.id_percorso IN ('0203009701', '0201238701')
 	)
@@ -430,7 +423,7 @@ def main():
             nome_via, nome_via_ordinato, nota_via,
             id_turno, cod_frequenza_percorso, freq_settimane,
             cod_frequenza_tratto, data_inizio, data_fine,
-            giorni
+            giorni, id_squadra
         ) 
         values 
         (
@@ -440,7 +433,7 @@ def main():
             %s, %s, %s,
             %s, %s, %s,
             %s, %s, %s,
-            %s   
+            %s , %s 
         ) ON CONFLICT (id_tappa_raggr,id_uo)
         DO UPDATE  
         SET 
@@ -461,7 +454,9 @@ def main():
         cod_frequenza_tratto=EXCLUDED.cod_frequenza_tratto,
         data_inizio=EXCLUDED.data_inizio,
         data_fine=EXCLUDED.data_fine,
-        giorni=EXCLUDED.giorni;'''
+        giorni=EXCLUDED.giorni,
+        id_squadra=EXCLUDED.id_squadra
+        ;'''
     
     logger.info("Recupero dati spazzamento da UO")
     try:
@@ -514,7 +509,7 @@ def main():
             rs[10], rs[11], rs[12],
             rs[8], rs[16], rs[17],
             rs[18], rs[13], rs[14],
-            rs[15]
+            rs[15], rs[19]
         ))
     logger.info("Scrivo dati spazzamento su {}".format(nome_db))
     execute_batch(curr, upsert_query_spazz, records, page_size=1000)

@@ -8,53 +8,46 @@
 Lo script verifica le variazioni e manda excel a assterritorio@amiu.genova.it giornalmemte con la sintesi delle stesse 
 '''
 
-import os, sys, re  # ,shutil,glob
-import inspect, os.path
-
-import xlsxwriter
-
-
-#import getopt  # per gestire gli input
-
-#import pymssql
-
-import psycopg2
-
-import cx_Oracle
-
+import csv
 import datetime
-import holidays
-from workalendar.europe import Italy
-
-
-from credenziali import *
-
-import report_settimanali_percorsi_ok 
-
-
-#import requests
-
+import email
+import inspect
 import logging
-import email, smtplib, ssl
 import mimetypes
-from email.mime.multipart import MIMEMultipart
+import os  # ,shutil,glob
+import os.path
+import re
+import smtplib
+import ssl
+import sys
 from email import encoders
 from email.message import Message
 from email.mime.audio import MIMEAudio
 from email.mime.base import MIMEBase
 from email.mime.image import MIMEImage
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from invio_messaggio import *
 
-
-from crea_dizionario_da_query import *
-
-
-import csv
-
-
+import cx_Oracle
+import holidays
+import psycopg2
 # per mandare file a EKOVISION
 import pysftp
+import xlsxwriter
+from workalendar.europe import Italy
+
+import report_settimanali_percorsi_ok
+from crea_dizionario_da_query import *
+from credenziali import *
+from invio_messaggio import *
+
+#import getopt  # per gestire gli input
+
+#import pymssql
+
+#import requests
+
+
 
 
 def cfr_tappe(tappe_sit, tappe_uo, logger):
@@ -63,7 +56,7 @@ def cfr_tappe(tappe_sit, tappe_uo, logger):
     check=0
     if len(tappe_sit) == len(tappe_uo) :
         k=0
-        while k < len(tappe_sit):
+        while k < len(tappe_sit) and check<1:
             #logger.debug(tappe_sit[k][0])
             #logger.debug(tappe_uo[k][0])
             
@@ -112,9 +105,6 @@ def cfr_tappe(tappe_sit, tappe_uo, logger):
 def main():
 
     #LOG
-
-    filename = inspect.getframeinfo(inspect.currentframe()).filename
-    path     = os.path.dirname(os.path.abspath(filename))
 
     path=os.path.dirname(sys.argv[0]) 
     nome=os.path.basename(__file__).replace('.py','')
@@ -194,7 +184,7 @@ def main():
     
     holiday_list = []
     holiday_list_pulita=[]
-    for holiday in holidays.Italy(years=[(oggi.year -1), (oggi.year)]).items():
+    for holiday in holidays.Italy(years=[(oggi.year -1), (oggi.year)]).items(): # type: ignore
         #print(holiday[0])
         #print(holiday[1])
         holiday_list.append(holiday)
@@ -297,8 +287,32 @@ and left(trim(replace(replace(replace(description, 'Percorso', ''), id_percorso:
         logger.error(e)
         
     conn.commit()    
-    curr.close()
-    curr = conn.cursor()
+    
+    
+    # inserisco modifiche ordinamento
+    insert_mod_ordine='''insert into util.sys_history
+    ("type", "action", description, datetime, id_user, id_percorso)
+    (
+    select 'PERCORSO' as type, 
+    'UPDATE' as action,
+    description, 
+    datetime, 
+    id_user,
+    left(trim(replace(replace(replace(description, 'Percorso', ''), id_percorso::text, ''), ': clonato come percorso', '')),6)::int as id_percorso_ok
+    from util.sys_history sh 
+    where description ilike '%clonato come percorso%'
+    and sh.datetime > (current_date - INTEGER '{0}')
+    and left(trim(replace(replace(replace(description, 'Percorso', ''), id_percorso::text, ''), ': clonato come percorso', '')),6) ~ '^[0-9]*$' 
+    )'''.format(num)
+        
+    try:
+        curr.execute(insert_mod_ordine)
+    except Exception as e:
+        logger.error(e)
+    
+    conn.commit()  
+    #curr.close()
+    #curr = conn.cursor()
     
     '''******************************************************************************************************
     NON SONO COMPRESI I PERCORSI STAGIONALI per cui vanno re-importate le variazioni in fase di attivazione 
@@ -1407,14 +1421,15 @@ from (
             check_ekovision=102 # problema file variazioni
         
         
-        
+        ####################################################
+        # BISOGNEREBBE PASSARE A PARAMIKO
+        ####################################################
         logger.info('Invio file con le variazioni via SFTP')
         try: 
             cnopts = pysftp.CnOpts()
             cnopts.hostkeys = None
             srv = pysftp.Connection(host=url_ev_sftp, username=user_ev_sftp,
-        password=pwd_ev_sftp, port= port_ev_sftp,  cnopts=cnopts,
-        log="/tmp/pysftp.log")
+        password=pwd_ev_sftp, port= port_ev_sftp,  cnopts=cnopts)
 
             with srv.cd('percorsi/in/'): #chdir to public
                 srv.put(file_variazioni_ekovision) #upload file to nodejs/
