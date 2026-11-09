@@ -359,21 +359,28 @@ def main():
 	       aspu.FREQ_SETTIMANE, fds1.COD_FREQUENZA AS cod_frequenza_tratto,
 	       cpvt.cronologia, aspu.id_squadra,
 	       /* Modifica 11/06/2024 per gestione stagionali prima di data di attivazione */
-		   CASE 
+           /* Modifica 09/11/2026 per correzione stagionali - DA CONTROLLARE */
+		    CASE 
 	       	WHEN aps.cod_percorso IS NOT NULL 
 	       	AND (SELECT max(dta_attivazione) FROM ANAGR_SER_PER_UO aspu 
 	       		WHERE id_percorso = aps.cod_percorso
 	       		AND aspu.DTA_ATTIVAZIONE < sysdate) > sysdate
-	       	THEN aspu.dta_attivazione
+	       	THEN greatest(cpvt.data_prevista, vp.data_prevista)
 	       	ELSE 
 	       	cpvt.data_prevista 
 	       END AS data_inizio, 
 	       /* cpvt.data_prevista data_inizio,*/
-	       CASE
-		       WHEN aps.cod_percorso IS NOT NULL
-	       	THEN aspu.dta_disattivazione
-	       	ELSE vp.data_fine_validita 
-	       END data_fine
+	CASE 
+	       	WHEN aps.cod_percorso IS NOT NULL 
+	       	/*AND (SELECT max(dta_disattivazione) FROM ANAGR_SER_PER_UO aspu 
+	       		WHERE id_percorso = aps.cod_percorso
+	       		AND aspu.DTA_ATTIVAZIONE < sysdate) > sysdate*/
+	       	THEN LEAST((SELECT COALESCE(max(dta_disattivazione),(vp.data_fine_validita+1))  FROM ANAGR_SER_PER_UO aspu 
+	       		WHERE id_percorso = aps.cod_percorso
+	       		AND aspu.DTA_ATTIVAZIONE = vp.DATA_PREVISTA ), vp.data_fine_validita + 1)
+	       	ELSE 
+	 (vp.data_fine_validita + 1) 
+	END AS data_fine
 	from pr_validita_percorsi vp
 	inner join cons_percorsi_vie_tappe cpvt
 	on VP.ID_PERCORSO = cpvt.id_percorso
