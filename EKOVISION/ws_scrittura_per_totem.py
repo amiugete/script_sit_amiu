@@ -279,7 +279,8 @@ nullif(trim(r.sportello),'') as sportello,
 trim(replace(mi.targa, ' ', '')) as targa,
 me.id_ekovision as id_rt_eko,
 r.datainsert,
-concat('TOTEM Badge ', r.codice, ' - Matr. ', vpes.matricola::text, ' - ', vpes.cognome, ' ', vpes.nome) as sorgente_dati
+concat('TOTEM Badge ', r.codice, ' - Matr. ', vpes.matricola::text, ' - ', vpes.cognome, ' ', vpes.nome) as sorgente_dati,
+mmq.descrizione as descr_qualifica
 from servizi.registrazioni r 
 left join totem.mapping_mansioni_qualifiche mmq on mmq.id_qualifica=r.id_qualifica 
 left join v_personale_ekovision_step1 vpes on r.codice::numeric = vpes.matricola::numeric
@@ -829,6 +830,7 @@ order by 3
                     id_percorso=registrazione[4]
                     data_percorso=registrazione[5]
                     id_qualifica=registrazione[6]
+                    descr_qualifica = registrazione[13]
                     id_mansione=registrazione[7]
                     sportello=registrazione[8]
                     targa=registrazione[9]
@@ -997,7 +999,8 @@ order by 3
                                 ru=0
                                 while ru < len(letture2['schede_lavoro'][0]['risorse_umane']):
                                     if id_mansione == mansioni[ru] and tipo_inserimento_ru[ru] == 1:
-                                        logger.info('Ho trovato una risorsa umana con mansione {0} e tipo inserimento 1, quindi posso sostituirla con la risorsa da inserire'.format(id_mansione))
+                                        logger.info(f'''Ho trovato una risorsa umana con mansione {id_mansione} e tipo inserimento 1, 
+                                                    quindi posso sostituirla con la risorsa da inserire''')
                                         check_inserimento=1
                                         # cambio tipo inserimento (mettendo 2 non dovrei toccarla più)
                                         tipo_inserimento_ru[ru]=2
@@ -1016,14 +1019,36 @@ order by 3
                             if check_inserimento == 0:
                                 # devo renderlo più comprensibile questo messaggio di errore
                                 
-                                warning_msg = f'''{incipit_mail_test}
+                                msg = f'''{incipit_mail_test}
                                 Non sono riuscito ad inserire la risorsa umana con badge {codice_badge}, 
                                 id ekovision {id_ekovision}, mansione {id_mansione} nella scheda {id_scheda}
                                 (codice percorso {cod_percorso} - {letture2['schede_lavoro'][0]['descr_scheda_lav']} 
-                                del {datalav}) '''
-                                warning_message_mail(warning_msg, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger, 'Scheda di lavoro con risorsa umana non inseribile su Ekovision')
-                                #mails_percorso = cerco_mail(curr_c, cod_percorso, datalav, logger)
-                                #totem_message_mail(test, testo_mail, mails_percorso,  os.path.basename(__file__), logger, 'Scheda di lavoro con risorsa tecnica da modificare')
+                                del {datalav}) 
+                                <br><br>
+                                Dati registrati su Totem: 
+                                <ul> 
+                                <li>cod percorso: {cod_percorso}</li>
+                                <li>data: {datetime.strptime(datalav, '%Y%m%d').strftime('%d/%m/%Y')}</li>
+                                
+                                <ul>                      
+                                <li>matricola: {codice_badge} ({cognome_ru} {nome_ru})</li>
+                                <li>id risorsa umana ekovision: {id_ekovision} </li>
+                                <li>mansione: {descr_qualifica} (id {id_mansione}) </li>'''
+                                # se c'è un mezzo
+                                if sportello:
+                                    msg =f'''{msg}<li>sportello: {sportello} (Targa: {targa})</li>
+                                        <li>id risorsa tecnica ekovision: {id_rt_eko} </li>'''
+                                else: 
+                                    msg=f'''{msg}<li>Nessun mezzo registrato</li>'''
+                                msg=f'''{msg}
+                                <li>data inserimento su totem: {datainsert_registrazione.strftime('%d/%m/%Y %H:%M')} </li>
+                                </ul></ul>'''
+                                
+                                
+                                
+                                #warning_message_mail(msg, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger, 'Scheda di lavoro con risorsa umana non inseribile su Ekovision')
+                                mails_percorso = cerco_mail(curr_c, cod_percorso, datalav, logger)
+                                totem_message_mail(test, msg, mails_percorso,  os.path.basename(__file__), logger, 'Scheda di lavoro con risorsa umana non inseribile su Ekovision')
 
                 
                 #exit()
