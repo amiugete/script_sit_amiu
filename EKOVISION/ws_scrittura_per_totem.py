@@ -1,85 +1,153 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# AMIU copyleft 2023
-# Roberto Marzocchi
+# AMIU copyleft 2026
+# Roberto Marzocchi, Roberta Fagandini
 
 '''
-
-
-
+Lo script gestisce  la scrittura dei dati registrati sul totem su Ekovision. 
 '''
 
+import json
 #from msilib import type_short
-import os, sys, re  # ,shutil,glob
+import os  # ,shutil,glob
+#import re
+import sys
+from datetime import date, datetime, timedelta
 
+import psycopg2
 import requests
 from requests.exceptions import HTTPError
 
-import json
-
-
 #import getopt  # per gestire gli input
-
 #import pymssql
 
-from datetime import date, datetime, timedelta
-
-
-import xlsxwriter
-
-import psycopg2
-
-import cx_Oracle
 
 currentdir = os.path.dirname(os.path.realpath(__file__))
 parentdir = os.path.dirname(currentdir)
 sys.path.append(parentdir)
-from credenziali import *
-
-
-# Funzione per recuperare la descrizione del percorso (usata per l'invio mail in caso di creazione scheda di lavoro)
-from descrizione_percorso import *
-
-
-# per mandare file a EKOVISION
-import pysftp
-
-
-#import requests
-
-import logging
-
-
-
-
-
+# libreria per scrivere file csv
+#import csv
 # libreria per invio mail
-import email, smtplib, ssl
+import email
+import logging
 import mimetypes
-from email.mime.multipart import MIMEMultipart
+#import smtplib
+#import ssl
+import uuid
 from email import encoders
 from email.message import Message
 from email.mime.audio import MIMEAudio
 from email.mime.base import MIMEBase
 from email.mime.image import MIMEImage
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+
+# Funzione per recuperare la descrizione del percorso (usata per l'invio mail in caso di creazione scheda di lavoro)
+from descrizione_percorso import *
+
+from credenziali import *
 from invio_messaggio import *
 
-# libreria per scrivere file csv
-import csv
 
-
-import uuid
-
-
+def cerco_mail(curr_c, cp: str, dd: str, logger_name) -> str: 
     
+    """ 
+    Funzione per cercare le mail in caso di errori
+    La richiamo in alcuni punti del main 
+    
+    """
+
+
+    query_mails='''select concat_ws(', ', mu.mail, mu1.mail) as mails
+    from servizi.servizi_per_ekovision spe 
+    left join servizi.mail_ut mu on mu.id_ut_sit = spe.id_uo_sit 
+    left join servizi.mail_ut mu1 on mu1.id_ut_sit = spe.id_rimessa_sit
+    where spe.id_percorso = %s 
+    and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_validita -1'''
+    
+    
+    logger_name.info(f'cerco la mail per percorso {cp} del {dd}')
+    try:
+        curr_c.execute(query_mails, (cp, dd))
+        mails_percorso=curr_c.fetchone()[0]
+    except Exception as e:
+        logger_name.error(e) 
+    
+    return mails_percorso     
      
 
+def totem_message_mail(test: int, messaggio: str, receiver_email, script_name, logger_name, subject=None, CC=None) -> int:
+    
+    """
+    Funzione che usa lo script invio_messaggio.py per inviare l'eventuale LOG con WARNING via mail
+    Input:
+        - test
+        - messaggio
+        - receiver_email
+        - script_name
+        - logger_name
+        [- soggetto mail] OPZIONALE
+    """
+
+
+    
+    if subject is None:
+        subject = 'WARNING MESSAGE - {}'.format(script_name)
+
+        body = '''Questo è un messaggio automatico:<br>
+        {0}<br><br>
+        Automatically sent from AMIU Genova by {1} script<br><br>
+        '''.format(messaggio,script_name)
+    else:
+        body='''Questo è un messaggio automatico:<br>
+        {0}<br><br>
+        Messaggio automatico. Si prega di non rispondere. In caso di problemi contattare {1} <br><br>
+        '''.format(messaggio,'assterritorio@amiu.genova.it')
+    #sender_email = user_mail
+
+
+    # Create a multipart message and set headers
+    message = MIMEMultipart()
+    message["From"] = "totem_noreply@amiu.genova.it"
+    if test == 1:
+        message["To"] = mail_cc_assterritorio
+        body=f'''<font color="red">Ambiente di test.</font>. I destinatari in prod sarebbero {receiver_email}
+        <br><hr><br>
+        {body}
+        '''
+    elif test == 0:
+        message["To"] = receiver_email
+        message["Bcc"] = mail_cc_assterritorio  # Recommended for mass emails
+    
+    
+    
+    # qualora non ci fosse già, aggiungo in CC assterritorio
+    #if 'assterritorio' not in receiver_email:    
+    #    message["CC"] = 'assterritorio@amiu.genova.it'
+    message["Subject"] = subject
+    if CC is not None:
+        message["CC"] = CC
+    
+    message.preamble = subject
+                    
+    # Add body to email
+    message.attach(MIMEText(body, "html"))
+
+
+    try:
+        invio_messaggio(message)
+        logger_name.info('Messaggio inviato')
+        return 200
+    except Exception as e:
+        logger_name.error('Errore invio mail: {}'.format(e))
+        return 500
+
+
+
+
 def main():
-    
-    
-    
+      
     try:
         if sys.argv[1]== 'prod':
             test=0
@@ -145,6 +213,8 @@ def main():
     if test==1:
         logger.info('Ambiente di TEST')
         incipit_mail_test='<font color="red"><b>AMBIENTE DI TEST</b></font><hr>'
+    else:
+        incipit_mail_test=''
       
     logger.info('Il PID corrente è {0}'.format(os.getpid()))
     
@@ -164,7 +234,9 @@ def main():
     logger.debug(giorno_file)
     
     
-        
+    id_progressivo_tmp = None
+    
+    
     # Mi connetto al nuovo DB consuntivazione  
     if test == 1:
         nome_db= db_totem_test
@@ -173,6 +245,7 @@ def main():
     else:
         logger.error(f'La variabilie test vale {test}. Si tratta di un valore anomalo. Mi fermo qua')
         exit()
+    
         
     logger.info('Connessione al db {} su {}'.format(nome_db, host_totem))
     conn_c = psycopg2.connect(dbname=nome_db,
@@ -181,7 +254,19 @@ def main():
                         password=pwd_totem,
                         host=host_totem)
 
-
+    
+    
+    
+    # in questo caso mi connetto a SIT (PostgreSQL) per recuperare le mail e il turno e la descrizione percorso
+    nome_db=db
+    logger.info('Connessione al db {}'.format(nome_db))
+    conn = psycopg2.connect(dbname=nome_db,
+                        port=port,
+                        user=user,
+                        password=pwd,
+                        host=host)
+                        
+    curr = conn.cursor()
     
     query_registrazioni= '''select r.codice,
 pe.id_ekovision,
@@ -208,6 +293,7 @@ left join (SELECT
 	and trim(pe.nome) = trim(vpes.nome)
 	and pe.dt_nascita = vpes.data_nascita 
 where r.send_ekovision is true
+and r.codice not like 'badge_%%'
 and errori is null'''
 
 
@@ -223,12 +309,7 @@ order by 3
     
     
     
-    query_mails='''select concat_ws(', ', mu.mail, mu1.mail) as mails
-from servizi.servizi_per_ekovision spe 
-left join servizi.mail_ut mu on mu.id_ut_sit = spe.id_uo_sit 
-left join servizi.mail_ut mu1 on mu1.id_ut_sit = spe.id_rimessa_sit
-where spe.id_percorso = %s 
-and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_validita -1'''
+    
      
      
      
@@ -255,6 +336,28 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
     
     
     
+    
+    
+    
+    query_badge_temporanei='''
+    select r.codice,
+    r.id_percorso, 
+    to_char(r.datalav, 'YYYYMMDD') as data_percorso, 
+    r.id_qualifica, 
+    nullif(trim(r.sportello),'') as sportello, 
+    trim(replace(mi.targa, ' ', '')) as targa,
+    me.id_ekovision as id_rt_eko,
+    r.datainsert
+    from servizi.registrazioni r 
+    left join totem.mezzi_infopm mi on trim(mi.sportello) = trim(lpad(r.sportello,5,'0')) 
+    left join totem.mezzi_ekovision me on trim(replace(mi.targa, ' ',''))=trim(replace(me.targa, ' ','')) 
+    where r.send_ekovision is true
+    and r.codice like 'badge_%'
+    and errori is null
+        '''
+    
+    
+    
 
     
     if test == 1 :
@@ -265,6 +368,68 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
     
     #exit()
 
+
+
+
+    # gestione badge temporanei
+    
+    
+    try:
+        curr_c.execute(query_badge_temporanei)
+        registrazini_badge_temp=curr_c.fetchall()
+    except Exception as e:
+        logger.error(query_badge_temporanei)
+        logger.error(e)
+    
+    
+    if len(registrazini_badge_temp) ==0 :
+        logger.info('Non ci sono percorsi registrati con badge temporanei')
+    else:
+        logger.info('Ci sono {0} percorsi registrati con badge temporanei'.format(len(registrazini_badge_temp)))    
+    
+    
+    for rbt in registrazini_badge_temp:
+        
+        msg = f'''Ci sono problemi a salvare le informazioni registrate su totem per il percorso 
+        codice percorso {rbt[1]} - {descrizione_percorso(rbt[1],  rbt[2], curr, logger)} del {datetime.strptime(rbt[2], '%Y%m%d').strftime('%d/%m/%Y')}
+        ) per un utente che si è registrato con un badge non riconosciuto 
+        <br><br>
+        Dati registrati su Totem: 
+        <ul> 
+        <li>cod percorso: {rbt[1]}</li>
+        <li>data: {datetime.strptime(rbt[2], '%Y%m%d').strftime('%d/%m/%Y')}</li>
+        <li><font color="red">badge: {rbt[0].replace("badge_","")} </font></li>'''
+        # se c'è un mezzo
+        if rbt[4]:
+            msg =f'''{msg}<li>sportello: {rbt[4]} (Targa: {rbt[5]})</li>
+            <li>id risorsa tecnica ekovision: {rbt[6]}</li>'''
+        else: 
+            msg=f'''{msg}<li>Nessun mezzo registrato</li>'''
+        msg=f'''{msg}<li>data inserimento su totem: {rbt[7].strftime('%d/%m/%Y %H:%M')} </li>
+        </ul>
+        <br><br> 
+        <b>I dati, se corretti, vanno inseriti manualmente su Ekovision. </b>
+        <hr>
+        '''
+    
+        mails_percorso = cerco_mail(curr_c, rbt[1], rbt[2], logger)
+        
+        logger.info (f'Invio mail a {mails_percorso}')
+    
+        res_mail_rbt = totem_message_mail(test, msg, mails_percorso,  os.path.basename(__file__), logger,  'Problema trasferimento dati totem ekovision')
+            
+        if res_mail_rbt != 200:
+            logger.error(f'Non riesco ad inviare la mail per segnalare la registrazione con badge tempopraneo {rbt}')
+
+        try: 
+            curr_c.execute(query_update_error, (rbt[0], rbt[1], rbt[2], rbt[7]))
+            conn_c.commit()
+        except Exception as e:
+            logger.error(query_update_error)
+            logger.error(e)
+
+
+    # gestione percorsi regolari
     try:
         curr_c.execute(query_percorsi)
         percorsi=curr_c.fetchall()
@@ -335,16 +500,7 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
                     logger.info('Andrebbe creata la scheda di lavoro')
                     
                     
-                    # in questo caso mi connetto a SIT (PostgreSQL) per poi recuperare le mail e il turno
-                    nome_db=db
-                    logger.info('Connessione al db {}'.format(nome_db))
-                    conn = psycopg2.connect(dbname=nome_db,
-                                        port=port,
-                                        user=user,
-                                        password=pwd,
-                                        host=host)
                     
-                    curr = conn.cursor()
                     
                     # cerco turno e mail
                     
@@ -367,9 +523,12 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
                         logger.error(query_percorsi)
                         logger.error(e) 
                     
-                    id_turno_sit = riga1[0]
-                    mails_sent = riga1[2]
-                    cod_turno_sit = riga1[1]
+                    if riga1 is not None:
+                        id_turno_sit = riga1[0]
+                        mails_sent = riga1[2]
+                        cod_turno_sit = riga1[1]
+                    else:
+                        logger.error(f'Non trovo turno e mail associate al percorso {cod_percorso} del {datalav}')
                         
                     
                     ruid = uuid.uuid4()
@@ -464,37 +623,89 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
                     
                     
                     
+                    esiste = 0 
+                    eseguita=0
+                    chiusa = 0
+                    continue # non elaboro questa scheda ma proseguo con le righe successive
+                    # dovrebbe essere codice morto da rimuovere
+                    # response2 = requests.post(eko_URL, params=params2, data=auth_data_eko, headers=headers)
+                    # letture2 = response2.json()
+                    # logger.info(letture2)
+                    # try: 
+                    #     id_scheda=letture['crea_schede_lavoro'][0]['id']
+                    # except Exception as e:
+                    #     logger.error(e)
                     
-                    exit()
-                    response2 = requests.post(eko_URL, params=params2, data=auth_data_eko, headers=headers)
-                    letture2 = response2.json()
-                    logger.info(letture2)
-                    try: 
-                        id_scheda=letture['crea_schede_lavoro'][0]['id']
-                    except Exception as e:
-                        logger.error(e)
                 elif len(letture['schede_lavoro']) > 0 : 
+                    esiste = 1 
                     id_scheda=letture['schede_lavoro'][0]['id_scheda_lav']
                     turno=letture['schede_lavoro'][0]['cod_turno_ext']
                     in_lavorazione= letture['schede_lavoro'][0]['flg_in_lavorazione']
                     eseguita=int(letture['schede_lavoro'][0]['flg_eseguito'])
-                    chiusa= letture['schede_lavoro'][0]['flg_chiuso'] 
+                    chiusa= int(letture['schede_lavoro'][0]['flg_chiuso'])
                     logger.info(f'id scheda: {id_scheda}')
                     logger.info(f'Cod Turno: {turno}')
             
 
             
-            if eseguita == 1:
-                logger.info('La scheda è già eseguita')
+            if eseguita == 1 or chiusa == 1:
                 
+                # cerco comunque le registrazioni per mandare mail di "warning"
                 try:
-                    curr_c.execute(query_mails, (cod_percorso, datalav))
-                    mails_percorso=curr_c.fetchone[0]
+                    curr_c.execute(query_registrazioni_percorso, (cod_percorso, datalav))
+                    registrazioni_percorso=curr_c.fetchall()
                 except Exception as e:
-                    logger.error(e)    
-                logger.info (f'La scheda è già eseguita, invio mail a {mails_percorso} e non faccio nulla')
+                    logger.error(query_registrazioni_percorso)
+                    logger.error(e)
                 
-            else:     
+                
+                msg = f'''La scheda {id_scheda} di Ekovision
+                (codice percorso {cod_percorso} - {descrizione_percorso(cod_percorso,  datalav, curr, logger)} del {datetime.strptime(datalav, '%Y%m%d').strftime('%d/%m/%Y')}
+                ) <b>è già eseguita</b>. Non posso caricare personale e mezzi
+                <br><br>
+                Dati registrati su Totem: 
+                <ul> 
+                <li>cod percorso: {cod_percorso}</li>
+                <li>data: {datetime.strptime(datalav, '%Y%m%d').strftime('%d/%m/%Y')}</li>'''
+                
+                for rr in registrazioni_percorso:
+                    codice_badge=rr[0]
+                    id_percorso=rr[4]
+                    data_percorso=rr[5]
+                    datainsert_registrazione=rr[11]
+                    curr_c.execute(query_update_error, (codice_badge, id_percorso, data_percorso, datainsert_registrazione))
+
+                    msg =f'''{msg} 
+                    <ul>                      
+                    <li>matricola: {rr[0]} ({rr[2]} {rr[3]})</li>
+                    <li>id risorsa umana ekovision: {rr[1]} </li>'''
+                    # se c'è un mezzo
+                    if rr[8]:
+                        msg =f'''{msg}<li>sportello: {rr[8]} (Targa: {rr[9]})</li>
+                            <li>id risorsa tecnica ekovision: {rr[10]} </li>'''
+                    else: 
+                        msg=f'''{msg}<li>Nessun mezzo registrato</li>'''
+                    msg=f'''{msg}
+                    <li>data inserimento su totem: {rr[11].strftime('%d/%m/%Y %H:%M')} </li>
+                    </ul>'''
+                msg = f'''{msg}     
+                </ul>
+                <br><br> 
+                <b>Solo in caso di dubbi<b> controllare i dati inseriti su Ekovision.
+                <hr>
+                '''
+                logger.info(msg)
+                
+                mails_percorso = cerco_mail(curr_c, cod_percorso, datalav, logger)
+                logger.info (f'Invio mail a {mails_percorso} e non faccio nulla')
+                
+                totem_message_mail(test, msg, mails_percorso,  os.path.basename(__file__), logger,  'Trasferimento dati totem ekovision. Scheda già eseguita')
+                # registro l'informazione sul DB 
+                conn_c.commit()
+                
+                
+                
+            elif esiste == 1 :     
                 
                 logger.info('Provo a leggere i dettagli della scheda')
                 
@@ -504,8 +715,8 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
                         'id': '{}'.format(id_scheda),
                         'flg_esponi_consunt': 1
                         }
-                
-                response2 = requests.post(eko_url_test, params=params2, data=auth_data_eko, headers=headers)
+
+                response2 = requests.post(eko_URL, params=params2, data=auth_data_eko, headers=headers)
                 #letture2 = response2.json()
                 letture2 = response2.json()
                 #logger.info(letture2)
@@ -629,7 +840,7 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
                     logger.info('Elaboro registrazione di {0} {1} con badge = {2}, cod_eko = {6} e qualifica {3} per il percorso {4} del {5}'.format(
                         nome_ru, cognome_ru, codice_badge, id_qualifica, id_percorso, data_percorso, id_ekovision
                     ))
-                
+            
                     if sportello is not None:
                         logger.info('Dovrei inserire la risorsa tecnica con sportello {0}, targa = "{1}"'.format(sportello, targa))
                         logger.debug(id_rt)
@@ -658,9 +869,17 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
                                     testo_mail= f'''{incipit_mail_test}
                                     La scheda di lavoro con id {id_scheda} (codice percorso {cod_percorso} - {letture2['schede_lavoro'][0]['descr_scheda_lav']} 
                                     del {datalav}) ha una risorsa tecnica con targa {letture2['schede_lavoro'][0]['risorse_tecniche'][0]['targa']} 
-                                    impostata manualmente su Ekovision, ma dalle info del totem dovrebbe essere modificata con sportello {sportello}.''' 
-                                    warning_message_mail(testo_mail, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger, 'Scheda di lavoro con risorsa tecnica da modificare')
-                                
+                                    impostata manualmente su Ekovision, 
+                                    ma dalle info del totem dovrebbe essere modificata con sportello {sportello}.
+                                    <br>Verificare le informazioni inserite dall'operatore con badge {codice_badge} 
+                                    ed eventualmente correggere Ekovision''' 
+                                    
+                                    #warning_message_mail(testo_mail, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger, 'Scheda di lavoro con risorsa tecnica da modificare')
+                                    
+                                    mails_percorso = cerco_mail(curr_c, cod_percorso, datalav, logger)
+                                    totem_message_mail(test, testo_mail, mails_percorso,  os.path.basename(__file__), logger, 'Scheda di lavoro con risorsa tecnica da modificare')
+                                                       
+                                                       
                                 if insert_update_rt == 1 :
                                     # cambio tipo inserimento rt
                                     tipo_inserimento_rt[0] = 2   
@@ -690,21 +909,25 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
                                         update_rt=1
                                         id_progresssivo_tmp=letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['id_progressivo']
                                         
-                                    elif letture2['schede_lavoro'][0]['risorse_tecniche'][0]['id'] > 0 and tipo_inserimento_rt[rt] == 1:
-                                        logger.error('La scheda ha una risorsa tecnica predefinita, la aggiorno con id {0} da totem'.format(id_rt_eko))
+                                    elif letture2['schede_lavoro'][0]['risorse_tecniche'][0]['id'] > 0 and tipo_inserimento_rt[rtt] == 1:
+                                        logger.warning('La scheda ha una risorsa tecnica predefinita, la aggiorno con id {0} da totem'.format(id_rt_eko))
                                         update_rt=1
                                         id_progresssivo_tmp=letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['id_progressivo']
                                         
                                     else:    
                                         testo_mail= f'''{incipit_mail_test}
                                         La scheda di lavoro con id {id_scheda} (codice percorso {cod_percorso} - {letture2['schede_lavoro'][0]['descr_scheda_lav']} 
-                                        del {datalav}) ha più risorse tecniche già impostata manualmente su Ekovision, 
-                                        ma dalle info del totem dovrebbe essere modificata con sportello {sportello}.''' 
-                                        warning_message_mail(testo_mail, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger, 'Scheda di lavoro con risorsa tecnica da modificare')
+                                        del {datalav}) ha più risorse tecniche già impostate manualmente su Ekovision, 
+                                        ma dalle info del totem dovrebbe esserci anche lo sportello {sportello}.
+                                        <br>Verificare le informazioni inserite dall'operatore con badge {codice_badge} 
+                                        ed eventualmente correggere Ekovision''' 
+                                        mails_percorso = cerco_mail(curr_c, cod_percorso, datalav, logger)
+                                        totem_message_mail(test, testo_mail, mails_percorso,  os.path.basename(__file__), logger, 'Scheda di lavoro con risorsa tecnica da modificare')
+                                        #warning_message_mail(testo_mail, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger, 'Scheda di lavoro con risorsa tecnica da modificare')
                                         break # inutile andare al passo successivo
                                     if update_rt==1:
                                         # cambio a 2 per non toccarla più
-                                        tipo_inserimento_rt[rt]=2
+                                        tipo_inserimento_rt[rtt]=2
                                         letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['id']=id_rt_eko
                                         letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['data_inizio']=letture2['schede_lavoro'][0]['servizi'][0]['data_inizio']
                                         letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['ora_inizio']=letture2['schede_lavoro'][0]['servizi'][0]['ora_inizio']
@@ -712,6 +935,13 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
                                         letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['ora_fine']=letture2['schede_lavoro'][0]['servizi'][0]['ora_fine']
                                     # vado al passo successivo
                                     rtt=rtt+1
+                    if id_progressivo_tmp is None:
+                        if len(letture2['schede_lavoro'][0]['risorse_tecniche'])>=1:
+                            id_progressivo_tmp=1
+                        else :
+                            id_progressivo_tmp=0
+                    
+                        
                     if id_ekovision in id_ru:
                         logger.info('La scheda ha già la risorsa umana con id {0} con indice {1}'.format(id_ekovision, id_ru.index(id_ekovision)))
                         # se su Ekovision fosse definito come autista, ma su totem no tolgo il flag autista
@@ -729,7 +959,7 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
                             # INVIO MAIL
                             
                             
-                              
+                            
                         else:
                             logger.info('La scheda ha già risorse umane - OK ')
                             ru=0
@@ -785,12 +1015,15 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
 
                             if check_inserimento == 0:
                                 # devo renderlo più comprensibile questo messaggio di errore
-                                warning_msg = '{3}Non sono riuscito ad inserire la risorsa umana con id {0} con mansione {1} nella scheda {2}'.format(
-                                    id_ekovision, 
-                                    id_mansione, 
-                                    id_scheda, incipit_mail_test)
-                                warning_message_mail(warning_msg, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger, 'Scheda di lavoro con risorsa tecnica da modificare')
-
+                                
+                                warning_msg = f'''{incipit_mail_test}
+                                Non sono riuscito ad inserire la risorsa umana con badge {codice_badge}, 
+                                id ekovision {id_ekovision}, mansione {id_mansione} nella scheda {id_scheda}
+                                (codice percorso {cod_percorso} - {letture2['schede_lavoro'][0]['descr_scheda_lav']} 
+                                del {datalav}) '''
+                                warning_message_mail(warning_msg, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger, 'Scheda di lavoro con risorsa umana non inseribile su Ekovision')
+                                #mails_percorso = cerco_mail(curr_c, cod_percorso, datalav, logger)
+                                #totem_message_mail(test, testo_mail, mails_percorso,  os.path.basename(__file__), logger, 'Scheda di lavoro con risorsa tecnica da modificare')
 
                 
                 #exit()
@@ -804,15 +1037,68 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
                         'json': json.dumps(letture2, ensure_ascii=False).encode('utf-8')
                         }
                 #exit()
-                response2 = requests.post(eko_url_test, params=params2, data=auth_data_eko, headers=headers)
+                response2 = requests.post(eko_URL, params=params2, data=auth_data_eko, headers=headers)
                 result2 = response2.json()
                 if result2['status']=='error':
-                    logger.error('Id_scheda = {}'.format(id_scheda))
-                    logger.error(result2)
-                    logger.error('**************************************************')
-                    logger.error('              JSON                                ')
-                    logger.error('**************************************************')
-                    logger.error(letture2)
+                    # devo mandare una mail 
+                    # codice_badge=registrazione[0]
+                    # id_ekovision=registrazione[1]
+                    # cognome_ru=registrazione[2]
+                    # nome_ru=registrazione[3]
+                    # id_percorso=registrazione[4]
+                    # data_percorso=registrazione[5]
+                    # id_qualifica=registrazione[6]
+                    # id_mansione=registrazione[7]
+                    # sportello=registrazione[8]
+                    # targa=registrazione[9]
+                    # id_rt_eko=registrazione[10]
+                    # datainsert_registrazione=registrazione[11]
+                    msg = f'''Ci sono problemi a salvare le informazioni registrate su totem sulla scheda {id_scheda} di Ekovision 
+                    (codice percorso {cod_percorso} - {descrizione_percorso(cod_percorso,  datalav, curr, logger)} del {datetime.strptime(datalav, '%Y%m%d').strftime('%d/%m/%Y')}
+                    )
+                    <br><br>
+                    Dati registrati su Totem: 
+                    <ul> 
+                    <li>cod percorso: {cod_percorso}</li>
+                    <li>data: {datetime.strptime(datalav, '%Y%m%d').strftime('%d/%m/%Y')}</li>'''
+                    
+                    for rr in registrazioni_percorso:
+                        msg =f'''{msg} 
+                        <ul>                      
+                        <li>matricola: {rr[0]} ({rr[2]} {rr[3]})</li>
+                        <li>id risorsa umana ekovision: {rr[1]} </li>'''
+                        # se c'è un mezzo
+                        if rr[8]:
+                            msg =f'''{msg}<li>sportello: {rr[8]} (Targa: {rr[9]})</li>
+                                <li>id risorsa tecnica ekovision: {rr[10]} </li>'''
+                        else: 
+                            msg=f'''{msg}<li>Nessun mezzo registrato</li>'''
+                        msg=f'''{msg}
+                        <li>data inserimento su totem: {rr[11].strftime('%d/%m/%Y %H:%M')} </li>
+                        </ul>'''
+                    msg = f'''{msg}     
+                    </ul>
+                    <br><br>
+                    Messaggio di errore Ekovision:<br>
+                    <i>
+                    {result2['error']['error_message']}
+                    </i>
+                    <br><br> 
+                    <b>I dati, se corretti, vanno inseriti manualmente su Ekovision. </b>
+                    <hr>
+                    '''
+                    
+                    mails_percorso = cerco_mail(curr_c, cod_percorso, datalav, logger)
+                    logger.info (f'Invio mail a {mails_percorso}')
+                    
+                    totem_message_mail(test, msg, mails_percorso,  os.path.basename(__file__), logger,  'Problema trasferimento dati totem ekovision')
+                    
+                    logger.warning('Id_scheda = {}'.format(id_scheda))
+                    logger.warning(result2)
+                    logger.warning('**************************************************')
+                    logger.warning('              JSON                                ')
+                    logger.warning('**************************************************')
+                    logger.warning(letture2)
                     curr_c.execute(query_update_error, (codice_badge, id_percorso, data_percorso, datainsert_registrazione))
                 else :
                     logger.info(result2['status'])
@@ -820,6 +1106,9 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
                     curr_c.execute(query_update_success, (codice_badge, id_percorso, data_percorso, datainsert_registrazione))
                 conn_c.commit()
 
+            else:
+                # non esiste la scheda non faccio niente, la processerò al prossimo giro
+                continue
 
 
 
@@ -830,6 +1119,9 @@ and to_date(%s, 'YYYYMMDD') between spe.data_inizio_validita and spe.data_fine_v
     curr_c.close()
     #currc1.close()
     conn_c.close()
+    
+    curr.close()
+    conn.close()
     
     
 
