@@ -129,7 +129,7 @@ def totem_message_mail(test: int, messaggio: str, receiver_email, script_name, l
     if CC is not None:
         message["CC"] = CC
     
-    message.preamble = subject
+    #message.preamble = subject
                     
     # Add body to email
     message.attach(MIMEText(body, "html"))
@@ -280,10 +280,11 @@ trim(replace(mi.targa, ' ', '')) as targa,
 me.id_ekovision as id_rt_eko,
 r.datainsert,
 concat('TOTEM Badge ', r.codice, ' - Matr. ', vpes.matricola::text, ' - ', vpes.cognome, ' ', vpes.nome) as sorgente_dati,
-mmq.descrizione as descr_qualifica
+mmq.descrizione as descr_qualifica, 
+vpes.matricola
 from servizi.registrazioni r 
 left join totem.mapping_mansioni_qualifiche mmq on mmq.id_qualifica=r.id_qualifica 
-left join v_personale_ekovision_step1 vpes on r.codice::numeric = vpes.matricola::numeric
+left join v_personale_ekovision_step1 vpes on r.codice::numeric = vpes.codice_badge::numeric
 left join totem.mezzi_infopm mi on trim(mi.sportello) = trim(lpad(r.sportello,5,'0')) 
 left join totem.mezzi_ekovision me on trim(replace(mi.targa, ' ',''))=trim(replace(me.targa, ' ','')) 
 left join (SELECT 
@@ -295,7 +296,7 @@ left join (SELECT
 	and pe.dt_nascita = vpes.data_nascita 
 where r.send_ekovision is true
 and r.codice not like 'badge_%%'
-and errori is null'''
+and errori is not true'''
 
 
     query_percorsi = f''' with registrazioni_agg as ({query_registrazioni})
@@ -420,7 +421,7 @@ order by 3
         res_mail_rbt = totem_message_mail(test, msg, mails_percorso,  os.path.basename(__file__), logger,  'Problema trasferimento dati totem ekovision')
             
         if res_mail_rbt != 200:
-            logger.error(f'Non riesco ad inviare la mail per segnalare la registrazione con badge tempopraneo {rbt}')
+            logger.error(f'Non riesco ad inviare la mail per segnalare la registrazione con badge temporaneo {rbt}')
 
         try: 
             curr_c.execute(query_update_error, (rbt[0], rbt[1], rbt[2], rbt[7]))
@@ -662,7 +663,7 @@ order by 3
                 
                 msg = f'''La scheda {id_scheda} di Ekovision
                 (codice percorso {cod_percorso} - {descrizione_percorso(cod_percorso,  datalav, curr, logger)} del {datetime.strptime(datalav, '%Y%m%d').strftime('%d/%m/%Y')}
-                ) <b>è già eseguita</b>. Non posso caricare personale e mezzi
+                ) <b>è già eseguita su Ekovision</b>. Non posso caricare personale e mezzi registrati sul totem.
                 <br><br>
                 Dati registrati su Totem: 
                 <ul> 
@@ -671,14 +672,17 @@ order by 3
                 
                 for rr in registrazioni_percorso:
                     codice_badge=rr[0]
+                    matricola = rr[14] or "Matricola ND"
+                    cognome=rr[2] or 'Nominativo Non trovato'
+                    nome = rr[3] or ''
                     id_percorso=rr[4]
                     data_percorso=rr[5]
                     datainsert_registrazione=rr[11]
-                    curr_c.execute(query_update_error, (codice_badge, id_percorso, data_percorso, datainsert_registrazione))
+                    
 
                     msg =f'''{msg} 
                     <ul>                      
-                    <li>matricola: {rr[0]} ({rr[2]} {rr[3]})</li>
+                    <li>badge: {rr[0]} (Matr: {matricola} - Nominativo: {cognome} {nome})</li>
                     <li>id risorsa umana ekovision: {rr[1]} </li>'''
                     # se c'è un mezzo
                     if rr[8]:
@@ -692,16 +696,17 @@ order by 3
                 msg = f'''{msg}     
                 </ul>
                 <br><br> 
-                <b>Solo in caso di dubbi<b> controllare i dati inseriti su Ekovision.
-                <hr>
+                <b>Solo in caso di dubbi</b>, controllare i dati inseriti su Ekovision.
                 '''
-                logger.info(msg)
+                #logger.info(msg)
                 
                 mails_percorso = cerco_mail(curr_c, cod_percorso, datalav, logger)
                 logger.info (f'Invio mail a {mails_percorso} e non faccio nulla')
                 
-                totem_message_mail(test, msg, mails_percorso,  os.path.basename(__file__), logger,  'Trasferimento dati totem ekovision. Scheda già eseguita')
+                ritorno=totem_message_mail(test, msg, mails_percorso,  os.path.basename(__file__), logger,  'Trasferimento dati totem ekovision. Problema con scheda eseguita')
+                #logger.info(ritorno)
                 # registro l'informazione sul DB 
+                curr_c.execute(query_update_error, (codice_badge, id_percorso, data_percorso, datainsert_registrazione))
                 conn_c.commit()
                 
                 
@@ -719,7 +724,48 @@ order by 3
 
                 response2 = requests.post(eko_URL, params=params2, data=auth_data_eko, headers=headers)
                 #letture2 = response2.json()
-                letture2 = response2.json()
+                
+                try: 
+                    letture2 = response2.json()
+                    update_db='''update totem.semaforo_ws_sl 
+                    set funzionano = true
+                    WHERE funzionano = false
+                    ;'''
+                    curr_c.execute(update_db)
+
+                    if curr_c.rowcount > 0:
+                        warning_message_mail(
+                            "WS Ekovision ripristinato",
+                            "assterritorio@amiu.genova.it",
+                            os.path.basename(__file__),
+                            logger,
+                            "WS Ekovision OK"
+                        )
+                    conn_c.commit()
+                except Exception as e:
+                    msg=f'''Eccezione lettura JSON: 
+                    <br>Eccezione: {e}
+                    <br> URL:{eko_URL}
+                    <br> Risposta Ekovision: {response2}
+                    '''
+                    logger.error(msg)
+                    update_db = """
+                    UPDATE totem.semaforo_ws_sl
+                    SET funzionano = false
+                    WHERE funzionano = true
+                    """
+                    curr_c.execute(update_db)
+
+                    if curr_c.rowcount > 0:
+                        # era la prima volta che andava KO
+                        warning_message_mail(msg, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger, 'Problemi con WS Ekovision')
+                    else:
+                        logger.warning('WS vanno in errore ma ho già inviato mail')
+                        
+                    conn_c.commit()
+                    exit()
+                
+            
                 #logger.info(letture2)
                 #exit()
                 # key to remove
@@ -825,8 +871,9 @@ order by 3
                 for registrazione in registrazioni_percorso:
                     codice_badge=registrazione[0]
                     id_ekovision=registrazione[1]
-                    cognome_ru=registrazione[2]
-                    nome_ru=registrazione[3]
+                    id_ekovision_mail=registrazione[1] or 'Non trovato'
+                    cognome_ru=registrazione[2] or 'Nominativo Non trovato'
+                    nome_ru=registrazione[3] or ''
                     id_percorso=registrazione[4]
                     data_percorso=registrazione[5]
                     id_qualifica=registrazione[6]
@@ -834,8 +881,10 @@ order by 3
                     id_mansione=registrazione[7]
                     sportello=registrazione[8]
                     targa=registrazione[9]
-                    id_rt_eko=registrazione[10]
+                    id_rt_eko=registrazione[10] 
+                    id_rt_eko_mail=registrazione[10] or 'Non trovato'
                     datainsert_registrazione=registrazione[11]
+                    matricola=registrazione[14] or "Matricola ND"
                     
                     
                     
@@ -935,6 +984,7 @@ order by 3
                                         letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['ora_inizio']=letture2['schede_lavoro'][0]['servizi'][0]['ora_inizio']
                                         letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['data_fine']=letture2['schede_lavoro'][0]['servizi'][0]['data_fine']
                                         letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['ora_fine']=letture2['schede_lavoro'][0]['servizi'][0]['ora_fine']
+                                        break # esco dal ciclo
                                     # vado al passo successivo
                                     rtt=rtt+1
                     if id_progressivo_tmp is None:
@@ -1021,7 +1071,7 @@ order by 3
                                 
                                 msg = f'''{incipit_mail_test}
                                 Non sono riuscito ad inserire la risorsa umana con badge {codice_badge}, 
-                                id ekovision {id_ekovision}, mansione {id_mansione} nella scheda {id_scheda}
+                                id ekovision {id_ekovision_mail}, mansione {id_mansione} nella scheda {id_scheda}
                                 (codice percorso {cod_percorso} - {letture2['schede_lavoro'][0]['descr_scheda_lav']} 
                                 del {datalav}) 
                                 <br><br>
@@ -1031,13 +1081,13 @@ order by 3
                                 <li>data: {datetime.strptime(datalav, '%Y%m%d').strftime('%d/%m/%Y')}</li>
                                 
                                 <ul>                      
-                                <li>matricola: {codice_badge} ({cognome_ru} {nome_ru})</li>
-                                <li>id risorsa umana ekovision: {id_ekovision} </li>
+                                <li>badge: {codice_badge} ({cognome_ru} {nome_ru})</li>
+                                <li>id risorsa umana ekovision: {id_ekovision_mail} </li>
                                 <li>mansione: {descr_qualifica} (id {id_mansione}) </li>'''
                                 # se c'è un mezzo
                                 if sportello:
                                     msg =f'''{msg}<li>sportello: {sportello} (Targa: {targa})</li>
-                                        <li>id risorsa tecnica ekovision: {id_rt_eko} </li>'''
+                                        <li>id risorsa tecnica ekovision: {id_rt_eko_mail} </li>'''
                                 else: 
                                     msg=f'''{msg}<li>Nessun mezzo registrato</li>'''
                                 msg=f'''{msg}
@@ -1063,7 +1113,45 @@ order by 3
                         }
                 #exit()
                 response2 = requests.post(eko_URL, params=params2, data=auth_data_eko, headers=headers)
-                result2 = response2.json()
+                try: 
+                    result2 = response2.json()
+                    update_db='''update totem.semaforo_ws 
+                    set funzionano = true
+                    WHERE funzionano = false
+                    ;'''
+                    curr_c.execute(update_db)
+
+                    if curr_c.rowcount > 0:
+                        warning_message_mail(
+                            "WS Ekovision ripristinato",
+                            "assterritorio@amiu.genova.it",
+                            os.path.basename(__file__),
+                            logger,
+                            "WS Ekovision OK"
+                        )
+                    conn_c.commit()
+                except Exception as e:
+                    msg=f'''Eccezione lettura JSON: 
+                    <br>Eccezione: {e}
+                    <br> URL:{eko_URL}
+                    <br> Risposta Ekovision: {response2}
+                    '''
+                    logger.error(msg)
+                    update_db = """
+                    UPDATE totem.semaforo_ws
+                    SET funzionano = false
+                    WHERE funzionano = true
+                    """
+                    curr_c.execute(update_db)
+
+                    if curr_c.rowcount > 0:
+                        # era la prima volta che andava KO
+                        warning_message_mail(msg, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger, 'Problemi con WS Ekovision')
+                    else:
+                        logger.warning('WS vanno in errore ma ho già inviato mail')
+                        
+                    conn_c.commit()
+                    exit()
                 if result2['status']=='error':
                     # devo mandare una mail 
                     # codice_badge=registrazione[0]
@@ -1090,7 +1178,7 @@ order by 3
                     for rr in registrazioni_percorso:
                         msg =f'''{msg} 
                         <ul>                      
-                        <li>matricola: {rr[0]} ({rr[2]} {rr[3]})</li>
+                        <li>badge: {rr[0]} ({rr[2]} {rr[3]})</li>
                         <li>id risorsa umana ekovision: {rr[1]} </li>'''
                         # se c'è un mezzo
                         if rr[8]:
