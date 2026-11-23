@@ -650,68 +650,10 @@ order by 3
             
 
             
-            if eseguita == 1 or chiusa == 1:
-                
-                # cerco comunque le registrazioni per mandare mail di "warning"
-                try:
-                    curr_c.execute(query_registrazioni_percorso, (cod_percorso, datalav))
-                    registrazioni_percorso=curr_c.fetchall()
-                except Exception as e:
-                    logger.error(query_registrazioni_percorso)
-                    logger.error(e)
+                        
                 
                 
-                msg = f'''La scheda {id_scheda} di Ekovision
-                (codice percorso {cod_percorso} - {descrizione_percorso(cod_percorso,  datalav, curr, logger)} del {datetime.strptime(datalav, '%Y%m%d').strftime('%d/%m/%Y')}
-                ) <b>è già eseguita su Ekovision</b>. Non posso caricare personale e mezzi registrati sul totem.
-                <br><br>
-                Dati registrati su Totem: 
-                <ul> 
-                <li>cod percorso: {cod_percorso}</li>
-                <li>data: {datetime.strptime(datalav, '%Y%m%d').strftime('%d/%m/%Y')}</li>'''
-                
-                for rr in registrazioni_percorso:
-                    codice_badge=rr[0]
-                    matricola = rr[14] or "Matricola ND"
-                    cognome=rr[2] or 'Nominativo Non trovato'
-                    nome = rr[3] or ''
-                    id_percorso=rr[4]
-                    data_percorso=rr[5]
-                    datainsert_registrazione=rr[11]
-                    
-
-                    msg =f'''{msg} 
-                    <ul>                      
-                    <li>badge: {rr[0]} (Matr: {matricola} - Nominativo: {cognome} {nome})</li>
-                    <li>id risorsa umana ekovision: {rr[1]} </li>'''
-                    # se c'è un mezzo
-                    if rr[8]:
-                        msg =f'''{msg}<li>sportello: {rr[8]} (Targa: {rr[9]})</li>
-                            <li>id risorsa tecnica ekovision: {rr[10]} </li>'''
-                    else: 
-                        msg=f'''{msg}<li>Nessun mezzo registrato</li>'''
-                    msg=f'''{msg}
-                    <li>data inserimento su totem: {rr[11].strftime('%d/%m/%Y %H:%M')} </li>
-                    </ul>'''
-                msg = f'''{msg}     
-                </ul>
-                <br><br> 
-                <b>Solo in caso di dubbi</b>, controllare i dati inseriti su Ekovision.
-                '''
-                #logger.info(msg)
-                
-                mails_percorso = cerco_mail(curr_c, cod_percorso, datalav, logger)
-                logger.info (f'Invio mail a {mails_percorso} e non faccio nulla')
-                
-                ritorno=totem_message_mail(test, msg, mails_percorso,  os.path.basename(__file__), logger,  'Trasferimento dati totem ekovision. Problema con scheda eseguita')
-                #logger.info(ritorno)
-                # registro l'informazione sul DB 
-                curr_c.execute(query_update_error, (codice_badge, id_percorso, data_percorso, datainsert_registrazione))
-                conn_c.commit()
-                
-                
-                
-            elif esiste == 1 :     
+            if esiste == 1 :     
                 
                 logger.info('Provo a leggere i dettagli della scheda')
                 
@@ -857,367 +799,459 @@ order by 3
                 logger.info('Tipi inserimento: {0}'.format(tipo_inserimento_ru))
                 
                 
-                
-                # ora faccio un ciclo sulle registrazioni per quel percorso
-                
-                try:
-                    curr_c.execute(query_registrazioni_percorso, (cod_percorso, datalav))
-                    registrazioni_percorso=curr_c.fetchall()
-                except Exception as e:
-                    logger.error(query_registrazioni_percorso)
-                    logger.error(e)
-                
-                
-                for registrazione in registrazioni_percorso:
-                    codice_badge=registrazione[0]
-                    id_ekovision=registrazione[1]
-                    id_ekovision_mail=registrazione[1] or 'Non trovato'
-                    cognome_ru=registrazione[2] or 'Nominativo Non trovato'
-                    nome_ru=registrazione[3] or ''
-                    id_percorso=registrazione[4]
-                    data_percorso=registrazione[5]
-                    id_qualifica=registrazione[6]
-                    descr_qualifica = registrazione[13]
-                    id_mansione=registrazione[7]
-                    sportello=registrazione[8]
-                    targa=registrazione[9]
-                    id_rt_eko=registrazione[10] 
-                    id_rt_eko_mail=registrazione[10] or 'Non trovato'
-                    datainsert_registrazione=registrazione[11]
-                    matricola=registrazione[14] or "Matricola ND"
+                # FACCIO DELLE VERIFICHE IN CASO DI SCHEDA ESEGUITA O CHIUSA
+                if eseguita == 1 or chiusa == 1:
+                    logger.warning('''La scheda risulta già eseguita non faccio nulla, verifico solo se le info dell'oeratore sono corrette o meno''')            
+                    # cerco comunque le registrazioni per mandare mail di "warning"
+                    try:
+                        curr_c.execute(query_registrazioni_percorso, (cod_percorso, datalav))
+                        registrazioni_percorso=curr_c.fetchall()
+                    except Exception as e:
+                        logger.error(query_registrazioni_percorso)
+                        logger.error(e)
                     
                     
-                    
-                    logger.info('Elaboro registrazione di {0} {1} con badge = {2}, cod_eko = {6} e qualifica {3} per il percorso {4} del {5}'.format(
-                        nome_ru, cognome_ru, codice_badge, id_qualifica, id_percorso, data_percorso, id_ekovision
-                    ))
+                    # devo verificare se le informazioni su EKO sono corrette o meno
+                    for rr in registrazioni_percorso:
+                        id_ru_eko = rr[1]
+                        id_rt_eko = rr[10]
+                        
+                        if id_ru_eko not in id_ru or (id_rt_eko is not None and id_rt_eko not in id_rt):
+                            
+                                
+                            # ci sono delle incongruenze per cui mando notifica
+                            msg = f'''La scheda {id_scheda} di Ekovision
+                            (codice percorso {cod_percorso} - {descrizione_percorso(cod_percorso,  datalav, curr, logger)} del {datetime.strptime(datalav, '%Y%m%d').strftime('%d/%m/%Y')}
+                            ) <b>è già eseguita su Ekovision</b>. Non posso caricare personale e mezzi registrati sul totem.
+                            <br>Si segnalano le seguenti anomalie<ul>: 
+                            '''
+                            if id_ru_eko not in id_ru:
+                                msg = f'''{msg}
+                                <li>Personale non caricato correttamente</li>'''
+                            if id_rt_eko is not None and id_rt_eko not in id_rt:
+                                msg = f'''{msg}
+                                <li>Mezzo non caricato correttamente</li>'''
+                            
+                            msg =f'''
+                            {msg}
+                            </ul>
+                            <br><br>
+                            Dati registrati su Totem: 
+                            <ul> 
+                            <li>cod percorso: {cod_percorso}</li>
+                            <li>data: {datetime.strptime(datalav, '%Y%m%d').strftime('%d/%m/%Y')}</li>'''
+                            
+                            for rr in registrazioni_percorso:
+                                codice_badge=rr[0]
+                                matricola = rr[14] or "Matricola ND"
+                                cognome=rr[2] or 'Nominativo Non trovato'
+                                nome = rr[3] or ''
+                                id_percorso=rr[4]
+                                data_percorso=rr[5]
+                                datainsert_registrazione=rr[11]
+                                
             
-                    if sportello is not None:
-                        logger.info('Dovrei inserire la risorsa tecnica con sportello {0}, targa = "{1}"'.format(sportello, targa))
-                        logger.debug(id_rt)
-                        # verifico se targa già presente
-                        if targa in targa_rt:
-                            logger.info('La scheda ha già la risorsa tecnica con sportello {0} - targa {1} con indice {2}'.format(sportello, targa, targa_rt.index(targa)))
-                            # prendo il progressivo della risorsa tecnica da usare per inserire la risorsa umana
-                            progressivo_tmp = progr_rt[targa_rt.index(targa)]
-                            logger.info('Il progressivo da usare per inserire la risorsa umana è {0}'.format(progressivo_tmp))
+                                msg =f'''{msg} 
+                                <ul>                      
+                                <li>badge: {rr[0]} (Matr: {matricola} - Nominativo: {cognome} {nome})</li>
+                                <li>id risorsa umana ekovision: {rr[1]} </li>'''
+                                # se c'è un mezzo
+                                if rr[8]:
+                                    msg =f'''{msg}<li>sportello: {rr[8]} (Targa: {rr[9]})</li>
+                                        <li>id risorsa tecnica ekovision: {rr[10]} </li>'''
+                                else: 
+                                    msg=f'''{msg}<li>Nessun mezzo registrato</li>'''
+                                msg=f'''{msg}
+                                <li>data inserimento su totem: {rr[11].strftime('%d/%m/%Y %H:%M')} </li>
+                                </ul>'''
+                            msg = f'''{msg}     
+                            </ul>
+                            <br><br> 
+                            Si suggerisce di controllare i dati inseriti su Ekovision.
+                            '''
+                            #logger.info(msg)
+                            
+                            mails_percorso = cerco_mail(curr_c, cod_percorso, datalav, logger)
+                            logger.info (f'Invio mail a {mails_percorso} e non faccio nulla')
+                            
+                            ritorno=totem_message_mail(test, msg, mails_percorso,  os.path.basename(__file__), logger,  'Scheda eseguita e dati totem non congruenti')
+                            #logger.info(ritorno)
                         else:
-                            # non c'è la risorsa tecnica da inserire, devo inserirla io
-                            # caso 1 solo mezzo
-                            if len(letture2['schede_lavoro'][0]['risorse_tecniche'])==1:
-                                id_progressivo_tmp=letture2['schede_lavoro'][0]['risorse_tecniche'][0]['id_progressivo']
-                                logger.info('La scheda ha una sola risorsa tecnica, va modificata')
-                                # se id = 0 signigica che è una risorsa tecnica non è statadefinita  va modificata la prima risorsa tecnica
-                                insert_update_rt = 0
-                                if int(letture2['schede_lavoro'][0]['risorse_tecniche'][0]['id']) == 0 :
-                                    logger.warning('La scheda non ha nessuna risorsa tecnica, la aggiorno'.format(id_rt_eko))
-                                    insert_update_rt = 1    
-                                elif int(letture2['schede_lavoro'][0]['risorse_tecniche'][0]['id']) > 0 and tipo_inserimento_rt[0] == 1:
-                                    logger.warning('La scheda ha una risorsa tecnica predefinita, la aggiorno con id {0} da totem'.format(id_rt_eko))
-                                    #letture2['schede_lavoro'][0]['risorse_tecniche'][0]['id']=id_rt_eko 
-                                    insert_update_rt = 1     
-                                else:
-                                    testo_mail= f'''{incipit_mail_test}
-                                    La scheda di lavoro con id {id_scheda} (codice percorso {cod_percorso} - {letture2['schede_lavoro'][0]['descr_scheda_lav']} 
-                                    del {datalav}) ha una risorsa tecnica con targa {letture2['schede_lavoro'][0]['risorse_tecniche'][0]['targa']} 
-                                    impostata manualmente su Ekovision, 
-                                    ma dalle info del totem dovrebbe essere modificata con sportello {sportello}.
-                                    <br>Verificare le informazioni inserite dall'operatore con badge {codice_badge} 
-                                    ed eventualmente correggere Ekovision''' 
-                                    
-                                    #warning_message_mail(testo_mail, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger, 'Scheda di lavoro con risorsa tecnica da modificare')
-                                    
-                                    mails_percorso = cerco_mail(curr_c, cod_percorso, datalav, logger)
-                                    totem_message_mail(test, testo_mail, mails_percorso,  os.path.basename(__file__), logger, 'Scheda di lavoro con risorsa tecnica da modificare')
-                                                       
-                                                       
-                                if insert_update_rt == 1 :
-                                    # cambio tipo inserimento rt
-                                    tipo_inserimento_rt[0] = 2   
-                                    letture2['schede_lavoro'][0]['risorse_tecniche'][0]['id']=id_rt_eko
-                                    letture2['schede_lavoro'][0]['risorse_tecniche'][0]['targa']=targa
-                                    letture2['schede_lavoro'][0]['risorse_tecniche'][0]['data_inizio']=letture2['schede_lavoro'][0]['servizi'][0]['data_inizio']
-                                    letture2['schede_lavoro'][0]['risorse_tecniche'][0]['ora_inizio']=letture2['schede_lavoro'][0]['servizi'][0]['ora_inizio']
-                                    letture2['schede_lavoro'][0]['risorse_tecniche'][0]['data_fine']=letture2['schede_lavoro'][0]['servizi'][0]['data_fine']
-                                    letture2['schede_lavoro'][0]['risorse_tecniche'][0]['ora_fine']=letture2['schede_lavoro'][0]['servizi'][0]['ora_fine']     
-                            elif len(letture2['schede_lavoro'][0]['risorse_tecniche'])==0:
-                                logger.info('La scheda non ha risorse tecniche, sarebbe da aggiungere ma forse meglio inviare mail')
-                                #letture2['schede_lavoro'][0]['risorse_tecniche'][0]['id']=sportello 
-                                # TO DO MAIL
-                                
-                            elif len(letture2['schede_lavoro'][0]['risorse_tecniche'])>1:
-                                # TODO ancora tutto da gestire
-                                
-                                # controllo se c'è id = 0 e se c'è modifico il primo 
-                                logger.info('La scheda ha più di una risorsa tecnica, va modificata la prima con id=0')
-                                # imposto questa variabile a 0
-                                update_rt=0
-                                rtt=0
-                                while rtt < len(letture2['schede_lavoro'][0]['risorse_tecniche']):
-                                    # se arrivo qua ho già verificato che la targa non è tra quelle già presenti, quindi devo solo capire 
-                                    # se ho spazio o meno per inserire questo sportello
-                                    if letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['id'] == 0:
-                                        update_rt=1
-                                        id_progresssivo_tmp=letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['id_progressivo']
-                                        
-                                    elif letture2['schede_lavoro'][0]['risorse_tecniche'][0]['id'] > 0 and tipo_inserimento_rt[rtt] == 1:
+                            logger.info('''I dati registrati dall'operatore sono già su EKO. Non dico nulla''')
+                    
+                    
+                    
+                    for rr in registrazioni_percorso:
+                        codice_badge=rr[0]
+                        id_percorso=rr[4]
+                        data_percorso=rr[5]
+                        datainsert_registrazione=rr[11]
+                        # registro l'informazione sul DB per non riprocessare
+                        curr_c.execute(query_update_error, (codice_badge, id_percorso, data_percorso, datainsert_registrazione))
+                        conn_c.commit()
+                
+                else:
+                    # ora faccio un ciclo sulle registrazioni per quel percorso
+                    
+                    try:
+                        curr_c.execute(query_registrazioni_percorso, (cod_percorso, datalav))
+                        registrazioni_percorso=curr_c.fetchall()
+                    except Exception as e:
+                        logger.error(query_registrazioni_percorso)
+                        logger.error(e)
+                    
+                    
+                    for registrazione in registrazioni_percorso:
+                        codice_badge=registrazione[0]
+                        id_ekovision=registrazione[1]
+                        id_ekovision_mail=registrazione[1] or 'Non trovato'
+                        cognome_ru=registrazione[2] or 'Nominativo Non trovato'
+                        nome_ru=registrazione[3] or ''
+                        id_percorso=registrazione[4]
+                        data_percorso=registrazione[5]
+                        id_qualifica=registrazione[6]
+                        descr_qualifica = registrazione[13]
+                        id_mansione=registrazione[7]
+                        sportello=registrazione[8]
+                        targa=registrazione[9]
+                        id_rt_eko=registrazione[10] 
+                        id_rt_eko_mail=registrazione[10] or 'Non trovato'
+                        datainsert_registrazione=registrazione[11]
+                        matricola=registrazione[14] or "Matricola ND"
+                        
+                        
+                        
+                        logger.info('Elaboro registrazione di {0} {1} con badge = {2}, cod_eko = {6} e qualifica {3} per il percorso {4} del {5}'.format(
+                            nome_ru, cognome_ru, codice_badge, id_qualifica, id_percorso, data_percorso, id_ekovision
+                        ))
+                
+                        if sportello is not None:
+                            logger.info('Dovrei inserire la risorsa tecnica con sportello {0}, targa = "{1}"'.format(sportello, targa))
+                            logger.debug(id_rt)
+                            # verifico se targa già presente
+                            if targa in targa_rt:
+                                logger.info('La scheda ha già la risorsa tecnica con sportello {0} - targa {1} con indice {2}'.format(sportello, targa, targa_rt.index(targa)))
+                                # prendo il progressivo della risorsa tecnica da usare per inserire la risorsa umana
+                                progressivo_tmp = progr_rt[targa_rt.index(targa)]
+                                logger.info('Il progressivo da usare per inserire la risorsa umana è {0}'.format(progressivo_tmp))
+                            else:
+                                # non c'è la risorsa tecnica da inserire, devo inserirla io
+                                # caso 1 solo mezzo
+                                if len(letture2['schede_lavoro'][0]['risorse_tecniche'])==1:
+                                    id_progressivo_tmp=letture2['schede_lavoro'][0]['risorse_tecniche'][0]['id_progressivo']
+                                    logger.info('La scheda ha una sola risorsa tecnica, va modificata')
+                                    # se id = 0 signigica che è una risorsa tecnica non è statadefinita  va modificata la prima risorsa tecnica
+                                    insert_update_rt = 0
+                                    if int(letture2['schede_lavoro'][0]['risorse_tecniche'][0]['id']) == 0 :
+                                        logger.warning('La scheda non ha nessuna risorsa tecnica, la aggiorno'.format(id_rt_eko))
+                                        insert_update_rt = 1    
+                                    elif int(letture2['schede_lavoro'][0]['risorse_tecniche'][0]['id']) > 0 and tipo_inserimento_rt[0] == 1:
                                         logger.warning('La scheda ha una risorsa tecnica predefinita, la aggiorno con id {0} da totem'.format(id_rt_eko))
-                                        update_rt=1
-                                        id_progresssivo_tmp=letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['id_progressivo']
-                                        
-                                    else:    
+                                        #letture2['schede_lavoro'][0]['risorse_tecniche'][0]['id']=id_rt_eko 
+                                        insert_update_rt = 1     
+                                    else:
                                         testo_mail= f'''{incipit_mail_test}
                                         La scheda di lavoro con id {id_scheda} (codice percorso {cod_percorso} - {letture2['schede_lavoro'][0]['descr_scheda_lav']} 
-                                        del {datalav}) ha più risorse tecniche già impostate manualmente su Ekovision, 
-                                        ma dalle info del totem dovrebbe esserci anche lo sportello {sportello}.
+                                        del {datalav}) ha una risorsa tecnica con targa {letture2['schede_lavoro'][0]['risorse_tecniche'][0]['targa']} 
+                                        impostata manualmente su Ekovision, 
+                                        ma dalle info del totem dovrebbe essere modificata con sportello {sportello}.
                                         <br>Verificare le informazioni inserite dall'operatore con badge {codice_badge} 
                                         ed eventualmente correggere Ekovision''' 
+                                        
+                                        #warning_message_mail(testo_mail, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger, 'Scheda di lavoro con risorsa tecnica da modificare')
+                                        
                                         mails_percorso = cerco_mail(curr_c, cod_percorso, datalav, logger)
                                         totem_message_mail(test, testo_mail, mails_percorso,  os.path.basename(__file__), logger, 'Scheda di lavoro con risorsa tecnica da modificare')
-                                        #warning_message_mail(testo_mail, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger, 'Scheda di lavoro con risorsa tecnica da modificare')
-                                        break # inutile andare al passo successivo
-                                    if update_rt==1:
-                                        # cambio a 2 per non toccarla più
-                                        tipo_inserimento_rt[rtt]=2
-                                        letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['id']=id_rt_eko
-                                        letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['data_inizio']=letture2['schede_lavoro'][0]['servizi'][0]['data_inizio']
-                                        letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['ora_inizio']=letture2['schede_lavoro'][0]['servizi'][0]['ora_inizio']
-                                        letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['data_fine']=letture2['schede_lavoro'][0]['servizi'][0]['data_fine']
-                                        letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['ora_fine']=letture2['schede_lavoro'][0]['servizi'][0]['ora_fine']
-                                        break # esco dal ciclo
-                                    # vado al passo successivo
-                                    rtt=rtt+1
-                    if id_progressivo_tmp is None:
-                        if len(letture2['schede_lavoro'][0]['risorse_tecniche'])>=1:
-                            id_progressivo_tmp=1
-                        else :
-                            id_progressivo_tmp=0
-                    
-                        
-                    if id_ekovision in id_ru:
-                        logger.info('La scheda ha già la risorsa umana con id {0} con indice {1}'.format(id_ekovision, id_ru.index(id_ekovision)))
-                        # se su Ekovision fosse definito come autista, ma su totem no tolgo il flag autista
-                        if int(flg_auti[id_ru.index(id_ekovision)]) == 1 and sportello is None:
-                            logger.info('La risorsa umana id {0} è autista su Ekovision ma va tolto'.format(id_ekovision))
-                            letture2['schede_lavoro'][0]['risorse_umane'][id_ru.index(id_ekovision)]['flg_autista']=0
-                        elif int(flg_auti[id_ru.index(id_ekovision)]) == 0 and sportello is not None:
-                            logger.info('La risorsa umana con id {0} non è autista su Ekovision, ma lo è dalle info del totem --> correggo'.format(id_ekovision))
-                            letture2['schede_lavoro'][0]['risorse_umane'][id_ru.index(id_ekovision)]['flg_autista']=1
-                    
-                    else:
-                        logger.info('La scheda non ha la risorsa umana con id {0}, va aggiunta'.format(id_ekovision))
-                        if len(letture2['schede_lavoro'][0]['risorse_umane'])==0:
-                            logger.info('La scheda non ha risorse umane, devo capire se posso aggiungerle')
-                            # INVIO MAIL
-                            
-                            
-                            
-                        else:
-                            logger.info('La scheda ha già risorse umane - OK ')
-                            ru=0
-                            # primo giro 
-                            check_inserimento=0
-                            while ru < len(letture2['schede_lavoro'][0]['risorse_umane']):
-                                if id_mansione == mansioni[ru] and tipo_inserimento_ru[ru] == 0:
-                                    # cambio tipo inserimento (mettendo 2 non dovrei toccarla più)
-                                    tipo_inserimento_ru[ru]=2
-                                    check_inserimento=1
-                                    logger.info('Ho trovato una risorsa umana con mansione {0} e tipo inserimento 0, quindi posso inserirla'.format(id_mansione))
-                                    letture2['schede_lavoro'][0]['risorse_umane'][ru]['id']=id_ekovision 
-                                    letture2['schede_lavoro'][0]['risorse_umane'][ru]['id_progr_ristec']=id_progressivo_tmp 
-                                    letture2['schede_lavoro'][0]['risorse_umane'][ru]['cognome']=cognome_ru # non funziona ma forse non serve
-                                    letture2['schede_lavoro'][0]['risorse_umane'][ru]['nome']=nome_ru # non funziona ma forse non serve
-                                    letture2['schede_lavoro'][0]['risorse_umane'][ru]['data_inizio']=letture2['schede_lavoro'][0]['servizi'][0]['data_inizio']
-                                    letture2['schede_lavoro'][0]['risorse_umane'][ru]['ora_inizio']=letture2['schede_lavoro'][0]['servizi'][0]['ora_inizio']
-                                    letture2['schede_lavoro'][0]['risorse_umane'][ru]['data_fine']=letture2['schede_lavoro'][0]['servizi'][0]['data_fine']
-                                    letture2['schede_lavoro'][0]['risorse_umane'][ru]['ora_fine']=letture2['schede_lavoro'][0]['servizi'][0]['ora_fine']
+                                                        
+                                                        
+                                    if insert_update_rt == 1 :
+                                        # cambio tipo inserimento rt
+                                        tipo_inserimento_rt[0] = 2   
+                                        letture2['schede_lavoro'][0]['risorse_tecniche'][0]['id']=id_rt_eko
+                                        letture2['schede_lavoro'][0]['risorse_tecniche'][0]['targa']=targa
+                                        letture2['schede_lavoro'][0]['risorse_tecniche'][0]['data_inizio']=letture2['schede_lavoro'][0]['servizi'][0]['data_inizio']
+                                        letture2['schede_lavoro'][0]['risorse_tecniche'][0]['ora_inizio']=letture2['schede_lavoro'][0]['servizi'][0]['ora_inizio']
+                                        letture2['schede_lavoro'][0]['risorse_tecniche'][0]['data_fine']=letture2['schede_lavoro'][0]['servizi'][0]['data_fine']
+                                        letture2['schede_lavoro'][0]['risorse_tecniche'][0]['ora_fine']=letture2['schede_lavoro'][0]['servizi'][0]['ora_fine']     
+                                elif len(letture2['schede_lavoro'][0]['risorse_tecniche'])==0:
+                                    logger.info('La scheda non ha risorse tecniche, sarebbe da aggiungere ma forse meglio inviare mail')
+                                    #letture2['schede_lavoro'][0]['risorse_tecniche'][0]['id']=sportello 
+                                    # TO DO MAIL
                                     
-                                    # se c'è una risorsa tecnica con id da totem e questa risorsa umana è autista, metto il flag autista
-                                    if sportello is not None:
-                                        logger.info(''' C'è una risorsa tecnica sportello {0} da totem, 
-                                                    quindi la risorsa umana con id {1} è autista --> metto flag autista'''.format(sportello, id_ekovision))
-                                        letture2['schede_lavoro'][0]['risorse_umane'][ru]['flg_autista']=1
-                                    else: 
-                                        letture2['schede_lavoro'][0]['risorse_umane'][ru]['flg_autista']=0
-                                    logger.debug(letture2['schede_lavoro'][0]['risorse_umane'][ru])
-                                    break
-                                ru=ru+1
-                            # secondo giro 
-                            if check_inserimento == 0:
-                                logger.info(f'''Non ho trovato una risorsa umana con mansione {id_mansione} e tipo inserimento 0, 
-                                            quindi cerco una risorsa umana con tipo inserimento 1 per sostituirla''')
+                                elif len(letture2['schede_lavoro'][0]['risorse_tecniche'])>1:
+                                    # TODO ancora tutto da gestire
+                                    
+                                    # controllo se c'è id = 0 e se c'è modifico il primo 
+                                    logger.info('La scheda ha più di una risorsa tecnica, va modificata la prima con id=0')
+                                    # imposto questa variabile a 0
+                                    update_rt=0
+                                    rtt=0
+                                    while rtt < len(letture2['schede_lavoro'][0]['risorse_tecniche']):
+                                        # se arrivo qua ho già verificato che la targa non è tra quelle già presenti, quindi devo solo capire 
+                                        # se ho spazio o meno per inserire questo sportello
+                                        if letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['id'] == 0:
+                                            update_rt=1
+                                            id_progresssivo_tmp=letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['id_progressivo']
+                                            
+                                        elif letture2['schede_lavoro'][0]['risorse_tecniche'][0]['id'] > 0 and tipo_inserimento_rt[rtt] == 1:
+                                            logger.warning('La scheda ha una risorsa tecnica predefinita, la aggiorno con id {0} da totem'.format(id_rt_eko))
+                                            update_rt=1
+                                            id_progresssivo_tmp=letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['id_progressivo']
+                                            
+                                        else:    
+                                            testo_mail= f'''{incipit_mail_test}
+                                            La scheda di lavoro con id {id_scheda} (codice percorso {cod_percorso} - {letture2['schede_lavoro'][0]['descr_scheda_lav']} 
+                                            del {datalav}) ha più risorse tecniche già impostate manualmente su Ekovision, 
+                                            ma dalle info del totem dovrebbe esserci anche lo sportello {sportello}.
+                                            <br>Verificare le informazioni inserite dall'operatore con badge {codice_badge} 
+                                            ed eventualmente correggere Ekovision''' 
+                                            mails_percorso = cerco_mail(curr_c, cod_percorso, datalav, logger)
+                                            totem_message_mail(test, testo_mail, mails_percorso,  os.path.basename(__file__), logger, 'Scheda di lavoro con risorsa tecnica da modificare')
+                                            #warning_message_mail(testo_mail, 'roberto.marzocchi@amiu.genova.it', os.path.basename(__file__), logger, 'Scheda di lavoro con risorsa tecnica da modificare')
+                                            break # inutile andare al passo successivo
+                                        if update_rt==1:
+                                            # cambio a 2 per non toccarla più
+                                            tipo_inserimento_rt[rtt]=2
+                                            letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['id']=id_rt_eko
+                                            letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['data_inizio']=letture2['schede_lavoro'][0]['servizi'][0]['data_inizio']
+                                            letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['ora_inizio']=letture2['schede_lavoro'][0]['servizi'][0]['ora_inizio']
+                                            letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['data_fine']=letture2['schede_lavoro'][0]['servizi'][0]['data_fine']
+                                            letture2['schede_lavoro'][0]['risorse_tecniche'][rtt]['ora_fine']=letture2['schede_lavoro'][0]['servizi'][0]['ora_fine']
+                                            break # esco dal ciclo
+                                        # vado al passo successivo
+                                        rtt=rtt+1
+                        if id_progressivo_tmp is None:
+                            if len(letture2['schede_lavoro'][0]['risorse_tecniche'])>=1:
+                                id_progressivo_tmp=1
+                            else :
+                                id_progressivo_tmp=0
+                        
+                            
+                        if id_ekovision in id_ru:
+                            logger.info('La scheda ha già la risorsa umana con id {0} con indice {1}'.format(id_ekovision, id_ru.index(id_ekovision)))
+                            # se su Ekovision fosse definito come autista, ma su totem no tolgo il flag autista
+                            if int(flg_auti[id_ru.index(id_ekovision)]) == 1 and sportello is None:
+                                logger.info('La risorsa umana id {0} è autista su Ekovision ma va tolto'.format(id_ekovision))
+                                letture2['schede_lavoro'][0]['risorse_umane'][id_ru.index(id_ekovision)]['flg_autista']=0
+                            elif int(flg_auti[id_ru.index(id_ekovision)]) == 0 and sportello is not None:
+                                logger.info('La risorsa umana con id {0} non è autista su Ekovision, ma lo è dalle info del totem --> correggo'.format(id_ekovision))
+                                letture2['schede_lavoro'][0]['risorse_umane'][id_ru.index(id_ekovision)]['flg_autista']=1
+                        
+                        else:
+                            logger.info('La scheda non ha la risorsa umana con id {0}, va aggiunta'.format(id_ekovision))
+                            if len(letture2['schede_lavoro'][0]['risorse_umane'])==0:
+                                logger.info('La scheda non ha risorse umane, devo capire se posso aggiungerle')
+                                # INVIO MAIL
+                                
+                                
+                                
+                            else:
+                                logger.info('La scheda ha già risorse umane - OK ')
                                 ru=0
+                                # primo giro 
+                                check_inserimento=0
                                 while ru < len(letture2['schede_lavoro'][0]['risorse_umane']):
-                                    if id_mansione == mansioni[ru] and tipo_inserimento_ru[ru] == 1:
-                                        logger.info(f'''Ho trovato una risorsa umana con mansione {id_mansione} e tipo inserimento 1, 
-                                                    quindi posso sostituirla con la risorsa da inserire''')
-                                        check_inserimento=1
+                                    if id_mansione == mansioni[ru] and tipo_inserimento_ru[ru] == 0:
                                         # cambio tipo inserimento (mettendo 2 non dovrei toccarla più)
                                         tipo_inserimento_ru[ru]=2
+                                        check_inserimento=1
+                                        logger.info('Ho trovato una risorsa umana con mansione {0} e tipo inserimento 0, quindi posso inserirla'.format(id_mansione))
+                                        letture2['schede_lavoro'][0]['risorse_umane'][ru]['id']=id_ekovision 
+                                        letture2['schede_lavoro'][0]['risorse_umane'][ru]['id_progr_ristec']=id_progressivo_tmp 
+                                        letture2['schede_lavoro'][0]['risorse_umane'][ru]['cognome']=cognome_ru # non funziona ma forse non serve
+                                        letture2['schede_lavoro'][0]['risorse_umane'][ru]['nome']=nome_ru # non funziona ma forse non serve
+                                        letture2['schede_lavoro'][0]['risorse_umane'][ru]['data_inizio']=letture2['schede_lavoro'][0]['servizi'][0]['data_inizio']
+                                        letture2['schede_lavoro'][0]['risorse_umane'][ru]['ora_inizio']=letture2['schede_lavoro'][0]['servizi'][0]['ora_inizio']
+                                        letture2['schede_lavoro'][0]['risorse_umane'][ru]['data_fine']=letture2['schede_lavoro'][0]['servizi'][0]['data_fine']
+                                        letture2['schede_lavoro'][0]['risorse_umane'][ru]['ora_fine']=letture2['schede_lavoro'][0]['servizi'][0]['ora_fine']
                                         
-                                        letture2['schede_lavoro'][0]['risorse_umane'][ru]['id']=id_ekovision  
                                         # se c'è una risorsa tecnica con id da totem e questa risorsa umana è autista, metto il flag autista
                                         if sportello is not None:
-                                            logger.info('C\'è una risorsa tecnica con id {0} da totem, quindi la risorsa umana con id {1} è autista --> metto flag autista'.format(sportello, id_ekovision))
+                                            logger.info(''' C'è una risorsa tecnica sportello {0} da totem, 
+                                                        quindi la risorsa umana con id {1} è autista --> metto flag autista'''.format(sportello, id_ekovision))
                                             letture2['schede_lavoro'][0]['risorse_umane'][ru]['flg_autista']=1
                                         else: 
                                             letture2['schede_lavoro'][0]['risorse_umane'][ru]['flg_autista']=0
                                         logger.debug(letture2['schede_lavoro'][0]['risorse_umane'][ru])
                                         break
                                     ru=ru+1
+                                # secondo giro 
+                                if check_inserimento == 0:
+                                    logger.info(f'''Non ho trovato una risorsa umana con mansione {id_mansione} e tipo inserimento 0, 
+                                                quindi cerco una risorsa umana con tipo inserimento 1 per sostituirla''')
+                                    ru=0
+                                    while ru < len(letture2['schede_lavoro'][0]['risorse_umane']):
+                                        if id_mansione == mansioni[ru] and tipo_inserimento_ru[ru] == 1:
+                                            logger.info(f'''Ho trovato una risorsa umana con mansione {id_mansione} e tipo inserimento 1, 
+                                                        quindi posso sostituirla con la risorsa da inserire''')
+                                            check_inserimento=1
+                                            # cambio tipo inserimento (mettendo 2 non dovrei toccarla più)
+                                            tipo_inserimento_ru[ru]=2
+                                            
+                                            letture2['schede_lavoro'][0]['risorse_umane'][ru]['id']=id_ekovision  
+                                            # se c'è una risorsa tecnica con id da totem e questa risorsa umana è autista, metto il flag autista
+                                            if sportello is not None:
+                                                logger.info('C\'è una risorsa tecnica con id {0} da totem, quindi la risorsa umana con id {1} è autista --> metto flag autista'.format(sportello, id_ekovision))
+                                                letture2['schede_lavoro'][0]['risorse_umane'][ru]['flg_autista']=1
+                                            else: 
+                                                letture2['schede_lavoro'][0]['risorse_umane'][ru]['flg_autista']=0
+                                            logger.debug(letture2['schede_lavoro'][0]['risorse_umane'][ru])
+                                            break
+                                        ru=ru+1
 
-                            if check_inserimento == 0:
-                                # devo renderlo più comprensibile questo messaggio di errore
-                                
-                                msg = f'''{incipit_mail_test}
-                                Non sono riuscito ad inserire la risorsa umana con badge {codice_badge}, 
-                                id ekovision {id_ekovision_mail}, mansione {id_mansione} nella scheda {id_scheda}
-                                (codice percorso {cod_percorso} - {letture2['schede_lavoro'][0]['descr_scheda_lav']} 
-                                del {datalav}) 
-                                <br><br>
-                                Dati registrati su Totem: 
-                                <ul> 
-                                <li>cod percorso: {cod_percorso}</li>
-                                <li>data: {datetime.strptime(datalav, '%Y%m%d').strftime('%d/%m/%Y')}</li>
-                                
-                                <ul>                      
-                                <li>badge: {codice_badge} ({cognome_ru} {nome_ru})</li>
-                                <li>id risorsa umana ekovision: {id_ekovision_mail} </li>
-                                <li>mansione: {descr_qualifica} (id {id_mansione}) </li>'''
-                                # se c'è un mezzo
-                                if sportello:
-                                    msg =f'''{msg}<li>sportello: {sportello} (Targa: {targa})</li>
-                                        <li>id risorsa tecnica ekovision: {id_rt_eko_mail} </li>'''
-                                else: 
-                                    msg=f'''{msg}<li>Nessun mezzo registrato</li>'''
-                                msg=f'''{msg}
-                                <li>data inserimento su totem: {datainsert_registrazione.strftime('%d/%m/%Y %H:%M')} </li>
-                                </ul></ul>'''
-                                
-                                
-                                
-                                #warning_message_mail(msg, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger, 'Scheda di lavoro con risorsa umana non inseribile su Ekovision')
-                                mails_percorso = cerco_mail(curr_c, cod_percorso, datalav, logger)
-                                totem_message_mail(test, msg, mails_percorso,  os.path.basename(__file__), logger, 'Scheda di lavoro con risorsa umana non inseribile su Ekovision')
+                                if check_inserimento == 0:
+                                    # devo renderlo più comprensibile questo messaggio di errore
+                                    
+                                    msg = f'''{incipit_mail_test}
+                                    Non sono riuscito ad inserire la risorsa umana con badge {codice_badge}, 
+                                    id ekovision {id_ekovision_mail}, mansione {id_mansione} nella scheda {id_scheda}
+                                    (codice percorso {cod_percorso} - {letture2['schede_lavoro'][0]['descr_scheda_lav']} 
+                                    del {datalav}) 
+                                    <br><br>
+                                    Dati registrati su Totem: 
+                                    <ul> 
+                                    <li>cod percorso: {cod_percorso}</li>
+                                    <li>data: {datetime.strptime(datalav, '%Y%m%d').strftime('%d/%m/%Y')}</li>
+                                    
+                                    <ul>                      
+                                    <li>badge: {codice_badge} ({cognome_ru} {nome_ru})</li>
+                                    <li>id risorsa umana ekovision: {id_ekovision_mail} </li>
+                                    <li>mansione: {descr_qualifica} (id {id_mansione}) </li>'''
+                                    # se c'è un mezzo
+                                    if sportello:
+                                        msg =f'''{msg}<li>sportello: {sportello} (Targa: {targa})</li>
+                                            <li>id risorsa tecnica ekovision: {id_rt_eko_mail} </li>'''
+                                    else: 
+                                        msg=f'''{msg}<li>Nessun mezzo registrato</li>'''
+                                    msg=f'''{msg}
+                                    <li>data inserimento su totem: {datainsert_registrazione.strftime('%d/%m/%Y %H:%M')} </li>
+                                    </ul></ul>'''
+                                    
+                                    
+                                    
+                                    #warning_message_mail(msg, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger, 'Scheda di lavoro con risorsa umana non inseribile su Ekovision')
+                                    mails_percorso = cerco_mail(curr_c, cod_percorso, datalav, logger)
+                                    totem_message_mail(test, msg, mails_percorso,  os.path.basename(__file__), logger, 'Scheda di lavoro con risorsa umana non inseribile su Ekovision')
 
                 
-                #exit()
-                logger.info('Provo a salvare la scheda')
-                #logger.info(letture2)
-                
-                guid = uuid.uuid4()
-                params2={'obj':'schede_lavoro',
-                        'act' : 'w',
-                        'ruid': '{}'.format(str(guid)),
-                        'json': json.dumps(letture2, ensure_ascii=False).encode('utf-8')
-                        }
-                #exit()
-                response2 = requests.post(eko_URL, params=params2, data=auth_data_eko, headers=headers)
-                try: 
-                    result2 = response2.json()
-                    update_db='''update totem.semaforo_ws 
-                    set funzionano = true
-                    WHERE funzionano = false
-                    ;'''
-                    curr_c.execute(update_db)
+                if eseguita == 0:
+                    #exit()
+                    logger.info('Provo a salvare la scheda')
+                    #logger.info(letture2)
+                    
+                    guid = uuid.uuid4()
+                    params2={'obj':'schede_lavoro',
+                            'act' : 'w',
+                            'ruid': '{}'.format(str(guid)),
+                            'json': json.dumps(letture2, ensure_ascii=False).encode('utf-8')
+                            }
+                    #exit()
+                    response2 = requests.post(eko_URL, params=params2, data=auth_data_eko, headers=headers)
+                    try: 
+                        result2 = response2.json()
+                        update_db='''update totem.semaforo_ws 
+                        set funzionano = true
+                        WHERE funzionano = false
+                        ;'''
+                        curr_c.execute(update_db)
 
-                    if curr_c.rowcount > 0:
-                        warning_message_mail(
-                            "WS Ekovision ripristinato",
-                            "assterritorio@amiu.genova.it",
-                            os.path.basename(__file__),
-                            logger,
-                            "WS Ekovision OK"
+                        if curr_c.rowcount > 0:
+                            warning_message_mail(
+                                "WS Ekovision ripristinato",
+                                "assterritorio@amiu.genova.it",
+                                os.path.basename(__file__),
+                                logger,
+                                "WS Ekovision OK"
+                            )
+                        conn_c.commit()
+                    except Exception as e:
+                        msg=f'''Eccezione lettura JSON: 
+                        <br>Eccezione: {e}
+                        <br> URL:{eko_URL}
+                        <br> Risposta Ekovision: {response2}
+                        '''
+                        logger.error(msg)
+                        update_db = """
+                        UPDATE totem.semaforo_ws
+                        SET funzionano = false
+                        WHERE funzionano = true
+                        """
+                        curr_c.execute(update_db)
+
+                        if curr_c.rowcount > 0:
+                            # era la prima volta che andava KO
+                            warning_message_mail(msg, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger, 'Problemi con WS Ekovision')
+                        else:
+                            logger.warning('WS vanno in errore ma ho già inviato mail')
+                            
+                        conn_c.commit()
+                        exit()
+                    if result2['status']=='error':
+                        # devo mandare una mail 
+                        # codice_badge=registrazione[0]
+                        # id_ekovision=registrazione[1]
+                        # cognome_ru=registrazione[2]
+                        # nome_ru=registrazione[3]
+                        # id_percorso=registrazione[4]
+                        # data_percorso=registrazione[5]
+                        # id_qualifica=registrazione[6]
+                        # id_mansione=registrazione[7]
+                        # sportello=registrazione[8]
+                        # targa=registrazione[9]
+                        # id_rt_eko=registrazione[10]
+                        # datainsert_registrazione=registrazione[11]
+                        msg = f'''Ci sono problemi a salvare le informazioni registrate su totem sulla scheda {id_scheda} di Ekovision 
+                        (codice percorso {cod_percorso} - {descrizione_percorso(cod_percorso,  datalav, curr, logger)} del {datetime.strptime(datalav, '%Y%m%d').strftime('%d/%m/%Y')}
                         )
-                    conn_c.commit()
-                except Exception as e:
-                    msg=f'''Eccezione lettura JSON: 
-                    <br>Eccezione: {e}
-                    <br> URL:{eko_URL}
-                    <br> Risposta Ekovision: {response2}
-                    '''
-                    logger.error(msg)
-                    update_db = """
-                    UPDATE totem.semaforo_ws
-                    SET funzionano = false
-                    WHERE funzionano = true
-                    """
-                    curr_c.execute(update_db)
-
-                    if curr_c.rowcount > 0:
-                        # era la prima volta che andava KO
-                        warning_message_mail(msg, 'assterritorio@amiu.genova.it', os.path.basename(__file__), logger, 'Problemi con WS Ekovision')
-                    else:
-                        logger.warning('WS vanno in errore ma ho già inviato mail')
+                        <br><br>
+                        Dati registrati su Totem: 
+                        <ul> 
+                        <li>cod percorso: {cod_percorso}</li>
+                        <li>data: {datetime.strptime(datalav, '%Y%m%d').strftime('%d/%m/%Y')}</li>'''
                         
+                        for rr in registrazioni_percorso:
+                            msg =f'''{msg} 
+                            <ul>                      
+                            <li>badge: {rr[0]} ({rr[2]} {rr[3]})</li>
+                            <li>id risorsa umana ekovision: {rr[1]} </li>'''
+                            # se c'è un mezzo
+                            if rr[8]:
+                                msg =f'''{msg}<li>sportello: {rr[8]} (Targa: {rr[9]})</li>
+                                    <li>id risorsa tecnica ekovision: {rr[10]} </li>'''
+                            else: 
+                                msg=f'''{msg}<li>Nessun mezzo registrato</li>'''
+                            msg=f'''{msg}
+                            <li>data inserimento su totem: {rr[11].strftime('%d/%m/%Y %H:%M')} </li>
+                            </ul>'''
+                        msg = f'''{msg}     
+                        </ul>
+                        <br><br>
+                        Messaggio di errore Ekovision:<br>
+                        <i>
+                        {result2['error']['error_message']}
+                        </i>
+                        <br><br> 
+                        <b>I dati, se corretti, vanno inseriti manualmente su Ekovision. </b>
+                        <hr>
+                        '''
+                        
+                        mails_percorso = cerco_mail(curr_c, cod_percorso, datalav, logger)
+                        logger.info (f'Invio mail a {mails_percorso}')
+                        
+                        totem_message_mail(test, msg, mails_percorso,  os.path.basename(__file__), logger,  'Problema trasferimento dati totem ekovision')
+                        
+                        logger.warning('Id_scheda = {}'.format(id_scheda))
+                        logger.warning(result2)
+                        logger.warning('**************************************************')
+                        logger.warning('              JSON                                ')
+                        logger.warning('**************************************************')
+                        logger.warning(letture2)
+                        curr_c.execute(query_update_error, (codice_badge, id_percorso, data_percorso, datainsert_registrazione))
+                    else :
+                        logger.info(result2['status'])
+                        # a questo punto dovrei fare 
+                        curr_c.execute(query_update_success, (codice_badge, id_percorso, data_percorso, datainsert_registrazione))
                     conn_c.commit()
-                    exit()
-                if result2['status']=='error':
-                    # devo mandare una mail 
-                    # codice_badge=registrazione[0]
-                    # id_ekovision=registrazione[1]
-                    # cognome_ru=registrazione[2]
-                    # nome_ru=registrazione[3]
-                    # id_percorso=registrazione[4]
-                    # data_percorso=registrazione[5]
-                    # id_qualifica=registrazione[6]
-                    # id_mansione=registrazione[7]
-                    # sportello=registrazione[8]
-                    # targa=registrazione[9]
-                    # id_rt_eko=registrazione[10]
-                    # datainsert_registrazione=registrazione[11]
-                    msg = f'''Ci sono problemi a salvare le informazioni registrate su totem sulla scheda {id_scheda} di Ekovision 
-                    (codice percorso {cod_percorso} - {descrizione_percorso(cod_percorso,  datalav, curr, logger)} del {datetime.strptime(datalav, '%Y%m%d').strftime('%d/%m/%Y')}
-                    )
-                    <br><br>
-                    Dati registrati su Totem: 
-                    <ul> 
-                    <li>cod percorso: {cod_percorso}</li>
-                    <li>data: {datetime.strptime(datalav, '%Y%m%d').strftime('%d/%m/%Y')}</li>'''
-                    
-                    for rr in registrazioni_percorso:
-                        msg =f'''{msg} 
-                        <ul>                      
-                        <li>badge: {rr[0]} ({rr[2]} {rr[3]})</li>
-                        <li>id risorsa umana ekovision: {rr[1]} </li>'''
-                        # se c'è un mezzo
-                        if rr[8]:
-                            msg =f'''{msg}<li>sportello: {rr[8]} (Targa: {rr[9]})</li>
-                                <li>id risorsa tecnica ekovision: {rr[10]} </li>'''
-                        else: 
-                            msg=f'''{msg}<li>Nessun mezzo registrato</li>'''
-                        msg=f'''{msg}
-                        <li>data inserimento su totem: {rr[11].strftime('%d/%m/%Y %H:%M')} </li>
-                        </ul>'''
-                    msg = f'''{msg}     
-                    </ul>
-                    <br><br>
-                    Messaggio di errore Ekovision:<br>
-                    <i>
-                    {result2['error']['error_message']}
-                    </i>
-                    <br><br> 
-                    <b>I dati, se corretti, vanno inseriti manualmente su Ekovision. </b>
-                    <hr>
-                    '''
-                    
-                    mails_percorso = cerco_mail(curr_c, cod_percorso, datalav, logger)
-                    logger.info (f'Invio mail a {mails_percorso}')
-                    
-                    totem_message_mail(test, msg, mails_percorso,  os.path.basename(__file__), logger,  'Problema trasferimento dati totem ekovision')
-                    
-                    logger.warning('Id_scheda = {}'.format(id_scheda))
-                    logger.warning(result2)
-                    logger.warning('**************************************************')
-                    logger.warning('              JSON                                ')
-                    logger.warning('**************************************************')
-                    logger.warning(letture2)
-                    curr_c.execute(query_update_error, (codice_badge, id_percorso, data_percorso, datainsert_registrazione))
-                else :
-                    logger.info(result2['status'])
-                    # a questo punto dovrei fare 
-                    curr_c.execute(query_update_success, (codice_badge, id_percorso, data_percorso, datainsert_registrazione))
-                conn_c.commit()
 
             else:
                 # non esiste la scheda non faccio niente, la processerò al prossimo giro
